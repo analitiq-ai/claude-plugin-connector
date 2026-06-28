@@ -136,7 +136,7 @@ Common API natives:
 | Native | Source | Typical canonical |
 |---|---|---|
 | `uuid` | `{"type":"string", "format":"uuid"}` | `Utf8` |
-| `date-time` | `{"type":"string", "format":"date-time"}` | `Timestamp(MICROSECOND, UTC)` |
+| `date-time` | `{"type":"string", "format":"date-time"}` | `Timestamp(MICROSECOND)` **or** `Timestamp(MICROSECOND, UTC)` — choose per the wire value (see below) |
 | `date` | `{"type":"string", "format":"date"}` | `Date32` |
 | `email` / `uri` | `{"type":"string", "format":"…"}` | `Utf8` |
 | `string` | `{"type":"string"}` | `Utf8` |
@@ -146,6 +146,44 @@ Common API natives:
 | `boolean` | `{"type":"boolean"}` | `Boolean` |
 | `object` (schemaless) | `{"type":"object"}` with no `properties` | `Json` |
 | `array` (schemaless) | `{"type":"array"}` with no `items` | `Json` |
+
+### `date-time` is not automatically tz-aware — inspect the wire value
+
+`format: date-time` declares a field *is* a datetime; it does **not**
+guarantee the wire value carries a zone offset. Many providers document a
+field as `date-time` yet emit naive, zoneless values — Wise, for example,
+returns space-separated `2016-12-13 22:57:03` with no offset. Pick the
+canonical from an **actual sample value**, not from the declared format.
+This mirrors the DB split below (`TIMESTAMP WITHOUT TIME ZONE →
+Timestamp(<unit>)` vs. `… WITH TIME ZONE → Timestamp(<unit>, UTC)`):
+
+- **Offset-bearing or documented-UTC** — `2016-12-13T22:57:03Z`,
+  `…+00:00`, or the docs explicitly state the value is UTC →
+  `Timestamp(MICROSECOND, UTC)` (tz-aware).
+- **Naive / zoneless** — `2016-12-13 22:57:03` with no offset →
+  `Timestamp(MICROSECOND)` (no tz). Do **not** assume UTC. If the provider
+  documents the values as known-UTC, make that interpretation explicit by
+  choosing the tz-aware canonical on the strength of the docs — the
+  canonical must never assert a zone the wire value does not carry.
+
+The read map keys on the field's `native_type` token and renders **one**
+canonical per token (first-match-wins), so the choice is per token, not per
+field. A connector whose `date-time` fields are uniformly one shape (e.g.
+Wise — all naive) needs a single rule. A connector that exposes **both**
+naive and offset datetimes must give the two shapes **distinct
+`native_type` tokens** (e.g. keep `date-time` for one, label the other
+`date-time-utc`), each with its own read-map rule and matching endpoint
+`arrow_type` — two rules sharing the `date-time` native collide (the second
+is unreachable, and any field wanting the other canonical fails type-map
+coverage).
+
+The canonical is a **claim about the data**: `Timestamp(<unit>, UTC)`
+asserts every value is an instant in UTC. Over a naive, zoneless wire value
+that claim is false — the type misrepresents what the provider sent, so the
+read map is wrong even though it satisfies the schema's shape check. Author
+the canonical that matches the wire: naive value → bare `Timestamp(<unit>)`;
+offset or documented-UTC value → `Timestamp(<unit>, UTC)`. Inspect a real
+sample before choosing.
 
 API connectors ship **no write map** — the write direction is a
 database-package concept (DDL rendering).

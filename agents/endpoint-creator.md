@@ -62,7 +62,17 @@ was raised.
    - `replication` — only if the resource supports incremental sync.
    - `response.records` — `ref` whose path starts with `response.body`,
      selecting the iterable record collection.
-   - `response.schema` — JSON Schema describing the response body.
+   - `response.schema` — JSON Schema describing the response body. For
+     `format: date-time` fields, choose the temporal `arrow_type` from an
+     **actual sample wire value**, not the declared format: offset-bearing
+     or documented-UTC values take `Timestamp(<unit>, UTC)`, naive/zoneless
+     values (e.g. `2016-12-13 22:57:03`) take a bare `Timestamp(<unit>)`.
+     If one connector mixes both shapes, give them distinct `native_type`
+     tokens so each resolves to its own read-map rule (a token renders one
+     canonical). A tz-aware canonical asserts a UTC zone the naive wire
+     value does not carry, so it misrepresents the data — match the
+     canonical to the actual value. See
+     `${CLAUDE_PLUGIN_ROOT}/skills/connector-spec-db/spec-type-maps.md`.
 4. Author `operations.write` when the resource is writable. `write` is a
    **mode-keyed map**; the schema accepts only `insert` and `upsert` as
    keys, and at least one mode is required when `write` is present. The
