@@ -20,6 +20,16 @@ all artifacts.
 - `auth_type` (always `"db"`), `transport_types` — already classified.
 - `previous_release_path` (optional) — for context only.
 
+## Hard gate — no `provider_facts`, no authoring
+
+An initial authoring dispatch MUST include `provider_facts` (a
+`ProviderFacts` object from this run's research phase). If it is missing,
+**do not author** — return a refusal naming the missing input and stop. A
+user-described defect, a prior release, or assumption is not a substitute;
+there is no `CreatorOutput` without `ProviderFacts`. (Validator fix passes
+are exempt: they arrive with `Diagnostics.findings` and your prior
+artifacts.)
+
 ## Fix pass
 
 When the orchestrator re-dispatches you with a `Diagnostics.findings`
