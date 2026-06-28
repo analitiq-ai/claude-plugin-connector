@@ -44,7 +44,12 @@ Building pipelines from existing connectors is a separate concern owned by the `
 
 ## Versioning
 
-The connector's `version` field is the connector release semver, bumped per the connector release table (patch/minor/major) by `connector-drift-classifier`; first release is `1.0.0`. This is distinct from the plugin's own package version in `.claude-plugin/plugin.json`, which is bumped on PR merge via labels (`version:minor`, `version:patch`, `version:major`) — never bump the plugin version manually.
+The connector's `version` field is the connector release semver, bumped per the connector release table (patch/minor/major) by `connector-drift-classifier`; first release is `1.0.0`. This is distinct from the plugin's own package version in `.claude-plugin/plugin.json`, which is managed by **release-please** (Conventional Commits) — never bump it by hand:
+
+- The bump is derived from the commit / squashed-PR-title type: `fix:` → patch, `feat:` → minor, `feat!:` or a `BREAKING CHANGE:` footer → major. Non-release types (`chore:`, `docs:`, `ci:`, `refactor:`, `test:`) don't trigger a bump.
+- release-please accumulates merged changes into a rolling **Release PR**; merging that Release PR bumps `plugin.json`, regenerates `CHANGELOG.md`, and tags the release. Feature PRs are one normal merge each — the only extra merge is the Release PR, once per release.
+- **Pre-1.0:** while the plugin is `0.x`, breaking changes bump the minor and features bump the patch (`bump-minor-pre-major` / `bump-patch-for-minor-pre-major` in `release-please-config.json`), so it won't jump to `1.0.0` accidentally.
+- When squash-merging, ensure the PR title is a valid Conventional Commit — that title is what release-please parses. Config lives in `release-please-config.json` + `.release-please-manifest.json`; the workflow is `.github/workflows/release-please.yml`.
 
 ## Connector Directory Structure (output of connector-builder)
 
