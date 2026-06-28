@@ -74,6 +74,30 @@ The contract is the single source of truth for *what to know*. `ProviderFacts`
 is derived from it (a coverage view), not maintained alongside it — which
 also ends the `io-contracts.md` drift problem.
 
+**Drift policy.** The same rule governs the **whole plugin**, not just
+`ProviderFacts`:
+
+> The published schema is the single source of truth. **Never restate what
+> it defines — reference or load it.** Carry only craft the schema can't
+> express (judgment, idioms, gotchas, workflow).
+
+This splits everything into **contract** (don't duplicate — field shapes,
+enums, vocabularies, `$schema` URLs) and **craft** (keep — *how* to choose,
+the "why", provider gotchas). Three mechanisms:
+
+- **`$ref`** the live schema for any JSON-schema shape the plugin needs.
+- **Fetch-once, pass-down** — the orchestrator/researcher fetches the live
+  schemas per run (cached, as the validator already does) and passes them
+  into sub-agent context, so the creators read the *same* schema the
+  validator enforces.
+- **Drift-check CI** for anything that must stay duplicated (e.g.
+  enum-mapper logic, which has to change with the enum anyway): load the live
+  schemas and fail the build on divergence.
+
+Accuracy rises — the live schema is always current and is exactly what the
+validator enforces — and the cost is one cached fetch per run. Craft is not
+drift-exposed because the schema never defined it.
+
 ---
 
 ## 3. Mechanism — researcher reads the contract schema
