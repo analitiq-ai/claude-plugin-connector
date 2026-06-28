@@ -1,0 +1,34 @@
+name: release-please
+
+# Derives the plugin's semver from Conventional Commit types and maintains a
+# rolling "Release PR". Merging that Release PR bumps the version in
+# .claude-plugin/plugin.json (via release-please-config.json extra-files),
+# updates CHANGELOG.md, and tags the release. The plugin is pre-1.0, so
+# breaking changes bump the minor and features bump the patch (configured in
+# release-please-config.json).
+#
+# Bump signal lives in the commit / squashed PR title:
+#   fix:                          -> patch   (0.1.0 -> 0.1.1)
+#   feat:                         -> minor while pre-1.0 this is patch
+#   feat!: / BREAKING CHANGE:     -> major while pre-1.0 this is minor
+# When squash-merging, enable "Default to PR title for squash merge commits"
+# in the repo settings so the PR title is what release-please parses.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Defaults read release-please-config.json and
+          # .release-please-manifest.json from the repo root.
