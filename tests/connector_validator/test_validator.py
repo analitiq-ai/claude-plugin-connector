@@ -23,7 +23,9 @@ SCRIPT = REPO_ROOT / "scripts" / "validate_connector.py"
 FIXTURES = Path(__file__).parent / "fixtures"
 VALID_API_CONNECTOR = FIXTURES / "valid_api_connector" / "connector.json"
 EXAMPLES_GLOB = list(REPO_ROOT.glob("skills/connector-spec-*/examples/*/*.example.json"))
+ENDPOINT_EXAMPLES_GLOB = list(REPO_ROOT.glob("skills/connector-spec-*/examples/*/endpoints/*.json"))
 SCHEMA_URL = "https://schemas.analitiq.ai/connector/latest.json"
+API_ENDPOINT_SCHEMA_URL = "https://schemas.analitiq.ai/api-endpoint/latest.json"
 TYPE_MAP_READ_SCHEMA_URL = "https://schemas.analitiq.ai/type-map-read/latest.json"
 TYPE_MAP_WRITE_SCHEMA_URL = "https://schemas.analitiq.ai/type-map-write/latest.json"
 
@@ -149,6 +151,34 @@ def test_reference_example_passes_semantic_validation(example):
 def test_examples_glob_is_non_empty():
     """Guard against the parametrize collapsing to zero cases silently."""
     assert len(EXAMPLES_GLOB) >= 10, f"expected ≥ 10 reference examples, found {len(EXAMPLES_GLOB)}"
+
+
+@pytest.mark.network
+@pytest.mark.parametrize(
+    "endpoint", ENDPOINT_EXAMPLES_GLOB, ids=lambda p: f"{p.parent.parent.name}/{p.name}"
+)
+def test_endpoint_example_passes_against_live_schema(endpoint):
+    """Every shipped endpoint example must validate against the live
+    api-endpoint schema. These files previously had no automated check —
+    only the `*.example.json` connector bodies were validated — so an
+    endpoint document could drift from the contract unnoticed.
+
+    Layer 1 only (`--json-only`): the Layer 2 semantic validators are
+    connector-context-oriented and flag endpoint-only scopes (e.g.
+    `response.body`) as unknown when a bare endpoint is validated in
+    isolation; endpoint semantics are exercised in connector context
+    elsewhere.
+    """
+    result = run_validator(endpoint, "--json-only", schema_url=API_ENDPOINT_SCHEMA_URL)
+    errors = [f for f in result["findings"] if f["severity"] == "error"]
+    assert not errors, f"{endpoint.parent.parent.name}/{endpoint.name}: {errors}"
+
+
+def test_endpoint_examples_glob_is_non_empty():
+    """Guard against the endpoint parametrize collapsing to zero cases."""
+    assert len(ENDPOINT_EXAMPLES_GLOB) >= 5, (
+        f"expected ≥ 5 endpoint examples, found {len(ENDPOINT_EXAMPLES_GLOB)}"
+    )
 
 
 # ---------------------------------------------------------------------------

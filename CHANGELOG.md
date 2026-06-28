@@ -12,12 +12,23 @@
   `#/$defs/SingleCursorMapping`, and `#/$defs/WindowCursorMapping`, and to
   defer to the schema as the source of truth instead of restating its shape
   as prose (issue #9).
+- `connector-spec-api/spec-pagination.md` had drifted the same way (found
+  by generalizing the new guard): `stop_when` was documented as a string
+  (`"page_empty"`) where the contract requires a predicate object, and the
+  `link` (`next_link`/`rel`) and `keyset` (`next_cursor`) shapes did not
+  match `#/$defs/LinkPagination` / `#/$defs/KeysetPagination`. Rewrote all
+  five strategies to match the contract.
 
 ### Added
 - `tests/connector_validator/test_spec_doc_examples.py` — validates the
-  `replication` examples embedded in the API spec docs against the live
-  `api-endpoint` schema, so the docs can't silently drift from the contract
-  again.
+  JSON examples embedded in the API spec docs (`spec-replication.md`,
+  `spec-pagination.md`) against the matching `$defs` of the live
+  `api-endpoint` schema, so those docs can't silently drift from the
+  contract again.
+- `test_endpoint_example_passes_against_live_schema` — validates every
+  `examples/*/endpoints/*.json` document against the live api-endpoint
+  schema (Layer 1). These endpoint examples previously had no automated
+  schema check.
 
 ## [0.1.0]
 
