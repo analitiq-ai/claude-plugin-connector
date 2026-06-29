@@ -21,8 +21,8 @@
   { "match": "regex", "native": "^CHAR(\\(.+\\))?$",                        "canonical": "Utf8" },
   { "match": "exact", "native": "BPCHAR",                                   "canonical": "Utf8" },
   { "match": "exact", "native": "UUID",                                     "canonical": "Utf8" },
-  { "match": "exact", "native": "JSON",                                     "canonical": "Utf8" },
-  { "match": "exact", "native": "JSONB",                                    "canonical": "Utf8" },
+  { "match": "exact", "native": "JSON",                                     "canonical": "Json" },
+  { "match": "exact", "native": "JSONB",                                    "canonical": "Json" },
   { "match": "exact", "native": "XML",                                      "canonical": "Utf8" },
   { "match": "exact", "native": "BYTEA",                                    "canonical": "Binary" },
   { "match": "exact", "native": "DATE",                                     "canonical": "Date32" },
@@ -38,6 +38,6 @@
   { "match": "exact", "native": "MACADDR",                                  "canonical": "Utf8" },
   { "match": "exact", "native": "MACADDR8",                                 "canonical": "Utf8" },
   { "match": "exact", "native": "MONEY",                                    "canonical": "Utf8" },
-  { "match": "exact", "native": "ARRAY",                                    "canonical": "Utf8" },
-  { "match": "regex", "native": ".*\\[\\]$",                                "canonical": "Utf8" }
+  { "match": "exact", "native": "ARRAY",                                    "canonical": "Json" },
+  { "match": "regex", "native": ".*\\[\\]$",                                "canonical": "Json" }
 ]

@@ -1321,6 +1321,41 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
 # rendered DDL as a literal `${}`.
 _PLACEHOLDER_RE = re.compile(r"\$\{([^}]*)\}")
 _NARROWING_ARROW_TYPES = {"Object", "List"}
+
+# Schemaless / structured-container native types. A read-map rule whose
+# `native` is one of these (or a parameterized container such as
+# `array<object>` / `struct<...>` / `map<...>`) MUST render a container
+# canonical (`_CONTAINER_CANONICAL_HEADS`), never a scalar like `Utf8`: a
+# scalar may round-trip the bytes but throws away the shape the canonical is
+# meant to describe. Kept connector-agnostic here, not in any one connector's
+# spec. Compared UPPERCASE (read matchers normalize to uppercase).
+_SCHEMALESS_CONTAINER_NATIVES = {
+    "JSON",
+    "JSONB",
+    "VARIANT",
+    "OBJECT",
+    "ARRAY",
+    "MAP",
+    "STRUCT",
+    "RECORD",
+    "HSTORE",
+    "SUPER",
+}
+# Leading tokens of parameterized container natives (`ARRAY<...>` etc.).
+_CONTAINER_NATIVE_HEADS = {"ARRAY", "STRUCT", "MAP", "LIST", "OBJECT"}
+# Canonical Arrow heads that preserve structure — the acceptable render
+# targets for the natives above. `Json` is the standard read-map target;
+# `Object` / `List` are the endpoint-only narrowings; `Struct` / `Map` /
+# `List` cover typed containers (`List<Int64>`, `Struct<...>`).
+_CONTAINER_CANONICAL_HEADS = {
+    "Json",
+    "Object",
+    "List",
+    "LargeList",
+    "FixedSizeList",
+    "Struct",
+    "Map",
+}
 _ECMA_NAMED_GROUP = re.compile(r"\(\?<([A-Za-z_][A-Za-z0-9_]*)>")
 # Catches all non-ECMA `(?P…` regex extensions: Python stdlib's named-group
 # declaration `(?P<name>…)` and backreference `(?P=name)`, plus the
@@ -1762,6 +1797,35 @@ def _safe_check_type_map_rules(doc: Any, direction: str = "read") -> list[dict]:
         ]
 
 
+def _leading_type_token(value: str) -> str:
+    """First run of identifier characters in a type string, UPPERCASE."""
+    m = re.search(r"[A-Za-z_]+", value)
+    return m.group(0).upper() if m else ""
+
+
+def _native_is_schemaless_container(native: str, match: str) -> bool:
+    """True when a read-map `native` denotes a schemaless / structured
+    container: a known token (JSON, JSONB, VARIANT, OBJECT, ARRAY, MAP,
+    STRUCT, …), a parameterized container (`array<...>`, `struct<...>`,
+    `map<...>`), or a SQL array-suffix spelling (`integer[]`, regex `.*\\[\\]$`).
+    Regex matchers are stripped of their meta first."""
+    probe = _strip_regex_meta(native) if match == "regex" else native
+    head = _leading_type_token(probe)
+    if head in _SCHEMALESS_CONTAINER_NATIVES:
+        return True
+    if "<" in probe and head in _CONTAINER_NATIVE_HEADS:
+        return True
+    # SQL array-suffix: `integer[]` (exact) or a read-map regex like `.*\[\]$`.
+    return probe.replace("\\", "").rstrip("$").endswith("[]")
+
+
+def _canonical_head(canonical: str) -> str:
+    """Leading PascalCase Arrow type name (`Json` from `Json`, `List` from
+    `List<Int64>`); empty when the value opens with a `${...}` substitution."""
+    m = re.match(r"\s*([A-Za-z][A-Za-z0-9]*)", canonical)
+    return m.group(1) if m else ""
+
+
 def check_type_map_rules(
     doc: Any,
     doc_path: Path | None = None,
@@ -2068,6 +2132,26 @@ def check_type_map_rules(
                 )
             )
             continue
+        # Schemaless / structured-container natives must resolve to a CONTAINER
+        # canonical (Json / Object / List / Struct / Map), never a scalar like
+        # Utf8 — collapsing a structured value to a scalar silently drops its
+        # shape. Read direction only (native is the matcher, canonical the
+        # render); the canonical *head* is checked so `List<Int64>` etc. pass.
+        if direction == "read" and _native_is_schemaless_container(
+            matcher_value, match
+        ):
+            head = _canonical_head(render_value)
+            if head and head not in _CONTAINER_CANONICAL_HEADS:
+                findings.append(
+                    finding(
+                        "type-map-rule",
+                        "error",
+                        f"/{i}/{render_key}",
+                        f"native {matcher_value!r} is a schemaless/structured container but resolves to scalar canonical {render_value!r}; map it to a container canonical (`Json`, or `Object`/`List` for endpoint narrowings) so its structure is not lost.",
+                        rule_doc="shared/type-maps.md",
+                    )
+                )
+                continue
         if match == "exact" and placeholders:
             findings.append(
                 finding(

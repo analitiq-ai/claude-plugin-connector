@@ -22,7 +22,7 @@
   { "match": "exact", "native": "TEXT",                                       "canonical": "Utf8" },
   { "match": "exact", "native": "MEDIUMTEXT",                                 "canonical": "Utf8" },
   { "match": "exact", "native": "LONGTEXT",                                   "canonical": "Utf8" },
-  { "match": "exact", "native": "JSON",                                       "canonical": "Utf8" },
+  { "match": "exact", "native": "JSON",                                       "canonical": "Json" },
   { "match": "regex", "native": "^ENUM\\(.+\\)$",                             "canonical": "Utf8" },
   { "match": "regex", "native": "^SET\\(.+\\)$",                              "canonical": "Utf8" },
   { "match": "regex", "native": "^BINARY(\\(.+\\))?$",                        "canonical": "Binary" },
