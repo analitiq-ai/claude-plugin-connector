@@ -164,7 +164,7 @@ Common API natives:
 | Native | Source | Typical canonical |
 |---|---|---|
 | `uuid` | `{"type":"string", "format":"uuid"}` | `Utf8` |
-| `date-time` | `{"type":"string", "format":"date-time"}` | `Timestamp(MICROSECOND, UTC)` |
+| `date-time` | `{"type":"string", "format":"date-time"}` | `Timestamp(MICROSECOND)` **or** `Timestamp(MICROSECOND, UTC)` — per the sample value's zone (see "Bare vs zoned timestamp" above) |
 | `date` | `{"type":"string", "format":"date"}` | `Date32` |
 | `email` / `uri` | `{"type":"string", "format":"…"}` | `Utf8` |
 | `string` | `{"type":"string"}` | `Utf8` |
