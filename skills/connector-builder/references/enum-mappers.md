@@ -4,6 +4,15 @@ Closed-enum decision rules used by the orchestrator to classify provider
 facts into schema-bound enum values. If no enum value fits, fail closed
 and ask the user.
 
+> **Source of truth.** The target columns below map onto enums **owned by the
+> published schema** — `auth.type` (the `*Auth` `$defs`), `AdbcTransport.driver`,
+> and the transport/kind discriminators. This file is the *mapping logic*, not
+> a second source for the values; when the schema's enum changes, these tables
+> change with it. The values are pinned against the live schema by
+> `tests/connector_validator/test_schema_drift.py` (the drift-check CI), so a
+> schema change that isn't reflected here fails the build. Do not treat a
+> stale copy here as authoritative over the live schema.
+
 ## KindMapper
 
 | Input fact | Output `kind` |

@@ -30,9 +30,11 @@ installable Python package.
   direction inversion.
 - This skill's `spec-connector-package.md` — package layout,
   `pyproject.toml` + entry points, dialect hooks, CDK import rules.
-- The matching example under `examples/<name>/`, which contains
-  `<name>.example.json` (connector body) plus sibling
-  `type-map-read.json` and `type-map-write.json`.
+- The closest transport archetype under `examples/<name>/`: `postgresql`
+  (sqlalchemy + `tls` block, with the full kitchen-sink `type-map-read.json` /
+  `type-map-write.json`) or `postgresql-adbc` (adbc + `db_kwargs` TLS, maps
+  trimmed to an illustrative stub). The per-provider type map is **derived
+  from research** (`spec-type-maps.md`), not copied per provider.
 
 ## What this skill covers
 

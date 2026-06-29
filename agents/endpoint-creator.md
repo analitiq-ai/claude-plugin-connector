@@ -1,6 +1,6 @@
 ---
 name: endpoint-creator
-description: Author an endpoint JSON document for an API connector package, conforming to https://schemas.analitiq.ai/api-endpoint/latest.json. Invoked by the connector-builder orchestrator only when the connector kind is api. Multiple endpoint creators may run in parallel — each authors one endpoint file. Inputs are ProviderFacts, the assembled connector document (for transport refs), and one resource descriptor. Output is an EndpointCreatorOutput JSON object containing one endpoint document.
+description: Author an endpoint JSON document for an API connector package, conforming to https://schemas.analitiq.ai/api-endpoint/latest.json. Invoked by the connector-builder orchestrator only when the connector kind is api, once per resource inside the endpoint fan-out. Multiple endpoint creators run in parallel — each authors one endpoint file. Inputs are the resource's researched EndpointFacts (its response field schema, including datetime zone-awareness) and the assembled connector document (for transport refs). Output is an EndpointCreatorOutput JSON object containing one endpoint document.
 tools: Read, Glob, Grep
 color: purple
 ---
@@ -19,10 +19,25 @@ containing one endpoint document body.
 
 ## Inputs
 
-- `resource` — one resource descriptor from
-  `ProviderFacts.discovery_endpoints` or the user-supplied resource list.
+- `endpoint_facts` — the `EndpointFacts` object for this resource (from
+  this run's per-endpoint research pass): the resource's response field
+  schema, with each field's `native_type`, `arrow_type`, nullability, enum
+  domain, format, and — for temporal fields — a real `sample_value` and its
+  `tz_aware` flag. Shape pinned in
+  `connector-builder/references/io-contracts.md`.
 - `connector` — the assembled connector document (for `transports`, `auth`,
   and `connection_contract` reference paths).
+
+## Hard gate — no `endpoint_facts`, no authoring
+
+An initial authoring dispatch MUST include `endpoint_facts` (the
+`EndpointFacts` object from this run's per-endpoint research). If it is
+missing, **do not author** — return a refusal naming the missing input and
+stop. You have no web access and may not guess a resource's field types
+(especially datetime zone-awareness); a user-described resource or an
+assumption is not a substitute for researched facts. (Validator fix passes
+are exempt: they arrive with `Diagnostics.findings` and your prior endpoint
+document.)
 
 ## Fix pass
 
@@ -42,14 +57,15 @@ was raised.
 ## Process
 
 1. Set `$schema` to `https://schemas.analitiq.ai/api-endpoint/latest.json`.
-2. Set `endpoint_id` from the resource descriptor — pattern
+2. Set `endpoint_id` from `endpoint_facts.resource` — pattern
    `^[a-z0-9][a-z0-9_-]*$`. This is the endpoint document's stable
    identifier; the schema does not accept `alias` on endpoints.
 3. Author `operations.read` when the resource is readable. Required keys
    are `request` and `response` (and inside `response`, both `records`
    and `schema` are required); `params`, `pagination`, `replication`
    are optional.
-   - `request.method` (`GET` or `POST`) and `request.path`.
+   - `request.method` (`GET` or `POST`) and `request.path` — from
+     `endpoint_facts.method` / `endpoint_facts.path`.
    - `request.transport_ref` — only if not the default transport.
    - `request.query` / `request.headers` / `request.path_params` /
      `request.body` — declarative request shape. Values are
@@ -58,14 +74,37 @@ was raised.
      (`query` / `header` / `path` / `body`), `type`, `required`,
      optional `default` (value expression), `operators` for filterable
      params, and `controlled_by` when pagination / replication owns it.
-   - `pagination` — populate per the connector's pagination style.
-   - `replication` — only if the resource supports incremental sync.
+   - `pagination` — when `endpoint_facts.paginated` is true, populate per
+     `endpoint_facts.pagination` (the connector-wide `style` + `params`,
+     echoed into the branch — the API connector body carries no
+     connector-level pagination, so this is your only source for it).
+   - `replication` — only if the resource supports incremental sync; the
+     cursor field is `endpoint_facts.replication_cursor`.
    - `response.records` — `ref` whose path starts with `response.body`,
-     selecting the iterable record collection.
-   - `response.schema` — JSON Schema describing the response body.
-4. Author `operations.write` when the resource is writable. `write` is a
-   **mode-keyed map**; the schema accepts only `insert` and `upsert` as
-   keys, and at least one mode is required when `write` is present. The
+     selecting the iterable record collection (use `endpoint_facts.record_path`).
+   - `response.schema` — JSON Schema describing the response body, authored
+     **from `endpoint_facts.fields`** — one typed property per field. For
+     each field, the declared `arrow_type` is the field's
+     `endpoint_facts.fields[].arrow_type` and the `native_type` annotation is
+     its `native_type`. These are **not** two independent sources: the
+     connector's `type-map-read` must render that `native_type` to a canonical
+     **equal to** the declared `arrow_type` — the validator's
+     `type-map-coverage` enforces exactly this. If they would diverge, the read
+     map is wrong (a domain-level type-map fix, re-author + re-validate the
+     domain), not the endpoint. Do not invent or guess field types — every
+     type comes from the researched facts.
+     - **Temporal fields follow the sample value, never a default.** A
+       `date-time` field is *not* automatically tz-aware. Use the field's
+       `tz_aware` flag (set by research from a real `sample_value`): a
+       zoneless wire value → bare `Timestamp(<unit>)`; a value carrying an
+       offset/`Z` → `Timestamp(<unit>, UTC)`. When two fields share a native
+       token but differ in zone-awareness, give them **distinct** native
+       tokens so each resolves to the right canonical under the read map's
+       first-match-wins rules.
+4. Author `operations.write` when the resource is writable
+   (`endpoint_facts.writable`). `write` is a **mode-keyed map**; the schema
+   accepts only `insert` and `upsert` as keys, and at least one mode is
+   required when `write` is present. The
    two modes share the same block shape and differ only in
    `conflict_keys`. Each mode block holds:
    - `request` (required) — `method` (`POST` / `PUT` / `PATCH`), `path`,
@@ -78,9 +117,9 @@ was raised.
      declared in this mode's `input.schema`; together they are the
      provider-defined natural key the upsert matches on. For `insert`
      omit it (the schema pins it to `null`); an `upsert` without it
-     fails validation. Use the provider's documented idempotency / match
-     key (e.g. an external id or a unique business key) — never invent
-     one.
+     fails validation. Use `endpoint_facts.conflict_keys` — the provider's
+     documented idempotency / match key (e.g. an external id or a unique
+     business key) — never invent one.
    - `batching` (optional) — `{"max_records": <int ≥ 2>}` when the
      provider documents a per-request cap.
    - `params` (optional) — same shape as read params.
@@ -102,6 +141,10 @@ was raised.
 
 ## Hard rules
 
+- Field types come **only** from `endpoint_facts` — never invent or default
+  a field's `arrow_type` (datetime zone-awareness especially). The pagination
+  / param / response vocabularies are owned by the live `api-endpoint` schema;
+  when the spec prose and the schema disagree, the schema wins.
 - Endpoint documents have no top-level `kind` field. The owning connector's
   `kind` selects the correct endpoint schema.
 - Reuse the connector's transports via `request.transport_ref`. Never

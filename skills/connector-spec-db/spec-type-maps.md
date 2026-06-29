@@ -95,26 +95,54 @@ fully-resolved literal on the rendered side.
 
 ## Schemaless / JSON-shaped natives
 
-Follow the reference connector packages — the right canonical for a
-JSON-shaped native depends on how the system's read path materializes
-it:
+A schemaless or structured-container native — `JSON`, `JSONB`, `VARIANT`,
+`OBJECT`, `ARRAY`, `MAP`, `STRUCT`, a parameterized container like
+`array<object>`, or a SQL array suffix like `integer[]` — **must** map to a
+**container canonical** (`Json`, or a typed `List` / `Struct` / `Map`),
+**never a scalar** like `Utf8`. The canonical is a *claim about the shape* of
+the data: `Utf8` asserts an opaque string and throws the structure away, so it
+is wrong for a JSON / array / struct column even when the driver happens to
+hand the value over as text on the wire. The `type-map-rule` validator
+**enforces** this — a schemaless / container native resolving to a scalar
+canonical is an error.
 
-| Provider | Native (read) | Canonical | Why |
-|---|---|---|---|
-| Postgres | `JSON`, `JSONB`, `XML` | `Utf8` | The driver read path returns JSON columns as text. |
-| MySQL / MariaDB | `JSON` | `Utf8` | Same — text on the wire. |
-| Snowflake | `VARIANT`, `OBJECT`, `ARRAY`, `MAP` | `Json` | Arrow-native semi-structured ingestion. |
-| MongoDB | `array`, `object` | `Json` | Documents are inherently JSON-shaped. |
+| Native (read) | Canonical |
+|---|---|
+| `JSON`, `JSONB` (Postgres, MySQL/MariaDB) | `Json` |
+| `VARIANT`, `OBJECT`, `ARRAY`, `MAP` (Snowflake) | `Json` |
+| `array`, `object` (document stores) | `Json` |
+| `integer[]` and other `…[]` array suffixes | `Json` (or a typed `List<…>`) |
+
+`XML` is structured text, not a JSON/array/struct container, so it maps to
+`Utf8` — the rule covers JSON / array / struct / map containers only.
 
 On the write side the `Json` canonical renders the system's JSON column
 type (`Json` → `JSONB` for postgres, `JSON` for MySQL, `VARIANT` for
-Snowflake).
+Snowflake), so the type round-trips.
 
 The endpoint-only shape markers `Object` and `List` (which require
 sibling `properties` / `items` to declare the inner shape) **never**
 appear as a type-map `canonical`. The endpoint walker accepts a field
 typed `Object` or `List` as a valid narrowing of a `Json` read-map
 rule; the validator does not treat that as a mismatch.
+
+## Non-obvious natives (derive, don't guess)
+
+When researching a new system's natives, these are the calls that aren't
+mechanical — the same judgment transfers across providers:
+
+- **Semi-structured / container** (`JSON`, `JSONB`, `VARIANT`, `OBJECT`,
+  `ARRAY`, `MAP`, `STRUCT`, `…[]`) → a container canonical (`Json`), never a
+  scalar (enforced — see "Schemaless / JSON-shaped natives").
+- **Opaque scalar types with no Arrow equivalent** (`INTERVAL`, `MONEY`,
+  network types `INET`/`CIDR`/`MACADDR`, `UUID`, `ENUM(...)`, `XML`) →
+  `Utf8`. They are atomic strings on the wire; don't invent a numeric/Decimal
+  canonical.
+- **Zoned time-of-day** (`TIME WITH TIME ZONE` / `TIMETZ`) → `Time64`
+  (the zone is dropped — a bare time-of-day carries no instant). Contrast
+  `TIMESTAMP WITH TIME ZONE` → `Timestamp(<unit>, UTC)`.
+- **Bare vs zoned timestamp**: choose the tz-aware canonical only when the
+  native (or, for APIs, the sample value) actually carries a zone.
 
 ## API coverage (read map)
 
@@ -206,7 +234,8 @@ is wrong — `Timestamp` requires a unit).
 
 Excerpt from the reference read map — uppercase patterns, the
 split-rule pattern for `NUMERIC` (a `regex` family rule above an
-`exact` fallback), and text-materialized JSON:
+`exact` fallback), and a `JSONB` column mapped to the `Json` container
+canonical (not a scalar):
 
 ```json
 [
@@ -217,7 +246,7 @@ split-rule pattern for `NUMERIC` (a `regex` family rule above an
   { "match": "exact", "native": "TEXT",                                     "canonical": "Utf8" },
   { "match": "regex", "native": "^CHARACTER VARYING(\\(.+\\))?$",           "canonical": "Utf8" },
   { "match": "exact", "native": "UUID",                                     "canonical": "Utf8" },
-  { "match": "exact", "native": "JSONB",                                    "canonical": "Utf8" },
+  { "match": "exact", "native": "JSONB",                                    "canonical": "Json" },
   { "match": "exact", "native": "DATE",                                     "canonical": "Date32" },
   { "match": "regex", "native": "^TIME(\\(.+\\))?( WITHOUT TIME ZONE)?$",   "canonical": "Time64(MICROSECOND)" },
   { "match": "regex", "native": "^TIMESTAMP(\\(.+\\))?( WITHOUT TIME ZONE)?$", "canonical": "Timestamp(MICROSECOND)" },

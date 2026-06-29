@@ -25,8 +25,10 @@ Pick what you need for the auth and pagination styles you're authoring:
 - `connector-spec-db/spec-type-maps.md` for authoring the standalone
   `type-map-read.json` (same rule shape for API and DB; API ships the
   read direction only)
-- The matching example under `examples/<name>/`, which contains both
-  `<name>.example.json` (connector body) and a sibling `type-map-read.json`
+- The closest auth archetype under `examples/<name>/` (`api_key`,
+  `oauth2_authorization_code`, `jwt`) — each a `<name>.example.json` connector
+  body + sibling `type-map-read.json`. `spec-auth-flows.md` covers every auth
+  type; only the diverse archetypes ship a full example dir
 
 ## What this skill covers
 

@@ -7,8 +7,9 @@ on demand by the orchestrator skill.
 
 The orchestrator runs in one of three modes (input `mode`, default
 `build`). `build` and `update` share phases 1–5 and branch only at
-phases 0, 6, and 7; `validate` runs only phase 0 → phase 5 (report-only,
-no fix loop), skipping phases 1–4 and 6–7.
+phases 0, 6, and 7; `validate` runs phase 0 then validates the on-disk
+documents (report-only, no fix loop), skipping research, authoring,
+drift, and write.
 
 - **`build`** (default) — author a fresh connector; phase 0 halts if the
   `{connector_id}/` directory already exists.
@@ -18,9 +19,10 @@ no fix loop), skipping phases 1–4 and 6–7.
   and phase 7 regenerates the tree in place. The prior files are the
   versioning baseline, never the working copy — they are not edited.
   Runs inside a VCS checkout so the regeneration is reviewable.
-- **`validate`** — read-only. Skip phases 1–4 and 6–7; run phase 5 over
-  the on-disk documents and report the diagnostics. To fix findings,
-  re-run in `update` mode.
+- **`validate`** — read-only. Skip phases 1–3 and 5–7; run phase 4
+  (validation) over the on-disk documents (connector, type maps, and all
+  endpoint files) and report the diagnostics. To fix findings, re-run in
+  `update` mode.
 
 ## Phases
 
@@ -58,7 +60,7 @@ tell the user.
 **`validate`** — read the on-disk documents under `connector_path`
 (`definition/connector.json`, `definition/type-map-read.json`,
 `definition/type-map-write.json` when present, and
-`definition/endpoints/*.json`) and skip directly to phase 5; do no
+`definition/endpoints/*.json`) and skip directly to phase 4; do no
 research, authoring, or writing. If `connector_path` does NOT exist, halt
 and tell the user there is nothing to validate.
 
@@ -75,15 +77,22 @@ this check; for now, manual removal is the contract.
 Surface the OS-level error and let the user resolve it before
 re-running.
 
-### 1. Research
+### 1. Research (domain)
 
-Invoke `connector-provider-researcher` with `provider`, optional
-`kind_hint`, and the official-docs URL when the user supplied one
-(when omitted, the researcher locates the official docs via WebSearch
-and reports the URL it used). Receive a `ProviderFacts` JSON object
-discriminated by `kind`.
+Invoke `connector-provider-researcher` at `scope: domain`, handing it the
+**live contract schema URLs** as its mission spec (`connector` +
+`type-map-read`, plus `type-map-write` for databases). The schema defines
+*what to research*; the researcher walks it and grounds every fact in the
+provider's docs. Pass `provider`, optional `kind_hint`, and the
+official-docs URL when the user supplied one (when omitted, the researcher
+locates the official docs via WebSearch and reports the URL it used).
+Receive a `ProviderFacts` JSON object discriminated by `kind`, carrying
+the connector skeleton, the **resource list** (`resources`) that seeds the
+phase-5 fan-out, and the connector-wide `native_type_vocabulary` (so the
+read map is authored complete before fan-out).
 
-**Input:** `provider`, `kind_hint?`, `docs_url?`.
+**Input:** `provider`, `kind_hint?`, `docs_url?`, `scope: domain`, contract
+schema URLs.
 **Output:** `ProviderFacts` (plus the docs URLs actually used).
 **Failure mode:** if the researcher cannot access or locate official
 docs, halt and ask the user for a URL or manually-supplied facts.
@@ -101,7 +110,7 @@ yet supported by the engine. If the user explicitly asked for one,
 dispatch to `storage-connector-creator` (which currently returns a
 structured refusal); otherwise fail closed and ask.
 
-### 3. Dispatch creator
+### 3. Dispatch creator (domain body + type maps)
 
 Based on `kind`:
 
@@ -110,65 +119,114 @@ Based on `kind`:
 - `kind = database` → invoke `db-connector-creator` with the same.
 - `kind ∈ {file, s3, stdout}` → invoke `storage-connector-creator` (stub).
 
+Always pass `provider_facts`. The creator's **hard gate** refuses an
+initial authoring dispatch without it — research cannot be skipped. The
+creator authors the connector body and type map(s); it does **not** author
+endpoints (that is the phase-5 fan-out).
+
 Receive a `CreatorOutput` JSON object containing the assembled connector
 body and type map(s). For `kind = database` it additionally carries the
 `package_files` block (`connector.py`, `__init__.py`, `requirements.txt`,
 `pyproject.toml` contents) — the connector is an installable Python
 package and the creator owns all of its files.
 
-### 4. Endpoint files (api only)
+### 4. Validate the domain (barrier)
 
-For each public resource in `ProviderFacts.discovery_endpoints` or the
-user-specified resource list, invoke `endpoint-creator`. Endpoint creators
-may run in parallel — dispatch them in a single message.
+Invoke `connector-schema-validator` over the connector body and type
+map(s):
 
-Database connectors do not ship endpoint files; their schema/table
-combinations are connection-scoped and discovered at runtime via
-`resource_discovery`.
+- Connector → `https://schemas.analitiq.ai/connector/latest.json`.
+- Read map (`type-map-read.json`) →
+  `https://schemas.analitiq.ai/type-map-read/latest.json`.
+- Write map (`type-map-write.json`, database only) →
+  `https://schemas.analitiq.ai/type-map-write/latest.json`.
 
-### 5. Validate
-
-Invoke `connector-schema-validator` with the connector document and
-`schema_url=https://schemas.analitiq.ai/connector/latest.json`. Also
-validate the standalone `type-map-read.json` against
-`https://schemas.analitiq.ai/type-map-read/latest.json`, and — for
-database connectors — `type-map-write.json` against
-`https://schemas.analitiq.ai/type-map-write/latest.json`. Both maps run
-the full Layer 1 + Layer 2 pass. The validator derives the rule
-direction from the filename, so write the maps under their exact
+Both maps run the full Layer 1 + Layer 2 pass. The validator derives the
+rule direction from the filename, so write the maps under their exact
 filenames before standalone validation, or validate via the connector
-document so the sibling walk picks them up. For each endpoint
-document, invoke the validator with the kind-specific URL:
+document so the sibling walk picks them up.
 
-- API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`.
-- Database endpoint (when applicable in future) →
-  `https://schemas.analitiq.ai/database-endpoint/latest.json`.
+The validator validates JSON documents only — the database package files
+(`connector.py`, `__init__.py`, `requirements.txt`, `pyproject.toml`) are
+enforced by registry CI (wheel build, entry-point checks), not by this
+pipeline.
 
-The validator validates JSON documents only — the database package
-files (`connector.py`, `__init__.py`, `requirements.txt`,
-`pyproject.toml`) are enforced by registry CI (wheel build,
-entry-point checks), not by this pipeline.
+This is a **barrier**. In `build` / `update` mode the connector body and
+type maps MUST validate clean before the phase-5 endpoint fan-out, because
+every endpoint references the connector's transports/auth and resolves its
+field types through `type-map-read`. For `kind = database` this completes
+validation — database connectors ship no endpoint files (schema/table
+combinations are connection-scoped and discovered at runtime via
+`resource_discovery`), so phase 5 is skipped.
 
-In `validate` mode, run the validator once over the on-disk documents,
-report the resulting `Diagnostics`, and stop — there is no fix loop and
-no creator re-dispatch (phases 1–4 were skipped, so there is no
-`CreatorOutput` to revise). The fix loop below applies to `build` and
-`update` only.
+In `validate` mode, run the validator once over **every** on-disk document
+— the connector, both type maps when present, and all
+`definition/endpoints/*.json` — report the resulting `Diagnostics`, and
+stop. There is no fix loop and no creator re-dispatch (phases 1–3 and 5
+were skipped, so there is no `CreatorOutput` to revise). The fix loop
+below applies to `build` and `update` only.
 
 In `build` / `update` mode the orchestrator should attempt at most 5 fix
 passes per artifact — re-dispatch the matching creator with the
-validator's findings and the artifacts it produced on the prior pass
-(`CreatorOutput` / `EndpointCreatorOutput`), re-validate, repeat. The
-creator — not the orchestrator — decides whether each finding is a real
-defect or a validator false positive; it owns the spec. Pass
-`Diagnostics.findings` verbatim; do not pre-filter, pre-diagnose, or read
-spec material to interpret them. If
-`error`-severity findings persist after 5
-passes, halt and surface the diagnostics; do not write partial files.
-The validator script is single-shot; iteration discipline lives in
-the orchestrator's prose, not in the script. The cap is best-effort
-and not runtime-enforced; runtime enforcement is tracked at
+validator's findings and the artifact it produced on the prior pass
+(`CreatorOutput`), re-validate, repeat. The creator — not the
+orchestrator — decides whether each finding is a real defect or a
+validator false positive; it owns the spec. Pass `Diagnostics.findings`
+verbatim; do not pre-filter, pre-diagnose, or read spec material to
+interpret them. If `error`-severity findings persist after 5 passes, halt
+and surface the diagnostics; do not write partial files. The validator
+script is single-shot; iteration discipline lives in the orchestrator's
+prose, not in the script. The cap is best-effort and not runtime-enforced;
+runtime enforcement is tracked at
 https://github.com/analitiq-ai/ai-plugins-official/issues/26.
+
+### 5. Endpoint fan-out (api only)
+
+With the domain authored and validated clean, author one endpoint per
+resource — **concurrently, bounded, and each on its own research**.
+Database connectors skip this phase entirely.
+
+1. **Enumerate the worklist.** From `ProviderFacts.resources` (or the
+   user-specified resource list), record every resource as a worklist item
+   with a state: `pending → running → done · failed`. The worklist is how
+   the orchestrator tracks the fan-out without dropping endpoints.
+2. **Run branches, bounded.** Run at most **N branches concurrently**
+   (default **10**); as one finishes, pull the next `pending`. Each branch
+   is a full `researcher → endpoint-creator → validator` chain for one
+   resource:
+   - `connector-provider-researcher` at `scope: endpoint` researches that
+     resource's response and returns `EndpointFacts` — the field-level
+     schema (datetime zone-awareness from a real sample value, enum
+     domains, nullability, formats). This is the per-resource research
+     that grounds field types instead of guessing them.
+   - `endpoint-creator` authors the endpoint document from `EndpointFacts`
+     and the connector document (for transport/auth refs). The API connector
+     body carries no connector-level pagination, so the orchestrator echoes
+     the connector-wide pagination (`ProviderFacts.pagination` → style +
+     params) into the branch's `EndpointFacts.pagination`. Its hard gate
+     refuses if `EndpointFacts` is missing — it has no web access and may not
+     guess field types.
+   - `connector-schema-validator` validates the endpoint against
+     `https://schemas.analitiq.ai/api-endpoint/latest.json`, with the same
+     per-artifact 5-pass fix loop as phase 4 (re-dispatch
+     `endpoint-creator` with `Diagnostics.findings` and the
+     `EndpointCreatorOutput` it produced).
+3. **Isolate failure.** A branch that still fails after the fix cap is
+   marked `failed` in the worklist and surfaced — it does **not** block its
+   siblings. The orchestrator reports partial results rather than silently
+   dropping the endpoint.
+4. **Join.** When the worklist is drained (no `pending` / `running`),
+   proceed to phase 6.
+
+**Type vocabulary stays connector-level.** If a resource exposes a native
+not covered by `type-map-read`, that is a **domain-level** type-map
+addition — re-author and re-validate the domain (phases 3–4), never patch
+the map per endpoint. This keeps canonical types consistent across
+endpoints.
+
+(Database endpoints validate against
+`https://schemas.analitiq.ai/database-endpoint/latest.json` when a future
+mode authors them; this plugin does not.)
 
 ### 6. Drift
 

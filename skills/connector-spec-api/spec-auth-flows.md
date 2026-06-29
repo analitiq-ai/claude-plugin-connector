@@ -15,8 +15,8 @@ The actual API key value is declared in `connection_contract.inputs` with
 `headers` block, e.g. `"Authorization": { "template": "Bearer ${secrets.api_key}" }`.
 
 Example: `examples/api-key/api-key.example.json` (with sibling
-`examples/api-key/type-map-read.json`). Variant with templated host:
-`examples/api-key-dynamic-host/api-key-dynamic-host.example.json`.
+`examples/api-key/type-map-read.json`). For a templated / post-auth-discovered
+host, see the multi-origin transport pattern in `spec-transport.md`.
 
 ## `basic_auth`
 
@@ -36,9 +36,6 @@ should use the `basic_auth` function expression — never pre-compute base64.
   }
 }
 ```
-
-Example: `examples/basic-auth/basic-auth.example.json` (with sibling
-`examples/basic-auth/type-map-read.json`).
 
 ## `oauth2_authorization_code`
 
@@ -66,10 +63,22 @@ Example: `examples/oauth2-authorization-code/oauth2-authorization-code.example.j
 **Optional:** `refresh`, `test`.
 
 Used for machine-to-machine auth. The `token_exchange` request POSTs
-client credentials and gets an access token.
+client credentials and gets an access token (no browser redirect):
 
-Example: `examples/oauth2-client-credentials/oauth2-client-credentials.example.json`
-(with sibling `examples/oauth2-client-credentials/type-map-read.json`).
+```json
+"auth": {
+  "type": "oauth2_client_credentials",
+  "token_exchange": {
+    "transport_ref": "auth",
+    "method": "POST",
+    "path": "/oauth/token",
+    "headers": { "Content-Type": "application/x-www-form-urlencoded" },
+    "body": {
+      "template": "grant_type=client_credentials&client_id=${connection.parameters.client_id}&client_secret=${secrets.client_secret}"
+    }
+  }
+}
+```
 
 ## `jwt`
 

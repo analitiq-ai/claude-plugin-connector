@@ -4,6 +4,22 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
 
 ## ProviderFacts (discriminated union by kind)
 
+`ProviderFacts` is the researcher's **coverage of the published contract** —
+the facts the live schemas (`connector`, `api-endpoint`,
+`type-map-read`/`-write`) require in order to author a connector for the
+target system. It is shaped *like* the contract, not maintained as a curated
+parallel list (design: `docs/design/contract-derived-research.md`).
+
+Read the schema below as a **floor, not a ceiling**: it pins the facts the
+pipeline depends on by name, but the researcher's mission is "ground every
+fact the contract asks about." When current docs expose a contract-relevant
+fact this fragment does not name, the researcher records it (alongside a
+`notes` line) rather than dropping it — the contract, not this fragment, is
+the source of truth for *what to know*. Per-resource response **field
+schemas** (the field-level facts that decide things like datetime
+zone-awareness) are not carried here; they are researched per endpoint in the
+fan-out and returned as `EndpointFacts` (below).
+
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -60,6 +76,7 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
         },
         "discovery_endpoints": {
           "type": "array",
+          "description": "Dynamic POST-AUTH discovery probes only (e.g. a call that resolves a per-tenant api_domain). NOT the list of data resources to author endpoints for — that is `resources`.",
           "items": {
             "type": "object",
             "properties": {
@@ -68,6 +85,28 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
               "path": { "type": "string" }
             }
           }
+        },
+        "resources": {
+          "type": "array",
+          "description": "The data resources the connector should expose — the domain branch's resource list. The orchestrator enumerates these into the endpoint fan-out worklist; each becomes one `endpoint-creator` branch fed by its own `EndpointFacts`. Carries only what the domain pass can know without deep-diving each resource's fields; the per-resource response field schema is researched per endpoint (see `EndpointFacts`).",
+          "items": {
+            "type": "object",
+            "required": ["key"],
+            "properties": {
+              "key": { "type": "string", "description": "Stable resource slug; becomes the endpoint_id (pattern ^[a-z0-9][a-z0-9_-]*$)." },
+              "label": { "type": "string" },
+              "method": { "type": "string" },
+              "path": { "type": "string" },
+              "paginated": { "type": "boolean", "description": "Whether this resource's list operation paginates (style is the connector-level `pagination`)." },
+              "writable": { "type": "boolean", "description": "Whether the provider documents a write (insert/upsert) for this resource." },
+              "replication_cursor": { "type": "string", "description": "Field usable as an incremental/replication cursor, when the resource supports one; else absent." }
+            }
+          }
+        },
+        "native_type_vocabulary": {
+          "type": "array",
+          "description": "Connector-wide set of native wire-type tokens observed across the provider's resources (e.g. `string`, `integer`, `date-time`, `number`, `boolean`, provider-specific scalar names). Researched at the domain level so the creator can author a COMPLETE `type-map-read` before fan-out; every endpoint field must resolve through that map. A genuinely new native surfaced by an endpoint is a domain-level type-map addition, never an endpoint-local one.",
+          "items": { "type": "string" }
         },
         "pagination": {
           "type": "object",
@@ -132,6 +171,65 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
       "required": ["driver", "transport_family"]
     }
   ]
+}
+```
+
+## EndpointFacts (per-resource field schema — API fan-out only)
+
+One `EndpointFacts` object per data resource: the researcher's
+**per-endpoint** pass in the fan-out grounds the researched fields, the
+orchestrator injects the connector-level `pagination` (echoed from
+`ProviderFacts.pagination`), and `endpoint-creator` consumes it. This
+is the category that `ProviderFacts` deliberately does **not** carry: the
+field-level truths about one resource's response — including the datetime
+zone-awareness that was previously guessed (issue #12). Every field fact is
+grounded on the resource's own documentation / a real sample; an
+`endpoint-creator` dispatched without `EndpointFacts` refuses (it has no web
+access and may not guess field types).
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["resource", "fields"],
+  "properties": {
+    "resource": { "type": "string", "description": "Resource key; matches the ProviderFacts.resources[].key and becomes the endpoint_id." },
+    "method": { "type": "string" },
+    "path": { "type": "string" },
+    "paginated": { "type": "boolean", "description": "Whether this resource's list operation paginates." },
+    "pagination": {
+      "type": "object",
+      "description": "The connector-wide pagination style + params (echoed from ProviderFacts.pagination into the branch), so endpoint-creator — which sees only EndpointFacts + the connector body — can author the per-endpoint pagination block. Present whenever `paginated` is true.",
+      "properties": {
+        "style": { "type": "string", "enum": ["offset", "page", "cursor", "link", "keyset"] },
+        "params": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "replication_cursor": { "type": "string", "description": "Field usable as an incremental cursor, when the resource supports one." },
+    "record_path": { "type": "string", "description": "Path to the iterable record collection in the response body (informs response.records, e.g. `response.body.data`)." },
+    "writable": { "type": "boolean" },
+    "conflict_keys": { "type": "array", "items": { "type": "string" }, "description": "Provider-documented natural key for upsert, when the resource is upsertable." },
+    "fields": {
+      "type": "array",
+      "minItems": 1,
+      "description": "One entry per response field the connector exposes. `native_type` must be a token covered by ProviderFacts.native_type_vocabulary; `arrow_type` is the canonical Arrow type the field resolves to.",
+      "items": {
+        "type": "object",
+        "required": ["name", "native_type", "arrow_type"],
+        "properties": {
+          "name": { "type": "string" },
+          "native_type": { "type": "string", "description": "Provider's documented/observed wire-type token (e.g. `string`, `integer`, `date-time`)." },
+          "arrow_type": { "type": "string", "description": "Canonical Arrow type (PascalCase). For temporals, chosen from the SAMPLE value's zone-awareness: a zoneless wire value → bare `Timestamp(<unit>)`; a value carrying an offset/Z → `Timestamp(<unit>, UTC)`. Never default date-time to tz-aware." },
+          "nullable": { "type": "boolean" },
+          "enum": { "type": "array", "items": { "type": "string" }, "description": "Closed value domain, when the field is enumerated in the docs." },
+          "format": { "type": "string", "description": "Documented string format (e.g. `email`, `uri`, `uuid`, `date`)." },
+          "sample_value": { "type": "string", "description": "A real wire sample. REQUIRED for any temporal field so zone-awareness is decided on evidence, not guessed." },
+          "tz_aware": { "type": "boolean", "description": "For date-time fields: true iff the wire value carries a zone/offset. Set from `sample_value`, not assumed." }
+        }
+      }
+    },
+    "notes": { "type": "string" }
+  }
 }
 ```
 

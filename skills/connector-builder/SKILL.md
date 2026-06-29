@@ -40,8 +40,9 @@ identified by `connector_path`, so `provider` is optional.
 
 The orchestrator runs in one of three modes (input `mode`, default
 `build`). `build` and `update` share phases 1–5 and differ only at
-phases 0, 6, and 7; `validate` runs only phase 0 → phase 5 (report-only,
-no fix loop), skipping phases 1–4 and 6–7.
+phases 0, 6, and 7; `validate` runs phase 0 then validates the on-disk
+documents (report-only, no fix loop), skipping research, authoring,
+drift, and write.
 
 - **`build`** (default) — author a fresh connector. Phase 0 halts if a
   `{connector_id}/` directory already exists.
@@ -56,10 +57,10 @@ no fix loop), skipping phases 1–4 and 6–7.
   treated as fully reproducible from `ProviderFacts` + creator logic;
   non-reproducible hand edits to a connector are not preserved across an
   update (known limitation).
-- **`validate`** — read-only. Skip phases 1–4 and 6–7; run phase 5
-  (validation) over the on-disk documents and report the diagnostics. Do
-  not research, author, fix, or write. To fix reported findings, re-run
-  in `update` mode.
+- **`validate`** — read-only. Skip phases 1–3 and 5–7; run phase 4
+  (validation) over the on-disk documents (connector, type maps, and all
+  endpoint files) and report the diagnostics. Do not research, author,
+  fix, or write. To fix reported findings, re-run in `update` mode.
 
 ## Required reading
 
@@ -100,28 +101,36 @@ sub-agents own those skills.
    - **`validate`** — read the on-disk documents under `connector_path`
      (`definition/connector.json`, `definition/type-map-read.json`,
      `definition/type-map-write.json` when present, and
-     `definition/endpoints/*.json`) and skip directly to phase 5. No
+     `definition/endpoints/*.json`) and skip directly to phase 4. No
      research, authoring, or writing. If `connector_path` does not exist,
      halt and tell the user there is nothing to validate.
 
-1. **Research** — invoke `connector-provider-researcher`. Receive
-   `ProviderFacts` (discriminated by kind). Pass `docs_url` when the
-   user supplied one; otherwise the researcher locates the official
-   docs itself and reports the URL it used.
+1. **Research (domain)** — invoke `connector-provider-researcher` at
+   `scope: domain`, handing it the **live contract schema URLs** as its
+   mission spec (`connector` + `type-map-read`, plus `type-map-write` for
+   databases). The schema is *what to research*; the researcher walks it
+   and grounds every fact in the provider's docs. Receive `ProviderFacts`
+   (discriminated by kind), which carries the connector skeleton, the
+   **resource list** (`resources`), and the connector-wide
+   `native_type_vocabulary`. Pass `docs_url` when the user supplied one;
+   otherwise the researcher locates the official docs itself and reports
+   the URL it used.
 2. **Classify** — run the closed-enum mappers inline (see
    `references/enum-mappers.md`):
    - `KindMapper` → `kind`.
    - `AuthTypeMapper` → `auth.type`.
    - `TransportTypeMapper` → `transport_type` per transport.
-3. **Dispatch creator** — based on `kind`:
+3. **Dispatch creator (domain body + type maps)** — based on `kind`:
    - `kind = api` → `api-connector-creator`.
    - `kind = database` → `db-connector-creator`.
    - `kind ∈ {file, s3, stdout}` → `storage-connector-creator` (stub).
-4. **Endpoint files (api only)** — for each public resource in
-   `ProviderFacts.discovery_endpoints` or the user-specified resource
-   list, invoke `endpoint-creator`. Endpoint creators may run in
-   parallel — dispatch them in a single message.
-5. **Validate** — invoke `connector-schema-validator`:
+
+   The creator authors the connector body and the type map(s) — **not**
+   endpoints. Always pass `provider_facts`; without it the creator
+   refuses (its hard gate, which makes skipping research structurally
+   impossible).
+4. **Validate the domain (barrier)** — invoke
+   `connector-schema-validator` over the connector body and type map(s):
    - Connector → `https://schemas.analitiq.ai/connector/latest.json`.
    - Read map (`type-map-read.json`) →
      `https://schemas.analitiq.ai/type-map-read/latest.json`.
@@ -129,35 +138,62 @@ sub-agents own those skills.
      `https://schemas.analitiq.ai/type-map-write/latest.json`. Both maps
      run the full Layer 1 + Layer 2 pass; the validator derives the
      direction from the filename. Do not pass `--semantic-only`.
-   - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`.
-   - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`.
 
    The validator validates JSON documents only. The database package
    files (`connector.py`, `__init__.py`, `requirements.txt`,
    `pyproject.toml`) are NOT validated here — registry CI owns their
    enforcement (wheel build + entry-point checks).
 
-   In `validate` mode, run the validator once over the on-disk
-   documents, report the resulting `Diagnostics`, and stop — there is no
-   fix loop and no creator re-dispatch (phases 1–4 were skipped, so there
-   is no `CreatorOutput` to revise). The fix loop below applies to
-   `build` and `update` only.
+   This is a **barrier**: in `build` / `update` mode the connector body
+   and type maps MUST validate clean before any endpoint fan-out, because
+   each endpoint references the connector's transports/auth and resolves
+   its field types through `type-map-read`. For `kind = database` this
+   completes validation — database connectors author no endpoint files,
+   so phase 5 is skipped.
+
+   In `validate` mode, run the validator once over **every** on-disk
+   document (connector, both type maps when present, and all
+   `endpoints/*.json`), report the resulting `Diagnostics`, and stop —
+   there is no fix loop and no creator re-dispatch (phases 1–3 and 5 were
+   skipped, so there is no `CreatorOutput` to revise). The fix loop below
+   applies to `build` and `update` only.
 
    In `build` / `update` mode the orchestrator should attempt at most 5
    fix passes per artifact — re-dispatch the matching creator with the
    validator's findings and the artifacts it produced on the prior pass
-   (`CreatorOutput` / `EndpointCreatorOutput`), re-validate, repeat. The
-   creator — not the orchestrator — decides whether each finding is a
-   real defect or a validator false positive; it owns the spec. Pass
-   `Diagnostics.findings` verbatim and do not pre-filter, pre-diagnose,
-   or read spec material to interpret them yourself. If `error`-severity
-   findings persist after 5
-   passes, halt and surface the diagnostics; do not write partial
-   files. The validator script itself is single-shot — iteration
-   discipline lives in the orchestrator's prose, not in the script.
-   The cap is best-effort and not runtime-enforced; runtime
-   enforcement is tracked at
+   (`CreatorOutput`), re-validate, repeat. The creator — not the
+   orchestrator — decides whether each finding is a real defect or a
+   validator false positive; it owns the spec. Pass `Diagnostics.findings`
+   verbatim and do not pre-filter, pre-diagnose, or read spec material to
+   interpret them yourself. If `error`-severity findings persist after 5
+   passes, halt and surface the diagnostics; do not write partial files.
+   The validator script itself is single-shot — iteration discipline
+   lives in the orchestrator's prose, not in the script. The cap is
+   best-effort and not runtime-enforced; runtime enforcement is tracked at
    https://github.com/analitiq-ai/ai-plugins-official/issues/26.
+5. **Endpoint fan-out (api only)** — the domain is authored and clean, so
+   now author one endpoint per resource, **concurrently and bounded**.
+   Enumerate `ProviderFacts.resources` (or the user-specified resource
+   list) into a **worklist** with per-item state (`pending → running →
+   done · failed`) so no resource is dropped. Run each resource as its
+   own branch, at most **N concurrent** (default **10**); as one finishes,
+   pull the next `pending`. Each branch is:
+   - `connector-provider-researcher` at `scope: endpoint` → `EndpointFacts`
+     (that resource's response field schema — datetime zone-awareness from
+     a real sample value, enum domains, nullability, formats),
+   - `endpoint-creator` authors the endpoint document from those facts
+     (its hard gate: no `EndpointFacts`, no authoring),
+   - `connector-schema-validator` against
+     `https://schemas.analitiq.ai/api-endpoint/latest.json`, with the same
+     per-artifact 5-pass fix loop as phase 4.
+
+   A branch that still fails after the fix cap is marked `failed` in the
+   worklist and surfaced — it does **not** block its siblings, and the
+   orchestrator reports partial results rather than silently dropping the
+   endpoint. If a resource exposes a native not in
+   `type_map_read`, that is a **domain-level** type-map addition: re-author
+   and re-validate the domain (phases 3–4), never patch the map per
+   endpoint — canonical types stay consistent across endpoints.
 6. **Drift** — the classifier reads `previous_version` from
    `previous_release_path` and returns the computed `next_version`; set
    the connector's top-level `version` to that `next_version` directly
@@ -203,6 +239,9 @@ Report to the user:
 
 - Path of the connector file.
 - Paths of any endpoint files.
+- **Endpoint worklist outcome** — count `done`, and name every `failed`
+  resource with its last diagnostics. Never silently drop a resource that
+  could not be authored.
 - Final `version` and the drift verdict that produced it.
 - Validator clean-run summary (count of artifacts validated, all clean).
 

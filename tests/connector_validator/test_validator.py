@@ -118,9 +118,12 @@ def test_layer1_malformed_write_map_rejected_against_live_schema(tmp_path):
 
 
 def test_db_example_maps_present():
-    """Guard against the network parametrize collapsing to zero cases."""
-    assert len(EXAMPLE_READ_MAPS) >= 3, f"expected ≥ 3 example read maps, found {EXAMPLE_READ_MAPS}"
-    assert len(EXAMPLE_WRITE_MAPS) >= 3, f"expected ≥ 3 example write maps, found {EXAMPLE_WRITE_MAPS}"
+    """Guard against the network parametrize collapsing to zero cases. The
+    examples are a small set of diverse archetypes (sqlalchemy + adbc), not one
+    per provider — per-provider maps are derived from research at authoring
+    time (see spec-type-maps.md)."""
+    assert len(EXAMPLE_READ_MAPS) >= 2, f"expected ≥ 2 example read maps, found {EXAMPLE_READ_MAPS}"
+    assert len(EXAMPLE_WRITE_MAPS) >= 2, f"expected ≥ 2 example write maps, found {EXAMPLE_WRITE_MAPS}"
 
 
 def test_schema_fetch_failure_is_diagnosed():
@@ -149,8 +152,10 @@ def test_reference_example_passes_semantic_validation(example):
 
 
 def test_examples_glob_is_non_empty():
-    """Guard against the parametrize collapsing to zero cases silently."""
-    assert len(EXAMPLES_GLOB) >= 10, f"expected ≥ 10 reference examples, found {len(EXAMPLES_GLOB)}"
+    """Guard against the parametrize collapsing to zero cases silently. The
+    reference set is a small group of diverse archetypes (api_key /
+    oauth2_authorization_code / jwt; sqlalchemy / adbc), not one per provider."""
+    assert len(EXAMPLES_GLOB) >= 5, f"expected ≥ 5 reference examples, found {len(EXAMPLES_GLOB)}"
 
 
 @pytest.mark.network
@@ -176,8 +181,8 @@ def test_endpoint_example_passes_against_live_schema(endpoint):
 
 def test_endpoint_examples_glob_is_non_empty():
     """Guard against the endpoint parametrize collapsing to zero cases."""
-    assert len(ENDPOINT_EXAMPLES_GLOB) >= 5, (
-        f"expected ≥ 5 endpoint examples, found {len(ENDPOINT_EXAMPLES_GLOB)}"
+    assert len(ENDPOINT_EXAMPLES_GLOB) >= 3, (
+        f"expected ≥ 3 endpoint examples, found {len(ENDPOINT_EXAMPLES_GLOB)}"
     )
 
 
@@ -920,6 +925,69 @@ def test_type_map_unclosed_placeholder_caught(tmp_path):
     errs = errors_of(result, "type-map-rule")
     assert any(e["path"] == "/0/native" and "unclosed" in e["message"] for e in errs), \
         f"expected unclosed-placeholder finding on /0/native; got {errs}"
+
+
+def test_type_map_schemaless_native_scalar_canonical_caught(tmp_path):
+    """A schemaless/structured-container native (JSONB) mapped to a scalar
+    canonical (Utf8) is a type-map-rule error — the canonical must describe the
+    shape, not collapse it to an opaque string."""
+    read_path = tmp_path / "type-map-read.json"
+    read_path.write_text(json.dumps([
+        {"match": "exact", "native": "JSONB", "canonical": "Utf8"}
+    ]))
+    result = run_validator(read_path, "--semantic-only", schema_url=TYPE_MAP_READ_SCHEMA_URL)
+    errs = errors_of(result, "type-map-rule")
+    assert any(
+        e["path"] == "/0/canonical" and "schemaless" in e["message"] and "JSONB" in e["message"]
+        for e in errs
+    ), f"expected schemaless-container finding on /0/canonical; got {errs}"
+
+
+def test_type_map_schemaless_native_container_canonical_ok(tmp_path):
+    """The same natives mapped to a container canonical (Json) are clean —
+    including a parameterized `array<...>` and a SQL `[]` array suffix."""
+    read_path = tmp_path / "type-map-read.json"
+    read_path.write_text(json.dumps([
+        {"match": "exact", "native": "JSONB", "canonical": "Json"},
+        {"match": "exact", "native": "VARIANT", "canonical": "Json"},
+        {"match": "exact", "native": "object", "canonical": "Json"},
+        {"match": "regex", "native": "^ARRAY<(?<t>[A-Z]+)>$", "canonical": "List"},
+        {"match": "regex", "native": ".*\\[\\]$", "canonical": "Json"},
+    ]))
+    result = run_validator(read_path, "--semantic-only", schema_url=TYPE_MAP_READ_SCHEMA_URL)
+    assert not [
+        e for e in errors_of(result, "type-map-rule")
+        if "schemaless" in e["message"]
+    ], "container canonicals must not be flagged"
+
+
+def test_type_map_array_suffix_scalar_caught(tmp_path):
+    """A SQL array-suffix native (`integer[]`, regex `.*[]$`) resolving to a
+    scalar is caught; a non-empty bracketed type like `FOO[3]` is not a false
+    positive."""
+    read_path = tmp_path / "type-map-read.json"
+    read_path.write_text(json.dumps([
+        {"match": "regex", "native": ".*\\[\\]$", "canonical": "Utf8"},
+        {"match": "regex", "native": "^FOO\\[[0-9]+\\]$", "canonical": "Utf8"},
+    ]))
+    result = run_validator(read_path, "--semantic-only", schema_url=TYPE_MAP_READ_SCHEMA_URL)
+    flagged = [e["path"] for e in errors_of(result, "type-map-rule") if "schemaless" in e["message"]]
+    assert flagged == ["/0/canonical"], f"only the []-array rule should flag; got {flagged}"
+
+
+def test_type_map_schemaless_rule_is_read_direction_only(tmp_path):
+    """The schemaless check is read-only. A write map (canonical is the
+    matcher, native the render) is never subject to it — `Json` rendering a
+    scalar-looking native must stay clean."""
+    write_path = tmp_path / "type-map-write.json"
+    write_path.write_text(json.dumps([
+        {"match": "exact", "canonical": "Json", "native": "JSONB"},
+        {"match": "exact", "canonical": "Utf8", "native": "TEXT"},
+    ]))
+    result = run_validator(write_path, "--semantic-only", schema_url=TYPE_MAP_WRITE_SCHEMA_URL)
+    assert not [
+        e for e in errors_of(result, "type-map-rule") if "schemaless" in e["message"]
+    ], "write-direction rules must not trigger the schemaless check"
 
 
 def test_type_map_duplicate_rule_warned():
