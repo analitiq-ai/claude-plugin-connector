@@ -976,6 +976,158 @@ def test_connector_endpoint_marker_violation_surfaced_via_coverage(tmp_path):
     ), f"expected connector-level marker error from sibling endpoint; got {errs}"
 
 
+def test_marker_list_items_must_be_a_subschema(tmp_path):
+    """`List` + `items` that isn't a sub-schema (boolean/null/scalar) does not
+    declare an element shape and is flagged the same as a missing `items`."""
+    for bad in (False, None, 5):
+        ep = _write_marker_endpoint(tmp_path, {
+            "type": "array",
+            "native_type": "array",
+            "arrow_type": "List",
+            "items": bad,
+        })
+        errs = errors_of(
+            run_validator(ep, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL),
+            "endpoint-annotations",
+        )
+        assert any('"List"' in e["message"] and "items" in e["message"] for e in errs), \
+            f"expected List+items={bad!r} to be flagged as no element spec; got {errs}"
+
+
+def test_marker_object_list_on_params_flagged(tmp_path):
+    """A `Param` is `additionalProperties: false` (no `properties`/`items`), so
+    an Object/List marker on a param can never be satisfied and must be flagged;
+    a `Json` param (opaque) and a scalar param are clean."""
+    endpoint = {
+        "$schema": API_ENDPOINT_SCHEMA_URL,
+        "endpoint_id": "items",
+        "operations": {
+            "read": {
+                "request": {"method": "GET", "path": "/items"},
+                "response": {"records": {"ref": "response.body"}, "schema": {"type": "object"}},
+                "params": {
+                    "shape": {"native_type": "obj", "arrow_type": "Object"},
+                    "blob": {"native_type": "jsonb", "arrow_type": "Json"},
+                    "q": {"native_type": "text", "arrow_type": "Utf8"},
+                },
+            }
+        },
+    }
+    path = tmp_path / "items.json"
+    path.write_text(json.dumps(endpoint))
+    errs = errors_of(
+        run_validator(path, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL),
+        "endpoint-annotations",
+    )
+    assert any("/operations/read/params/shape" in e["message"] and '"Object"' in e["message"]
+               for e in errs), f"expected Object-marker param to be flagged; got {errs}"
+    # Json param (opaque) and scalar param must NOT be flagged.
+    assert not any("/params/blob" in e["message"] or "/params/q" in e["message"] for e in errs), \
+        f"Json/scalar params must not be flagged; got {errs}"
+
+
+def test_marker_violation_in_write_input_schema(tmp_path):
+    """The write-mode `input.schema` branch is enforced, with a write-scoped pointer."""
+    endpoint = {
+        "$schema": API_ENDPOINT_SCHEMA_URL,
+        "endpoint_id": "items",
+        "operations": {
+            "write": {
+                "insert": {
+                    "request": {"method": "POST", "path": "/items"},
+                    "input": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "tags": {"type": "array", "native_type": "array", "arrow_type": "List"},
+                            },
+                        }
+                    },
+                }
+            }
+        },
+    }
+    path = tmp_path / "items.json"
+    path.write_text(json.dumps(endpoint))
+    errs = errors_of(
+        run_validator(path, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL),
+        "endpoint-annotations",
+    )
+    assert any(
+        "/operations/write/insert/input/schema/properties/tags" in e["message"]
+        and '"List"' in e["message"] and "items" in e["message"]
+        for e in errs
+    ), f"expected write-input List-without-items error; got {errs}"
+
+
+def test_marker_parameterized_forms_not_flagged(tmp_path):
+    """Self-describing parameterized containers (`List<…>`, `Struct<…>`) and
+    scalars carry no sibling contract — they must NOT trip the marker check
+    even with no `properties`/`items`. Guards against loosening the exact-set
+    membership test to a prefix match."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "ids": {"native_type": "array", "arrow_type": "List<Int64>"},
+            "rec": {"native_type": "struct", "arrow_type": "Struct<id:Int64>"},
+            "n": {"native_type": "int", "arrow_type": "Int64"},
+        },
+    }
+    ep = _write_marker_endpoint(tmp_path, schema)
+    errs = errors_of(
+        run_validator(ep, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL),
+        "endpoint-annotations",
+    )
+    assert not errs, f"parameterized/scalar arrow types must not trip the marker check; got {errs}"
+
+
+def test_marker_recurses_through_items(tmp_path):
+    """The recursion covers the `items` branch too: a List-of-Objects whose
+    element Object lacks `properties` is flagged at the `/items` pointer."""
+    ep = _write_marker_endpoint(tmp_path, {
+        "type": "array",
+        "native_type": "array",
+        "arrow_type": "List",
+        "items": {"type": "object", "native_type": "json", "arrow_type": "Object"},
+    })
+    errs = errors_of(
+        run_validator(ep, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL),
+        "endpoint-annotations",
+    )
+    assert any(
+        "/operations/read/response/schema/items" in e["message"] and '"Object"' in e["message"]
+        for e in errs
+    ), f"expected nested Object-in-items violation at /items pointer; got {errs}"
+
+
+def test_marker_message_keys_cover_every_emitted_kind():
+    """Drift guard: every `kind` `_check_marker_siblings` can emit must have a
+    `_MARKER_SIBLING_MESSAGES` entry, else the `[problem_kind]` subscript at the
+    emission sites raises KeyError (caught by the per-validator guard, but it
+    would collapse the whole validator's findings into one crash finding)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("validate_connector", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    emitted: set[str] = set()
+    probes = [
+        ({}, "Object"),
+        ({"properties": {"a": {}}, "items": {}}, "Object"),
+        ({}, "List"),
+        ({"items": {}, "properties": {"a": {}}}, "List"),
+        ({"properties": {"a": {}}}, "Json"),
+        ({"items": {}}, "Json"),
+    ]
+    for node, arrow in probes:
+        out: list = []
+        mod._check_marker_siblings(node, arrow, "/", out)
+        emitted |= {kind for _, kind in out}
+    assert emitted == set(mod._MARKER_SIBLING_MESSAGES), \
+        f"emitted kinds and message keys diverged: {emitted ^ set(mod._MARKER_SIBLING_MESSAGES)}"
+
+
 def test_api_endpoint_arrow_template_substitution_renders():
     """A regex rule with ${name} substitution renders before comparison."""
     import tempfile

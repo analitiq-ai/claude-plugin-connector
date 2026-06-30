@@ -29,6 +29,7 @@ import validate_connector as v  # noqa: E402
 
 CONNECTOR_URL = v.CONNECTOR_SCHEMA_URL
 API_ENDPOINT_URL = "https://schemas.analitiq.ai/api-endpoint/latest.json"
+CANONICAL_TYPES_URL = "https://schemas.analitiq.ai/canonical-types.json"
 
 # --- plugin-side expected sets ---------------------------------------------
 # These mirror the schema-owned enums restated across CLAUDE.md and
@@ -58,6 +59,13 @@ EXPECTED_DSN_ENCODINGS = {
     "url_query_value",
 }
 EXPECTED_PAGINATION_STYLES = {"offset", "page", "cursor", "link", "keyset"}
+# Bare-marker arrow_type vocabulary the validator mirrors as
+# `_BARE_MARKER_ARROW_TYPES` to enforce the sibling-key contract
+# (Object→properties, List→items, Json→neither). Owned by
+# canonical-types.json `$defs/authored_shape_type` (and accepted by the
+# api-endpoint `arrow_type` pattern); the published schema does NOT enforce
+# the siblings, so the validator must — keep this set in lockstep.
+EXPECTED_BARE_MARKER_ARROW_TYPES = {"Object", "List", "Json"}
 
 
 def _const_types(schema: dict, def_suffix: str) -> set[str]:
@@ -162,6 +170,32 @@ def test_pagination_styles_match_schema(api_endpoint_schema: dict) -> None:
         schema_set,
         EXPECTED_PAGINATION_STYLES,
         "update io-contracts.md ProviderFacts and spec-pagination.md.",
+    )
+
+
+@pytest.fixture(scope="module")
+def canonical_types_schema() -> dict:
+    try:
+        return v.fetch_schema(CANONICAL_TYPES_URL, cache=False)
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        pytest.skip(f"live canonical-types schema unreachable: {exc}")
+
+
+@pytest.mark.network
+def test_bare_marker_arrow_types_match_schema(canonical_types_schema: dict) -> None:
+    schema_set = v._enum_at(canonical_types_schema, "$defs", "authored_shape_type")
+    assert schema_set == EXPECTED_BARE_MARKER_ARROW_TYPES, _diff_msg(
+        "authored_shape_type",
+        schema_set,
+        EXPECTED_BARE_MARKER_ARROW_TYPES,
+        "update _BARE_MARKER_ARROW_TYPES + _check_marker_siblings in "
+        "validate_connector.py, CLAUDE.md, and the connector-schema-validator "
+        "endpoint-annotations row.",
+    )
+    # The set the validator actually enforces must equal the contract's.
+    assert v._BARE_MARKER_ARROW_TYPES == EXPECTED_BARE_MARKER_ARROW_TYPES, (
+        "validator's _BARE_MARKER_ARROW_TYPES diverged from the contract: "
+        f"{v._BARE_MARKER_ARROW_TYPES ^ EXPECTED_BARE_MARKER_ARROW_TYPES}"
     )
 
 
