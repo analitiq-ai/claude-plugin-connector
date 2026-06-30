@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/analitiq-ai/claude-plugin-connector/compare/v0.1.2...v0.1.3) (2026-06-30)
+
+
+### Features
+
+* enforce endpoint filename equals endpoint_id in validation ([#24](https://github.com/analitiq-ai/claude-plugin-connector/issues/24)) ([87061cb](https://github.com/analitiq-ai/claude-plugin-connector/commit/87061cbc373e8dc6e7740289b5b6f5ec279c69ec))
+
 ## [0.1.2](https://github.com/analitiq-ai/claude-plugin-connector/compare/v0.1.1...v0.1.2) (2026-06-30)
 
 
