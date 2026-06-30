@@ -1141,10 +1141,11 @@ def test_marker_recurses_through_combiners(tmp_path):
 
 
 def test_marker_message_keys_cover_every_emitted_kind():
-    """Drift guard: every `kind` `_check_marker_siblings` can emit must have a
-    `_MARKER_SIBLING_MESSAGES` entry, else the `[problem_kind]` subscript at the
-    emission sites raises KeyError (caught by the per-validator guard, but it
-    would collapse the whole validator's findings into one crash finding)."""
+    """Drift guard: every `kind` `_check_marker_siblings` can emit should have a
+    `_MARKER_SIBLING_MESSAGES` entry. A missing entry no longer crashes — the
+    emission sites route through `_marker_sibling_message()`, which falls back to
+    a generic message — but it silently drops the kind-specific guidance, so
+    keep the mapping complete."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("validate_connector", SCRIPT)
