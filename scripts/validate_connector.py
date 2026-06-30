@@ -292,44 +292,53 @@ def _is_value_expression(node: Any) -> str | None:
 _SINGLE_TOKEN_SCOPES = {s for s in KNOWN_SCOPES if "." not in s}
 _MULTI_TOKEN_SCOPE_HEADS = {s.split(".", 1)[0] for s in KNOWN_SCOPES if "." in s}
 
-# Response-extraction namespace. These scopes read from the provider's HTTP
-# *response* (the record selector, pagination cursors/links, and
+# Response-extraction namespace. The `response` scope reads from the provider's
+# HTTP *response* (the record selector, pagination cursors/links, and
 # `stop_when`/`success_when` predicates), as opposed to the request-side
-# `KNOWN_SCOPES` above which *construct* the outgoing request. Per the
-# published value-expression contract (`shared/value-expression-parameterization.md`,
-# the "context scopes" table) `response` is a first-class scope alongside the
-# request-side ones; `record`/`records` name the per-record selector context.
+# `KNOWN_SCOPES` above which *construct* the outgoing request. Per the published
+# value-expression contract (`shared/value-expression-parameterization.md`, the
+# "context scopes" table) `response` is a first-class scope alongside the
+# request-side ones; its sub-paths (`response.body.*`, `response.headers.*`, …)
+# all hang off this single head.
 #
-# They are kept DELIBERATELY OUT of `KNOWN_SCOPES`: they are legal ONLY at
-# response-extraction sites (an endpoint operation's `response`/`pagination`
-# subtree) and must stay rejected in request-construction slots. Folding them
-# into the global set would trade the old false positive (flagging a spec-
-# mandated `response.body`) for a false negative (silently accepting a header
-# that references the not-yet-existent response). The gating is positional —
-# see `_is_response_extraction_path`.
+# It is kept DELIBERATELY OUT of `KNOWN_SCOPES`: it is legal ONLY at
+# response-extraction sites (see `_is_response_extraction_path`) and must stay
+# rejected in request-construction slots. Folding it into the global set would
+# trade the old false positive (flagging a spec-mandated `response.body`) for a
+# false negative (silently accepting a header that references the
+# not-yet-existent response). The gating is positional.
 #
 # The contract's scope table also lists `request`, `connector`, and `state`;
 # those are not yet exercised by any authored artifact, so they are left out
 # until a real use appears (they would need the same position-aware handling).
-_RESPONSE_SCOPE_HEADS = {"response", "record", "records"}
+_RESPONSE_SCOPE_HEADS = {"response"}
 
 # An endpoint document is a tree of operations; value expressions under an
 # operation's `response` or `pagination` subtree extract from the provider's
-# response, so the `response.*` namespace is valid there and only there.
-# Anchored at `/operations/<op>/` so a request body field that happens to be
-# named "response" or "pagination" is not mistaken for a response-extraction
-# site.
-_RESPONSE_EXTRACTION_PATH = re.compile(r"^/operations/[^/]+/(?:response|pagination)(?:/|$)")
+# response, so the `response.*` namespace is valid there and only there. The
+# alternation mirrors the api-endpoint contract's two operation shapes:
+#   - `operations.read`  — a single object carrying `response` and `pagination`;
+#   - `operations.write` — a mode-keyed map (`insert`/`upsert`), each mode an
+#     object carrying `response` (writes have no `pagination`).
+# So read response refs sit at `/operations/read/{response,pagination}/…` and
+# write response refs one level deeper at `/operations/write/<mode>/response/…`.
+# Anchored at `/operations/…` so a request slot — including a request body field
+# that happens to be named "response"/"pagination" — is never mistaken for a
+# response-extraction site.
+_RESPONSE_EXTRACTION_PATH = re.compile(
+    r"^/operations/(?:read/(?:response|pagination)|write/[^/]+/response)(?:/|$)"
+)
 
 
 def _is_response_extraction_path(path: str) -> bool:
     """True when `path` points inside an operation's response-extraction region.
 
-    Response-extraction sites are the `response` and `pagination` subtrees of
-    an endpoint operation, where value expressions read from the provider's
-    response (record selector, pagination cursor/link, `stop_when` predicates)
-    rather than constructing the request. The `response.*` / `record.*`
-    namespace (`_RESPONSE_SCOPE_HEADS`) is permitted here and nowhere else.
+    Response-extraction sites are an operation's `response` subtree (and, for
+    read operations, `pagination`), where value expressions read from the
+    provider's response — the record selector, pagination cursor/link, and the
+    `stop_when` / `success_when` predicates — rather than constructing the
+    request. The `response.*` namespace (`_RESPONSE_SCOPE_HEADS`) is permitted
+    here and nowhere else.
     """
     return bool(_RESPONSE_EXTRACTION_PATH.match(path))
 
@@ -344,8 +353,8 @@ def _scope_is_known(dotted: str, *, response_ok: bool = False) -> bool:
 
     `response_ok` is set only at response-extraction sites (see
     `_is_response_extraction_path`); it additionally accepts the
-    response-extraction namespace (`response.*`, `record.*`, `records.*`),
-    which is a validation error everywhere else.
+    response-extraction namespace (`response.*`), which is a validation
+    error everywhere else.
     """
     head_one = dotted.split(".", 1)[0]
     if response_ok and head_one in _RESPONSE_SCOPE_HEADS:
@@ -378,8 +387,8 @@ def check_expressions(doc: dict) -> list[dict]:
             continue
         # Value expressions under an operation's response/pagination subtree
         # extract from the provider's response, so the response-extraction
-        # namespace (`response.*`, `record.*`) is valid there; everywhere else
-        # it stays rejected.
+        # namespace (`response.*`) is valid there; everywhere else it stays
+        # rejected.
         response_ok = _is_response_extraction_path(path)
         if kind == "multi-keyed":
             present = sorted(k for k in _EXPRESSION_KEYS if k in node)

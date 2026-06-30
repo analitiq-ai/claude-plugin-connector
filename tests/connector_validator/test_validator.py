@@ -262,8 +262,9 @@ def test_unclosed_template_variable_caught(tmp_path):
 
 
 def _endpoint_with_response_refs() -> dict:
-    """A spec-compliant standalone api-endpoint document whose record selector
-    and pagination predicates use the response-extraction namespace."""
+    """A spec-compliant standalone api-endpoint document whose record selector,
+    response metadata, and pagination predicates use the response-extraction
+    namespace (`response.body.*` and `response.headers.*`)."""
     return {
         "$schema": API_ENDPOINT_SCHEMA_URL,
         "endpoint_id": "widgets",
@@ -278,6 +279,9 @@ def _endpoint_with_response_refs() -> dict:
                 },
                 "response": {
                     "records": {"ref": "response.body.data"},
+                    # `response.headers.*` is a real, spec-documented response
+                    # site (e.g. Link-header pagination) — exercise that head too.
+                    "metadata": {"total": {"ref": "response.headers.x-total-count"}},
                     "schema": {"type": "object"},
                 },
                 "pagination": {
@@ -293,16 +297,78 @@ def _endpoint_with_response_refs() -> dict:
     }
 
 
+def _write_endpoint_with_response_refs() -> dict:
+    """A spec-compliant standalone api-endpoint with a mode-keyed `write`
+    operation whose response-extraction sits one level deeper than `read`
+    (`/operations/write/<mode>/response/...`)."""
+    return {
+        "$schema": API_ENDPOINT_SCHEMA_URL,
+        "endpoint_id": "widgets",
+        "operations": {
+            "write": {
+                "insert": {
+                    "request": {
+                        "method": "POST",
+                        "path": "/widgets",
+                        # Positive control: a request-side ref under the write
+                        # mode block is still validated against request scopes.
+                        "headers": {"Authorization": {"template": "Bearer ${secrets.api_key}"}},
+                    },
+                    "input": {"schema": {"type": "object"}},
+                    "response": {
+                        "generated_keys": {"ref": "response.body.id"},
+                        "affected_records": {"ref": "response.body.count"},
+                    },
+                }
+            }
+        },
+    }
+
+
 def test_response_extraction_refs_not_flagged(tmp_path):
-    """Issue #7: response-extraction refs (`response.body*`) at an operation's
-    response/pagination sites must NOT be flagged as unknown scope. A compliant
-    standalone endpoint must emit zero expression-resolver findings."""
+    """Issue #7: response-extraction refs (`response.body*`, `response.headers*`)
+    at a read operation's response/pagination sites must NOT be flagged as
+    unknown scope. A compliant standalone endpoint must emit zero
+    expression-resolver findings."""
     doc_path = tmp_path / "widgets.json"
     doc_path.write_text(json.dumps(_endpoint_with_response_refs()))
     result = run_validator(doc_path, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL)
     expr_findings = [f for f in result["findings"] if f["validator"] == "expression-resolver"]
     assert expr_findings == [], (
         f"spec-compliant response-extraction refs wrongly flagged; got {expr_findings}"
+    )
+
+
+def test_write_response_extraction_refs_not_flagged(tmp_path):
+    """Issue #7 (write half): `operations.write` is a mode-keyed map, so write
+    response refs live at `/operations/write/<mode>/response/...` — one level
+    deeper than `read`. The carve-out must reach them (a destination connector's
+    `generated_keys`/`affected_records` use `response.body.*`), while a request
+    slot inside the same mode block stays rejected."""
+    doc_path = tmp_path / "widgets.json"
+    doc_path.write_text(json.dumps(_write_endpoint_with_response_refs()))
+    result = run_validator(doc_path, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL)
+    expr_findings = [f for f in result["findings"] if f["validator"] == "expression-resolver"]
+    assert expr_findings == [], (
+        f"write-operation response-extraction refs wrongly flagged; got {expr_findings}"
+    )
+
+
+def test_write_response_scope_rejected_in_request_slot(tmp_path):
+    """Issue #7 anti-shim (write half): `response.*` placed in a write request
+    slot must still error — the deeper write nesting must not widen the carve-out
+    to request-construction positions."""
+    doc = _write_endpoint_with_response_refs()
+    doc["operations"]["write"]["insert"]["request"]["headers"]["X-Bad"] = {"ref": "response.body"}
+    doc_path = tmp_path / "widgets.json"
+    doc_path.write_text(json.dumps(doc))
+    result = run_validator(doc_path, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL)
+    errs = errors_of(result, "expression-resolver")
+    assert any("/request/" in e["path"] for e in errs), (
+        f"expected response.* in a write request slot to be flagged; got {result['findings']}"
+    )
+    assert not any("/response/" in e["path"] for e in errs), (
+        f"write response-extraction refs wrongly flagged; got {errs}"
     )
 
 
@@ -585,13 +651,26 @@ def test_pagination_outside_operation_caught():
 
 def test_malformed_post_auth_outputs_warned():
     """A post_auth_output whose `value_path` is missing/empty (the schema requires
-    a non-empty response-extraction path) should produce a warning. A bare
-    response field like `"id"` is *valid* and must NOT warn (see
-    test_user_selection_response_value_path_not_flagged)."""
+    a non-empty response-extraction path) should produce exactly one warning. A
+    bare response field like `"id"` is *valid* and must NOT warn (see
+    test_user_selection_response_value_path_not_flagged).
+
+    The fixture also references the output's DERIVED path
+    (`connection.discovered.bad_path`) from a transport: even though `value_path`
+    is empty, the produced reference path is derived from storage + key and must
+    still be indexed, so the ref resolves with no phase-resolvability *error*.
+    The empty `value_path` is surfaced as a standalone warning, not a misdirected
+    "not produced" error on the ref."""
     result = run_validator(FIXTURES / "invalid_post_auth_outputs_malformed.json", "--semantic-only")
     warns = warnings_of(result, "phase-resolvability")
-    assert any("value_path" in w["message"] for w in warns), \
-        f"expected malformed-value_path warning; got {warns}"
+    value_path_warns = [w for w in warns if "value_path" in w["message"]]
+    assert len(value_path_warns) == 1, f"expected exactly one value_path warning; got {warns}"
+    # The derived-path ref must resolve — the malformed-but-indexed entry keeps
+    # the produced path declared, so no "not produced" error is misdirected at it.
+    assert errors_of(result, "phase-resolvability") == [], (
+        f"derived produced path should resolve despite empty value_path; got "
+        f"{errors_of(result, 'phase-resolvability')}"
+    )
 
 
 def test_user_selection_response_value_path_not_flagged(tmp_path):

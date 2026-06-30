@@ -7,7 +7,9 @@
   "transports": {
     "api": {
       "transport_type": "http",
-      "base_url": "https://api.example.com"
+      "base_url": {
+        "template": "https://api.example.com/${connection.discovered.bad_path}"
+      }
     }
   },
   "auth": {
