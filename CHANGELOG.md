@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.2](https://github.com/analitiq-ai/claude-plugin-connector/compare/v0.1.1...v0.1.2) (2026-06-30)
+
+
+### Features
+
+* enforce bare-marker arrow_type sibling-key rules in endpoint validation ([#19](https://github.com/analitiq-ai/claude-plugin-connector/issues/19)) ([74527ba](https://github.com/analitiq-ai/claude-plugin-connector/commit/74527ba9e4a28acc5f62a4fd4db15efdd58f9b46))
+* package validator as installable analitiq-connector-validator for standalone CI ([#22](https://github.com/analitiq-ai/claude-plugin-connector/issues/22)) ([0e25b10](https://github.com/analitiq-ai/claude-plugin-connector/commit/0e25b10d4f0a5ef4397f3e27a29ea324cc2487a7))
+
+
+### Bug Fixes
+
+* position-aware response-extraction scopes; value_path as response path ([#18](https://github.com/analitiq-ai/claude-plugin-connector/issues/18)) ([f09395a](https://github.com/analitiq-ai/claude-plugin-connector/commit/f09395af2dc06ee2feafdcb500c983296c2d4d33))
+
 ## [0.1.1](https://github.com/analitiq-ai/claude-plugin-connector/compare/v0.1.0...v0.1.1) (2026-06-29)
 
 
