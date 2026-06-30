@@ -262,7 +262,8 @@ access and may not guess field types).
               "type-map-coverage",
               "type-map-rule",
               "type-map-write-coverage",
-              "endpoint-annotations"
+              "endpoint-annotations",
+              "endpoint-filename"
             ]
           },
           "severity": { "type": "string", "enum": ["error", "warning"] },

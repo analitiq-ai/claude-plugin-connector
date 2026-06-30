@@ -84,7 +84,7 @@ The plugin includes a Python validator module
    - `reserved-field`, `expression-resolver`, `phase-resolvability`,
      `transport-ref`, `dsn-binding`, `auth-shape`, `tls-consistency`,
      `type-map-coverage`, `type-map-rule`, `type-map-write-coverage`,
-     `endpoint-annotations`.
+     `endpoint-annotations`, `endpoint-filename`.
 
    The validator checks JSON documents only; the database package files
    (`connector.py`, `pyproject.toml`, …) are enforced by registry CI.

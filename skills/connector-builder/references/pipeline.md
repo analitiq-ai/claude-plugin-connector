@@ -283,6 +283,14 @@ is out of scope for now.
 Never write a `type-map.json` — that pre-split filename is dead to the
 engine and the validator rejects it with a migration finding.
 
+Each endpoint file's basename **must** equal its `endpoint_id` (write the
+endpoint to `endpoints/{endpoint_id}.json`, never a renamed or aliased
+file). The engine looks an endpoint up by `endpoint_id` and reads
+`endpoints/{endpoint_id}.json`, so a divergent filename is unreachable at
+runtime. The validator's `endpoint-filename` check enforces this — both on
+an endpoint validated directly and on every sibling endpoint during
+connector validation.
+
 ## Failure modes
 
 - Research timeout: ask user for offline-supplied facts or a different docs URL.

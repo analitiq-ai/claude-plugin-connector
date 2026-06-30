@@ -13,7 +13,8 @@ It runs two layers over connector / endpoint / type-map JSON documents:
 - **Layer 2** — semantic validators (reserved-field, expression-resolver,
   phase-resolvability, transport-ref, dsn-binding, auth-shape,
   tls-consistency, **type-map-coverage**, type-map-rule,
-  type-map-write-coverage, endpoint-annotations). **No network.**
+  type-map-write-coverage, endpoint-annotations, endpoint-filename).
+  **No network.**
 
 The canonical source lives at `src/analitiq_connector_validator.py` and is the
 single source of truth: the plugin runtime executes this same file by path, so

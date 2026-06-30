@@ -214,7 +214,12 @@ sub-agents own those skills.
    files replace the existing connector tree (its prior files were read
    as the drift baseline in phase 6, never edited in place); report that
    the tree was regenerated and recommend reviewing `git diff` before
-   committing. API connectors carry only the definition; database
+   committing. Each API endpoint file **must** be named
+   `{endpoint_id}.json` — the basename has to equal the document's
+   `endpoint_id` exactly (the engine locates an endpoint as
+   `endpoints/{endpoint_id}.json`, so a divergent filename is unreachable
+   at runtime). The validator's `endpoint-filename` check enforces this.
+   API connectors carry only the definition; database
    connectors are installable Python packages, so the creator's package
    files land at the connector root:
 

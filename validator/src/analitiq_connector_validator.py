@@ -94,6 +94,7 @@ VALIDATOR_IDS = {
     "type-map-rule",
     "type-map-write-coverage",
     "endpoint-annotations",
+    "endpoint-filename",
 }
 
 
@@ -1814,6 +1815,32 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
                 )
             )
             continue
+        # A parsed-but-non-dict sibling (`[]`, a string, a number) would crash
+        # the `_collect_asymmetric_pairs` walker below on its unguarded
+        # `.get("operations")` — the dispatcher would catch it but mislabel it
+        # a validator bug AND abort the loop, leaving every remaining sibling
+        # unchecked. Shape-gate here so it surfaces as a clean per-file error
+        # and the loop continues.
+        if not isinstance(ep_doc, dict):
+            findings.append(
+                finding(
+                    "type-map-coverage",
+                    "error",
+                    "/",
+                    f"endpoint file '{ep_path.name}' is not a JSON object (got {type(ep_doc).__name__}); "
+                    "cannot analyze its filename or annotations.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+            continue
+        # The endpoint file's basename must equal `{endpoint_id}.json` (the
+        # engine's on-disk lookup key). Enforced here on every sibling, in the
+        # same per-endpoint loop as the asymmetric-pair / marker walkers, so a
+        # connector-level run catches it; the standalone `check_endpoint_filename`
+        # covers an endpoint validated by itself. The parity is positional —
+        # findings surface under the `endpoint-filename` id (not
+        # `type-map-coverage` like the sibling walkers), so don't realign the id.
+        findings.extend(_endpoint_filename_findings(ep_doc, ep_path.name))
         for problem_pointer, problem_kind in _collect_asymmetric_pairs(ep_doc):
             if problem_kind == "asymmetric":
                 findings.append(
@@ -2978,6 +3005,98 @@ def check_endpoint_annotations(doc: Any) -> list[dict]:
     return findings
 
 
+# The engine locates an API endpoint on disk as
+# `{connector_id}/definition/endpoints/{endpoint_id}.json` — the filename is the
+# lookup key, derived from the document's `endpoint_id`. The published
+# api-endpoint schema constrains `endpoint_id` (required, `^[a-z0-9][a-z0-9_-]*$`)
+# but cannot see the filename, so a file whose basename disagrees with its
+# `endpoint_id` is invisible to Layer 1 yet broken at runtime (the engine and
+# the on-disk file diverge). The semantic layer is the only place this is
+# catchable; enforced from both `check_endpoint_filename` (endpoint validated
+# directly) and `check_type_map_coverage` (sibling endpoints during connector
+# validation), mirroring the endpoint-annotations split.
+def _endpoint_filename_findings(ep_doc: Any, filename: str) -> list[dict]:
+    """Findings for an api-endpoint whose file basename ≠ `{endpoint_id}.json`.
+
+    `filename` is the endpoint file's basename (e.g. `"users.json"`). Returns
+    `[]` when the document is not a dict (a defensive guard — the connector
+    walk shape-gates non-dict siblings before calling, and the standalone
+    caller passes a dict) or when the names already agree.
+
+    A missing / non-string `endpoint_id` is NOT a silent pass — it warns. The
+    filename↔id equality is the only thing this check exists to verify, so an
+    unusable id means the check is *prevented*, not satisfied. Layer 1 owns the
+    hard required/pattern error, but it never runs on sibling endpoints (only
+    the top-level CLI document is schema-validated) nor under `--semantic-only`,
+    so a bare `return []` here would let exactly the file this check targets —
+    one with no resolvable on-disk name — pass green. Mirrors the
+    `doc_path is None` / `kind is None` "skipped" warnings.
+    """
+    if not isinstance(ep_doc, dict):
+        return []
+    endpoint_id = ep_doc.get("endpoint_id")
+    if not isinstance(endpoint_id, str):
+        return [
+            finding(
+                "endpoint-filename",
+                "warning",
+                "/endpoint_id",
+                f"endpoint filename check skipped for {filename!r}: endpoint_id is "
+                "absent or non-string, so the basename cannot be compared to the "
+                "expected '{endpoint_id}.json'. Layer 1 owns the hard required/pattern "
+                "error, but it never runs on sibling endpoints during connector "
+                "validation, nor under `--semantic-only` — validate this endpoint file "
+                "directly (without `--semantic-only`) to surface the schema error.",
+                rule_doc="endpoints/api-endpoint-schema-parameterization.md",
+            )
+        ]
+    expected = f"{endpoint_id}.json"
+    if filename == expected:
+        return []
+    return [
+        finding(
+            "endpoint-filename",
+            "error",
+            "/endpoint_id",
+            f"endpoint file is named {filename!r} but its endpoint_id is {endpoint_id!r}; "
+            f"the file must be named {expected!r} — the engine locates an endpoint as "
+            "endpoints/{endpoint_id}.json, so a divergent filename is unreachable at runtime.",
+            rule_doc="endpoints/api-endpoint-schema-parameterization.md",
+        )
+    ]
+
+
+def check_endpoint_filename(doc: Any, doc_path: Path | None = None) -> list[dict]:
+    """Enforce that an api-endpoint file's basename equals `{endpoint_id}.json`.
+
+    Runs only for api-endpoint documents (the dispatcher gates this via
+    `_ENDPOINT_ONLY`). When `doc_path` is None the validator was invoked
+    without a filesystem anchor, so the basename can't be compared — emit a
+    warning rather than a silent pass, mirroring `check_type_map_coverage`'s
+    "no document path" warning. The same equality is also enforced on every
+    sibling endpoint during connector-level validation (in
+    `check_type_map_coverage`), so connector runs cover it too.
+    """
+    findings: list[dict] = []
+    if not isinstance(doc, dict):
+        return findings
+    if doc_path is None:
+        findings.append(
+            finding(
+                "endpoint-filename",
+                "warning",
+                "/",
+                "endpoint filename check skipped: validator was invoked without a "
+                "filesystem-anchored document path; the file basename cannot be compared "
+                "to endpoint_id.",
+                rule_doc="endpoints/api-endpoint-schema-parameterization.md",
+            )
+        )
+        return findings
+    findings.extend(_endpoint_filename_findings(doc, doc_path.name))
+    return findings
+
+
 SEMANTIC_VALIDATORS: dict[str, Callable[..., list[dict]]] = {
     "reserved-field": check_reserved_fields,
     "expression-resolver": check_expressions,
@@ -2990,15 +3109,17 @@ SEMANTIC_VALIDATORS: dict[str, Callable[..., list[dict]]] = {
     "type-map-rule": check_type_map_rules,
     "type-map-write-coverage": check_type_map_write_coverage,
     "endpoint-annotations": check_endpoint_annotations,
+    "endpoint-filename": check_endpoint_filename,
 }
 
 # Validators that accept an optional `doc_path` second positional argument.
 # `type-map-rule` and `type-map-write-coverage` use it to derive the rule
-# direction from the on-disk filename (`type-map-write.json` → write).
-_PATH_AWARE_VALIDATORS = {"type-map-coverage", "type-map-rule", "type-map-write-coverage"}
+# direction from the on-disk filename (`type-map-write.json` → write);
+# `endpoint-filename` uses it to compare the file's basename to `endpoint_id`.
+_PATH_AWARE_VALIDATORS = {"type-map-coverage", "type-map-rule", "type-map-write-coverage", "endpoint-filename"}
 _CONNECTOR_ONLY = {"transport-ref", "dsn-binding", "auth-shape", "tls-consistency", "type-map-coverage"}
 _TYPE_MAP_ONLY = {"type-map-rule", "type-map-write-coverage"}
-_ENDPOINT_ONLY = {"endpoint-annotations"}
+_ENDPOINT_ONLY = {"endpoint-annotations", "endpoint-filename"}
 
 # Module-load invariant: every dispatched validator id MUST be registered in
 # VALIDATOR_IDS. The crash-handler in `run_semantic_validators` calls
