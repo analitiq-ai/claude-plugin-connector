@@ -42,10 +42,19 @@ Both kinds emit the same outer shape. Concrete inputs differ:
 `post_auth_outputs` are the single source of truth for durable post-auth
 context. Required fields per output:
 
-- `mode` — discovery mode (e.g. `discovered`, `selected`).
-- `storage` — `"connection.selections"` for user choices, `"connection.discovered"` for auto-discovered values.
+- `mode` — closed enum: `user_selection` (a value the user picks from an `options_request`) or `auto_discovery` (a value read from a `discovery_request`).
+- `storage` — `"connection.selections"` for user choices (`user_selection`), `"connection.discovered"` for auto-discovered values.
 - `type` — the value's type.
-- `value_path` — the reference path the runtime materializes (e.g. `"connection.discovered.api_domain"`).
+- `value_path` — the **response-extraction path**: the field read out of the
+  `options_request` / `discovery_request` response (e.g. `"id"` for a
+  selection option, `"company_domain"` for a discovery field). It is *not* the
+  materialized reference path.
+
+The durable reference path is **derived** as `storage` + `"."` + the output
+key — e.g. an output keyed `api_domain` with `storage: "connection.discovered"`
+materializes at `connection.discovered.api_domain`, which is what refs and
+`required_for_activation` target. For `user_selection` outputs, `label_path` /
+`options_path` are response-extraction paths too.
 
 Discovery mechanics (`options_request` / `discovery_request`) are
 declared in the same output entry where applicable.

@@ -7,7 +7,9 @@
   "transports": {
     "api": {
       "transport_type": "http",
-      "base_url": "https://api.example.com"
+      "base_url": {
+        "template": "https://api.example.com/${connection.discovered.bad_path}"
+      }
     }
   },
   "auth": {
@@ -29,7 +31,7 @@
         "mode": "auto_discovery",
         "storage": "connection.discovered",
         "type": "string",
-        "value_path": "discovered.foo"
+        "value_path": ""
       }
     }
   }
