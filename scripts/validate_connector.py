@@ -1764,8 +1764,8 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
                     "type-map-coverage",
                     "error",
                     "/",
-                    f"endpoint '{ep_path.name}' field at {problem_pointer} {_MARKER_SIBLING_MESSAGES[problem_kind]}",
-                    rule_doc="endpoints/endpoint-schema-parameterization.md",
+                    f"endpoint '{ep_path.name}' field at {problem_pointer} {_marker_sibling_message(problem_kind)}",
+                    rule_doc="endpoints/api-endpoint-schema-parameterization.md",
                 )
             )
         for native, arrow, pointer in _collect_endpoint_native_arrow_pairs(ep_doc):
@@ -2694,6 +2694,23 @@ _MARKER_SIBLING_MESSAGES = {
 }
 
 
+def _marker_sibling_message(kind: str) -> str:
+    """Message tail for a marker sibling-key violation `kind`.
+
+    Uses `.get` with a generic fallback rather than a direct subscript so a
+    future `kind` added to `_check_marker_siblings` without a matching
+    `_MARKER_SIBLING_MESSAGES` entry degrades to a still-useful finding instead
+    of raising `KeyError`. A raise here would unwind `check_type_map_coverage`
+    and collapse every coverage finding for the connector into one synthetic
+    crash finding (cf. the `_check_type_map_rules_guarded` precedent for the
+    same hazard). `test_marker_message_keys_cover_every_emitted_kind` keeps the
+    mapping complete for all currently-emitted kinds.
+    """
+    return _MARKER_SIBLING_MESSAGES.get(
+        kind, f"violates the bare-marker arrow_type sibling-key contract (kind: {kind})."
+    )
+
+
 def _check_marker_siblings(node: dict, arrow: str, pointer: str, out: list[tuple[str, str]]) -> None:
     """Emit sibling-key violations for one node carrying a bare-marker arrow_type.
 
@@ -2706,9 +2723,12 @@ def _check_marker_siblings(node: dict, arrow: str, pointer: str, out: list[tuple
 
     The require checks demand the sibling actually be a sub-schema, not merely
     present: `Object` needs a truthy `properties` dict, `List` needs `items`
-    to be a sub-schema (a dict, or the Draft-4/7 tuple list). A boolean / null
-    / scalar `items` does NOT satisfy `List` — that would be a value the marker
-    can't describe an element shape with, so it is reported as missing.
+    to be a sub-schema — a dict (the api-endpoint contract's single-schema
+    form) or, defensively, a non-empty Draft-4/7 tuple list (the contract types
+    `items` as a single object, so a tuple is itself a Layer 1 error, but the
+    walkers tolerate it). A boolean / null / scalar / empty-list `items` does
+    NOT satisfy `List` — none can describe an element shape, so it is reported
+    as missing.
     """
     if arrow == "Object":
         props = node.get("properties")
@@ -2760,9 +2780,11 @@ def _walk_op_for_markers(op: dict, base_pointer: str, schema_field: str, out: li
     Visits the operation's `<schema_field>.schema` JSON-Schema tree (recursive)
     and its flat `params`, matching the sub-trees `_walk_endpoint_op` walks for
     coverage. A `Param` is `additionalProperties: false` and defines neither
-    `properties` nor `items`, so an `Object` / `List` marker on a param can
-    never be satisfied — the require rule flags it (a `Json` param is opaque,
-    forbids both, and is left clean). Params are flat, so no recursion.
+    `properties` nor `items` (nor `arrow_type` itself), so a param carrying
+    `arrow_type` is already a Layer 1 violation — this param branch only
+    matters under `--semantic-only`, where it flags an `Object` / `List` marker
+    the param can never satisfy (a `Json` param is opaque, forbids both, and is
+    left clean). Params are flat, so no recursion.
     """
     body = op.get(schema_field)
     if isinstance(body, dict) and isinstance(body.get("schema"), dict):
@@ -2862,8 +2884,8 @@ def check_endpoint_annotations(doc: Any) -> list[dict]:
                 "endpoint-annotations",
                 "error",
                 "/",
-                f"endpoint field at {problem_pointer} {_MARKER_SIBLING_MESSAGES[problem_kind]}",
-                rule_doc="endpoints/endpoint-schema-parameterization.md",
+                f"endpoint field at {problem_pointer} {_marker_sibling_message(problem_kind)}",
+                rule_doc="endpoints/api-endpoint-schema-parameterization.md",
             )
         )
     return findings

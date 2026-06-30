@@ -996,8 +996,9 @@ def test_marker_list_items_must_be_a_subschema(tmp_path):
 
 def test_marker_object_list_on_params_flagged(tmp_path):
     """A `Param` is `additionalProperties: false` (no `properties`/`items`), so
-    an Object/List marker on a param can never be satisfied and must be flagged;
-    a `Json` param (opaque) and a scalar param are clean."""
+    Object/List markers on a param can never be satisfied and must be flagged —
+    on both read and write ops; a `Json` param (opaque) and a scalar param are
+    clean."""
     endpoint = {
         "$schema": API_ENDPOINT_SCHEMA_URL,
         "endpoint_id": "items",
@@ -1007,10 +1008,18 @@ def test_marker_object_list_on_params_flagged(tmp_path):
                 "response": {"records": {"ref": "response.body"}, "schema": {"type": "object"}},
                 "params": {
                     "shape": {"native_type": "obj", "arrow_type": "Object"},
+                    "tags": {"native_type": "arr", "arrow_type": "List"},
                     "blob": {"native_type": "jsonb", "arrow_type": "Json"},
                     "q": {"native_type": "text", "arrow_type": "Utf8"},
                 },
-            }
+            },
+            "write": {
+                "insert": {
+                    "request": {"method": "POST", "path": "/items"},
+                    "input": {"schema": {"type": "object"}},
+                    "params": {"wshape": {"native_type": "obj", "arrow_type": "Object"}},
+                }
+            },
         },
     }
     path = tmp_path / "items.json"
@@ -1020,7 +1029,11 @@ def test_marker_object_list_on_params_flagged(tmp_path):
         "endpoint-annotations",
     )
     assert any("/operations/read/params/shape" in e["message"] and '"Object"' in e["message"]
-               for e in errs), f"expected Object-marker param to be flagged; got {errs}"
+               for e in errs), f"expected Object-marker read param to be flagged; got {errs}"
+    assert any("/operations/read/params/tags" in e["message"] and '"List"' in e["message"]
+               for e in errs), f"expected List-marker read param to be flagged; got {errs}"
+    assert any("/operations/write/insert/params/wshape" in e["message"] and '"Object"' in e["message"]
+               for e in errs), f"expected Object-marker write param to be flagged; got {errs}"
     # Json param (opaque) and scalar param must NOT be flagged.
     assert not any("/params/blob" in e["message"] or "/params/q" in e["message"] for e in errs), \
         f"Json/scalar params must not be flagged; got {errs}"
@@ -1098,6 +1111,33 @@ def test_marker_recurses_through_items(tmp_path):
         "/operations/read/response/schema/items" in e["message"] and '"Object"' in e["message"]
         for e in errs
     ), f"expected nested Object-in-items violation at /items pointer; got {errs}"
+
+
+def test_marker_recurses_through_combiners(tmp_path):
+    """Recursion also reaches combiner keywords (`anyOf`/`allOf`/`oneOf`): a
+    marker violation inside an `anyOf` branch is flagged at the branch pointer,
+    proving the marker walker descends the full `_recurse_jsonschema` keyword
+    set, not just `properties`/`items`."""
+    ep = _write_marker_endpoint(tmp_path, {
+        "type": "object",
+        "properties": {
+            "either": {
+                "anyOf": [
+                    {"type": "string", "native_type": "text", "arrow_type": "Utf8"},
+                    {"type": "object", "native_type": "json", "arrow_type": "Object"},
+                ]
+            }
+        },
+    })
+    errs = errors_of(
+        run_validator(ep, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL),
+        "endpoint-annotations",
+    )
+    assert any(
+        "/operations/read/response/schema/properties/either/anyOf/1" in e["message"]
+        and '"Object"' in e["message"]
+        for e in errs
+    ), f"expected Object violation inside anyOf branch to be flagged; got {errs}"
 
 
 def test_marker_message_keys_cover_every_emitted_kind():
