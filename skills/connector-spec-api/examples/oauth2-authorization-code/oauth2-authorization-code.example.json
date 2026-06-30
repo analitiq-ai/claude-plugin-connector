@@ -104,7 +104,7 @@
         "mode": "auto_discovery",
         "storage": "connection.discovered",
         "type": "string",
-        "value_path": "connection.discovered.api_domain",
+        "value_path": "company_domain",
         "discovery_request": {
           "transport_ref": "discovery",
           "method": "GET",

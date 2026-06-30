@@ -292,22 +292,78 @@ def _is_value_expression(node: Any) -> str | None:
 _SINGLE_TOKEN_SCOPES = {s for s in KNOWN_SCOPES if "." not in s}
 _MULTI_TOKEN_SCOPE_HEADS = {s.split(".", 1)[0] for s in KNOWN_SCOPES if "." in s}
 
+# Response-extraction namespace. These scopes read from the provider's HTTP
+# *response* (the record selector, pagination cursors/links, and
+# `stop_when`/`success_when` predicates), as opposed to the request-side
+# `KNOWN_SCOPES` above which *construct* the outgoing request. Per the
+# published value-expression contract (`shared/value-expression-parameterization.md`,
+# the "context scopes" table) `response` is a first-class scope alongside the
+# request-side ones; `record`/`records` name the per-record selector context.
+#
+# They are kept DELIBERATELY OUT of `KNOWN_SCOPES`: they are legal ONLY at
+# response-extraction sites (an endpoint operation's `response`/`pagination`
+# subtree) and must stay rejected in request-construction slots. Folding them
+# into the global set would trade the old false positive (flagging a spec-
+# mandated `response.body`) for a false negative (silently accepting a header
+# that references the not-yet-existent response). The gating is positional —
+# see `_is_response_extraction_path`.
+#
+# The contract's scope table also lists `request`, `connector`, and `state`;
+# those are not yet exercised by any authored artifact, so they are left out
+# until a real use appears (they would need the same position-aware handling).
+_RESPONSE_SCOPE_HEADS = {"response", "record", "records"}
 
-def _scope_is_known(dotted: str) -> bool:
+# An endpoint document is a tree of operations; value expressions under an
+# operation's `response` or `pagination` subtree extract from the provider's
+# response, so the `response.*` namespace is valid there and only there.
+# Anchored at `/operations/<op>/` so a request body field that happens to be
+# named "response" or "pagination" is not mistaken for a response-extraction
+# site.
+_RESPONSE_EXTRACTION_PATH = re.compile(r"^/operations/[^/]+/(?:response|pagination)(?:/|$)")
+
+
+def _is_response_extraction_path(path: str) -> bool:
+    """True when `path` points inside an operation's response-extraction region.
+
+    Response-extraction sites are the `response` and `pagination` subtrees of
+    an endpoint operation, where value expressions read from the provider's
+    response (record selector, pagination cursor/link, `stop_when` predicates)
+    rather than constructing the request. The `response.*` / `record.*`
+    namespace (`_RESPONSE_SCOPE_HEADS`) is permitted here and nowhere else.
+    """
+    return bool(_RESPONSE_EXTRACTION_PATH.match(path))
+
+
+def _scope_is_known(dotted: str, *, response_ok: bool = False) -> bool:
     """Decide whether a dotted path targets a known scope.
 
     For single-token scopes (`secrets`, `auth`, `runtime`, `stream`),
     the head alone is enough. For multi-token scope heads like
     `connection`, the *two-token* prefix must be one of the registered
     scopes — `connection.bogus.x` is rejected.
+
+    `response_ok` is set only at response-extraction sites (see
+    `_is_response_extraction_path`); it additionally accepts the
+    response-extraction namespace (`response.*`, `record.*`, `records.*`),
+    which is a validation error everywhere else.
     """
     head_one = dotted.split(".", 1)[0]
+    if response_ok and head_one in _RESPONSE_SCOPE_HEADS:
+        return True
     if head_one in _SINGLE_TOKEN_SCOPES:
         return True
     if head_one in _MULTI_TOKEN_SCOPE_HEADS:
         head_two = ".".join(dotted.split(".", 2)[:2])
         return head_two in KNOWN_SCOPES
     return False
+
+
+def _known_scopes_display(response_ok: bool) -> list[str]:
+    """Sorted scope names for an unknown-scope finding, position-aware."""
+    scopes = set(KNOWN_SCOPES)
+    if response_ok:
+        scopes |= _RESPONSE_SCOPE_HEADS
+    return sorted(scopes)
 
 
 def check_expressions(doc: dict) -> list[dict]:
@@ -320,6 +376,11 @@ def check_expressions(doc: dict) -> list[dict]:
         kind = _is_value_expression(node)
         if not kind:
             continue
+        # Value expressions under an operation's response/pagination subtree
+        # extract from the provider's response, so the response-extraction
+        # namespace (`response.*`, `record.*`) is valid there; everywhere else
+        # it stays rejected.
+        response_ok = _is_response_extraction_path(path)
         if kind == "multi-keyed":
             present = sorted(k for k in _EXPRESSION_KEYS if k in node)
             findings.append(
@@ -359,13 +420,13 @@ def check_expressions(doc: dict) -> list[dict]:
                     )
                 )
                 continue
-            if not _scope_is_known(ref):
+            if not _scope_is_known(ref, response_ok=response_ok):
                 findings.append(
                     finding(
                         "expression-resolver",
                         "error",
                         path,
-                        f"ref '{ref}' targets unknown scope. Known scopes: {sorted(KNOWN_SCOPES)}.",
+                        f"ref '{ref}' targets unknown scope. Known scopes: {_known_scopes_display(response_ok)}.",
                         rule_doc="shared/value-expression-parameterization.md",
                     )
                 )
@@ -381,13 +442,14 @@ def check_expressions(doc: dict) -> list[dict]:
                             rule_doc="shared/value-expression-parameterization.md",
                         )
                     )
-                elif not _scope_is_known(var):
+                elif not _scope_is_known(var, response_ok=response_ok):
                     findings.append(
                         finding(
                             "expression-resolver",
                             "error",
                             path,
-                            f"template variable '${{{var}}}' targets unknown scope.",
+                            f"template variable '${{{var}}}' targets unknown scope. "
+                            f"Known scopes: {_known_scopes_display(response_ok)}.",
                             rule_doc="shared/value-expression-parameterization.md",
                         )
                     )
@@ -903,16 +965,29 @@ def _index_inputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
 def _index_post_auth_outputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
     """Map produced reference paths to their post-auth output, plus warnings.
 
-    Returns `(index, warnings)`. The index keys are the produced paths
-    (e.g. `connection.discovered.api_domain`); values describe the
-    producing output. Warnings flag malformed entries that the index
-    silently drops for shape reasons:
+    Returns `(index, warnings)`. The index keys are the produced reference
+    paths — derived as `storage + "." + <output key>` (e.g. the output
+    `api_domain` with `storage: "connection.discovered"` produces
+    `connection.discovered.api_domain`). This is the durable path that refs
+    and `required_for_activation` target.
+
+    The produced path is NOT `value_path`. Per the published `PostAuthOutput`
+    schema, `value_path` (and `label_path` / `options_path`) is a
+    **response-extraction path** — the field read out of the
+    `options_request` / `discovery_request` response (e.g. an option object's
+    `"id"`), not the materialized `connection.*` reference. Indexing by it,
+    or requiring it to start with the `storage` prefix, contradicts the
+    contract and mis-flags correctly-authored `user_selection` outputs.
+
+    Warnings flag malformed entries:
 
     - non-dict spec entry (`{"foo": "bar-string"}`-style mistakes),
     - `storage` outside the allowed enum (`connection.discovered` /
-      `connection.selections` / `secrets`),
-    - missing / non-string `value_path`, or a `value_path` that doesn't
-      prefix-match the declared `storage` scope.
+      `connection.selections` / `secrets`) — these drop from the index,
+    - missing / non-string / empty `value_path` (the response-extraction
+      path is required and `minLength: 1` per the schema). The entry is
+      still indexed by its produced path so downstream refs resolve; the
+      warning surfaces the unusable extraction path on its own.
 
     Without surfacing these, downstream refs would emit misdirected
     "not declared" errors when the real fault is in the output
@@ -952,21 +1027,23 @@ def _index_post_auth_outputs(doc: dict) -> tuple[dict[str, dict], list[dict]]:
                 )
             )
             continue
-        if not isinstance(value_path, str) or not value_path.startswith(f"{storage}."):
+        if not isinstance(value_path, str) or not value_path:
             warnings.append(
                 finding(
                     "phase-resolvability",
                     "warning",
                     f"/connection_contract/post_auth_outputs/{name}",
                     (
-                        f"post_auth_outputs.{name} declares storage={storage!r} "
-                        f"but value_path is missing or does not start with '{storage}.': {value_path!r}"
+                        f"post_auth_outputs.{name} has a missing or empty value_path; "
+                        f"it must be a non-empty response-extraction path (the field read "
+                        f"out of the discovery/options response): {value_path!r}"
                     ),
                     rule_doc="shared/lifecycle-phases.md",
                 )
             )
-            continue
-        out[value_path] = {"storage": storage, "output_name": name}
+            # Still index the produced path: the reference path is derived from
+            # storage + key, independent of value_path, so refs to it resolve.
+        out[f"{storage}.{name}"] = {"storage": storage, "output_name": name}
     return out, warnings
 
 
@@ -1179,7 +1256,8 @@ def check_phase_resolvability(doc: dict) -> list[dict]:
     deeper analysis tracked separately.
 
     Also emits a warning when a `post_auth_outputs` entry is malformed
-    (bad storage, missing/invalid value_path), and an error when
+    (bad storage, or a missing/empty `value_path` response-extraction
+    path), and an error when
     `connection_contract.inputs`, `connection_contract.post_auth_outputs`,
     or `transports` is present-but-non-object (the index helpers would
     otherwise silently coerce to {} and produce misdirected "not

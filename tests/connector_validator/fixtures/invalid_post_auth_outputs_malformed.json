@@ -29,7 +29,7 @@
         "mode": "auto_discovery",
         "storage": "connection.discovered",
         "type": "string",
-        "value_path": "discovered.foo"
+        "value_path": ""
       }
     }
   }

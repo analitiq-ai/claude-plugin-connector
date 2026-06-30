@@ -164,17 +164,17 @@ def test_examples_glob_is_non_empty():
 )
 def test_endpoint_example_passes_against_live_schema(endpoint):
     """Every shipped endpoint example must validate against the live
-    api-endpoint schema. These files previously had no automated check —
-    only the `*.example.json` connector bodies were validated — so an
-    endpoint document could drift from the contract unnoticed.
+    api-endpoint schema — full Layer 1 + Layer 2.
 
-    Layer 1 only (`--json-only`): the Layer 2 semantic validators are
-    connector-context-oriented and flag endpoint-only scopes (e.g.
-    `response.body`) as unknown when a bare endpoint is validated in
-    isolation; endpoint semantics are exercised in connector context
-    elsewhere.
+    Previously this ran `--json-only` (Layer 1 only) because the Layer 2
+    expression-resolver mis-flagged the spec-mandated response-extraction
+    namespace (`response.body`) as an unknown scope on a standalone endpoint.
+    With the scope check now position-aware (`response.*` accepted under an
+    operation's response/pagination subtree, rejected elsewhere), standalone
+    endpoints get the full semantic pass and the shipped examples must come
+    out clean.
     """
-    result = run_validator(endpoint, "--json-only", schema_url=API_ENDPOINT_SCHEMA_URL)
+    result = run_validator(endpoint, schema_url=API_ENDPOINT_SCHEMA_URL)
     errors = [f for f in result["findings"] if f["severity"] == "error"]
     assert not errors, f"{endpoint.parent.parent.name}/{endpoint.name}: {errors}"
 
@@ -259,6 +259,86 @@ def test_unclosed_template_variable_caught(tmp_path):
     unclosed = [e for e in errs if "unclosed template variable" in e["message"]]
     # Exactly one: the dangling `${`. The literal-brace JSON template is clean.
     assert len(unclosed) == 1, f"expected exactly one unclosed finding; got {result['findings']}"
+
+
+def _endpoint_with_response_refs() -> dict:
+    """A spec-compliant standalone api-endpoint document whose record selector
+    and pagination predicates use the response-extraction namespace."""
+    return {
+        "$schema": API_ENDPOINT_SCHEMA_URL,
+        "endpoint_id": "widgets",
+        "operations": {
+            "read": {
+                "request": {
+                    "method": "GET",
+                    "path": "/widgets",
+                    # A legitimate request-side ref — positive control that
+                    # request slots are still validated against request scopes.
+                    "headers": {"Authorization": {"template": "Bearer ${secrets.api_key}"}},
+                },
+                "response": {
+                    "records": {"ref": "response.body.data"},
+                    "schema": {"type": "object"},
+                },
+                "pagination": {
+                    "type": "cursor",
+                    "cursor": {
+                        "param": "cursor",
+                        "next_cursor": {"ref": "response.body.next_cursor"},
+                    },
+                    "stop_when": {"missing": {"ref": "response.body.next_cursor"}},
+                },
+            }
+        },
+    }
+
+
+def test_response_extraction_refs_not_flagged(tmp_path):
+    """Issue #7: response-extraction refs (`response.body*`) at an operation's
+    response/pagination sites must NOT be flagged as unknown scope. A compliant
+    standalone endpoint must emit zero expression-resolver findings."""
+    doc_path = tmp_path / "widgets.json"
+    doc_path.write_text(json.dumps(_endpoint_with_response_refs()))
+    result = run_validator(doc_path, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL)
+    expr_findings = [f for f in result["findings"] if f["validator"] == "expression-resolver"]
+    assert expr_findings == [], (
+        f"spec-compliant response-extraction refs wrongly flagged; got {expr_findings}"
+    )
+
+
+def test_response_scope_rejected_in_request_slot(tmp_path):
+    """Issue #7 anti-shim: the carve-out is position-aware. `response.*` is legal
+    only at response-extraction sites — in a request slot it must still error, so
+    the false positive isn't traded for a false negative (a request header that
+    references the not-yet-existent response)."""
+    doc = {
+        "$schema": API_ENDPOINT_SCHEMA_URL,
+        "endpoint_id": "widgets",
+        "operations": {
+            "read": {
+                "request": {
+                    "method": "GET",
+                    "path": "/widgets",
+                    "headers": {"X-Bad": {"ref": "response.body"}},
+                },
+                "response": {
+                    "records": {"ref": "response.body"},
+                    "schema": {"type": "object"},
+                },
+            }
+        },
+    }
+    doc_path = tmp_path / "widgets.json"
+    doc_path.write_text(json.dumps(doc))
+    result = run_validator(doc_path, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL)
+    errs = errors_of(result, "expression-resolver")
+    # The request-slot ref is flagged...
+    request_errs = [e for e in errs if "/request/" in e["path"]]
+    assert request_errs, f"expected response.* in a request slot to be flagged; got {result['findings']}"
+    # ...but the identical ref at the response record selector is NOT.
+    assert not any("/response/records" in e["path"] for e in errs), (
+        f"response-extraction record selector wrongly flagged; got {errs}"
+    )
 
 
 def test_transport_ref_caught():
@@ -504,11 +584,82 @@ def test_pagination_outside_operation_caught():
 
 
 def test_malformed_post_auth_outputs_warned():
-    """post_auth_outputs entries with bad value_path should produce warnings."""
+    """A post_auth_output whose `value_path` is missing/empty (the schema requires
+    a non-empty response-extraction path) should produce a warning. A bare
+    response field like `"id"` is *valid* and must NOT warn (see
+    test_user_selection_response_value_path_not_flagged)."""
     result = run_validator(FIXTURES / "invalid_post_auth_outputs_malformed.json", "--semantic-only")
     warns = warnings_of(result, "phase-resolvability")
     assert any("value_path" in w["message"] for w in warns), \
         f"expected malformed-value_path warning; got {warns}"
+
+
+def test_user_selection_response_value_path_not_flagged(tmp_path):
+    """Issue #8: a compliant `user_selection` output whose `value_path` is a bare
+    response field (e.g. `"id"`) must produce no phase-resolvability finding, and
+    a ref to its *derived* path (storage + '.' + key) must resolve.
+
+    Per the connector schema, `value_path` / `label_path` / `options_path` are
+    response-extraction paths (the field read out of the options/discovery
+    response), not the materialized `connection.*` reference path. The durable
+    reference path is derived as `storage` + '.' + the output key.
+    """
+    doc = {
+        "$schema": SCHEMA_URL,
+        "kind": "api",
+        "connector_id": "fixture-user-selection",
+        "version": "1.0.0",
+        "default_transport": "api",
+        "transports": {
+            "api": {
+                "transport_type": "http",
+                # References the DERIVED produced path, not value_path.
+                "base_url": {
+                    "template": "https://api.example.com/${connection.selections.region_id}/v1"
+                },
+            }
+        },
+        "auth": {"type": "api_key"},
+        "connection_contract": {
+            "inputs": {
+                "api_key": {
+                    "source": "user",
+                    "phase": "auth",
+                    "storage": "secrets",
+                    "type": "string",
+                    "required": True,
+                    "secret": True,
+                }
+            },
+            "post_auth_outputs": {
+                "region_id": {
+                    "mode": "user_selection",
+                    "storage": "connection.selections",
+                    "type": "string",
+                    # value_path / label_path / options_path are response-extraction
+                    # paths (fields read out of the options_request response), NOT
+                    # the materialized connection.* reference path.
+                    "value_path": "id",
+                    "label_path": "name",
+                    "options_path": "items",
+                    "options_request": {
+                        "transport_ref": "api",
+                        "method": "GET",
+                        "path": "/regions",
+                    },
+                }
+            },
+            "required_for_activation": ["connection.selections.region_id"],
+        },
+    }
+    doc_path = tmp_path / "connector.json"
+    doc_path.write_text(json.dumps(doc))
+    result = run_validator(doc_path, "--semantic-only")
+    phase_findings = [f for f in result["findings"] if f["validator"] == "phase-resolvability"]
+    assert phase_findings == [], (
+        f"bare response-field value_path must not be flagged, and the derived "
+        f"reference path must resolve; got {phase_findings}"
+    )
 
 
 def test_api_endpoint_coverage_walks_combiners_and_array_items():
