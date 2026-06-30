@@ -372,6 +372,50 @@ def test_write_response_scope_rejected_in_request_slot(tmp_path):
     )
 
 
+def test_response_template_var_position_aware(tmp_path):
+    """Issue #7: the carve-out is plumbed through BOTH arms of check_expressions —
+    `ref` and `template`. A `${response.body.*}` template variable at a response
+    site (a pagination cursor built by interpolation) must be accepted; the same
+    template variable in a request slot must still error."""
+    doc = {
+        "$schema": API_ENDPOINT_SCHEMA_URL,
+        "endpoint_id": "widgets",
+        "operations": {
+            "read": {
+                "request": {
+                    "method": "GET",
+                    "path": "/widgets",
+                    "headers": {"X-Bad": {"template": "cursor=${response.body.next_cursor}"}},
+                },
+                "response": {
+                    "records": {"ref": "response.body.data"},
+                    "schema": {"type": "object"},
+                },
+                "pagination": {
+                    "type": "cursor",
+                    "cursor": {
+                        "param": "cursor",
+                        "next_cursor": {"template": "${response.body.next_cursor}"},
+                    },
+                    "stop_when": {"missing": {"ref": "response.body.next_cursor"}},
+                },
+            }
+        },
+    }
+    doc_path = tmp_path / "widgets.json"
+    doc_path.write_text(json.dumps(doc))
+    result = run_validator(doc_path, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL)
+    errs = errors_of(result, "expression-resolver")
+    # The request-slot template var is flagged...
+    assert any("/request/" in e["path"] for e in errs), (
+        f"expected response.* template var in a request slot to be flagged; got {result['findings']}"
+    )
+    # ...but the pagination template var at the response site is NOT.
+    assert not any("/pagination/" in e["path"] for e in errs), (
+        f"response-site template var wrongly flagged; got {errs}"
+    )
+
+
 def test_response_scope_rejected_in_request_slot(tmp_path):
     """Issue #7 anti-shim: the carve-out is position-aware. `response.*` is legal
     only at response-extraction sites — in a request slot it must still error, so
