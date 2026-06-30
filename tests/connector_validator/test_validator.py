@@ -863,6 +863,31 @@ def test_schema_url_required_when_layer1_runs():
     assert "--schema-url is required" in proc.stderr
 
 
+def test_semantic_only_passes_clean_connector_without_schema_url():
+    """The merge gate's PASS path: a clean connector under `--semantic-only`
+    with no `--schema-url` exits 0 / `passed: True`.
+
+    The two checks above only assert non-zero exits, so a regression where
+    omitting `--schema-url` crashed or wrongly re-required the URL on a
+    *passing* document would slip past them. This pins the exact green
+    invocation the registry gate relies on.
+    """
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--document",
+            str(VALID_API_CONNECTOR),
+            "--semantic-only",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, f"expected clean pass; stderr={proc.stderr}"
+    assert json.loads(proc.stdout)["passed"] is True
+
+
 def test_db_connector_missing_sibling_type_map_caught(tmp_path):
     """The missing-sibling check must fire for kind=database too, not just api."""
     base = json.loads((FIXTURES / "valid_db_connector" / "connector.json").read_text())

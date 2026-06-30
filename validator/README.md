@@ -24,8 +24,12 @@ authoring, the plugin, and registry CI all run one implementation.
 Pinned, from a tagged ref of this repo (no PyPI required):
 
 ```bash
-pip install "analitiq-connector-validator @ git+https://github.com/analitiq-ai/claude-plugin-connector.git@validator-v0.1.0#subdirectory=validator"
+pip install "analitiq-connector-validator @ git+https://github.com/analitiq-ai/claude-plugin-connector.git@validator-vX.Y.Z#subdirectory=validator"
 ```
+
+The tag `validator-vX.Y.Z` is cut at release and its version must match
+`version` in `pyproject.toml` (the first release is `validator-v0.1.0`). Until
+that tag exists, pin to a commit SHA or branch instead.
 
 ## Use
 
