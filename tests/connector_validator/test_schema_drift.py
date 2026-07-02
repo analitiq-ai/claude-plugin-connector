@@ -59,6 +59,11 @@ EXPECTED_DSN_ENCODINGS = {
     "url_query_value",
 }
 EXPECTED_PAGINATION_STYLES = {"offset", "page", "cursor", "link", "keyset"}
+# WriteOperation.idempotency `in` targets (api-endpoint ≥ 9.1.0,
+# infrastructure#890) — restated in io-contracts.md EndpointFacts,
+# endpoint-creator.md, connector-provider-researcher.md, and
+# connector-spec-api/SKILL.md.
+EXPECTED_IDEMPOTENCY_TARGETS = {"header", "body"}
 # Bare-marker arrow_type vocabulary the validator mirrors as
 # `_BARE_MARKER_ARROW_TYPES` to enforce the sibling-key contract
 # (Object→properties, List→items, Json→neither). Owned by
@@ -160,6 +165,20 @@ def test_dsn_encodings_match_schema(connector_schema: dict) -> None:
     enum, derived_from_live = v.known_encodings()
     assert derived_from_live is True, "known_encodings() fell back instead of deriving from live schema"
     assert enum == frozenset(EXPECTED_DSN_ENCODINGS)
+
+
+@pytest.mark.network
+def test_idempotency_targets_match_schema(api_endpoint_schema: dict) -> None:
+    schema_set = v._enum_at(
+        api_endpoint_schema, "$defs", "Idempotency", "properties", "in"
+    )
+    assert schema_set == EXPECTED_IDEMPOTENCY_TARGETS, _diff_msg(
+        "idempotency.in",
+        schema_set,
+        EXPECTED_IDEMPOTENCY_TARGETS,
+        "update io-contracts.md EndpointFacts.idempotency, endpoint-creator.md, "
+        "connector-provider-researcher.md, and connector-spec-api/SKILL.md.",
+    )
 
 
 @pytest.mark.network

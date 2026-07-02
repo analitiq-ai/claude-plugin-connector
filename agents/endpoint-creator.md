@@ -125,7 +125,19 @@ was raised.
      documented idempotency / match key (e.g. an external id or a unique
      business key) — never invent one.
    - `batching` (optional) — `{"max_records": <int ≥ 2>}` when the
-     provider documents a per-request cap.
+     provider documents a per-request cap. Mutually exclusive with
+     `idempotency`.
+   - `idempotency` (optional) — `{"in": "header" | "body", "name":
+     "<non-empty>"}`: where the provider's idempotency key goes on each
+     write request (`header`: Stripe `Idempotency-Key`; `body`: Square's
+     top-level `idempotency_key` — requires a JSON-object body).
+     Placement only — the key value is engine-owned: never author it as
+     a value expression, in `input.schema`, or in `request.headers` /
+     `request.body`. Populate from `endpoint_facts.idempotency`; never
+     invent the name. Declare on `insert` whenever the provider
+     documents a key; on `upsert` only when the provider requires it.
+     When the provider documents both a key and a batch cap, prefer
+     `idempotency` unless the user asks for throughput.
    - `params` (optional) — same shape as read params.
    - `response` (optional) — write-result extraction. All keys
      optional; populate whichever the provider documents:

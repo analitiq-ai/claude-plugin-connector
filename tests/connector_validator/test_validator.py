@@ -117,6 +117,79 @@ def test_layer1_malformed_write_map_rejected_against_live_schema(tmp_path):
     assert result["passed"] is False
 
 
+def _write_endpoint_with_idempotency(tmp_path, *, idempotency, batching=None, body=None):
+    mode = {
+        "request": {"method": "POST", "path": "/contacts"},
+        "input": {"schema": {"type": "object", "properties": {"name": {"type": "string"}}}},
+        "idempotency": idempotency,
+    }
+    if batching is not None:
+        mode["batching"] = batching
+    if body is not None:
+        mode["request"]["body"] = body
+    doc = {
+        "$schema": API_ENDPOINT_SCHEMA_URL,
+        "endpoint_id": "contacts",
+        "operations": {"write": {"insert": mode}},
+    }
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    path = tmp_path / "contacts.json"
+    path.write_text(json.dumps(doc))
+    return path
+
+
+@pytest.mark.network
+def test_layer1_idempotency_constraints_enforced_by_live_schema(tmp_path):
+    """The published api-endpoint schema must enforce the two structural
+    idempotency constraints the plugin's prose restates (endpoint-creator.md,
+    connector-spec-api/SKILL.md): mutual exclusion with `batching`, and
+    `in: "body"` requiring a JSON-object `request.body`. The drift suite pins
+    only the `in` enum; if the schema relaxed either constraint this would
+    stay green vacuously while the prose claims enforcement."""
+    def schema_errors(result):
+        # Document-anchored errors only — a schema-fetch failure carries the
+        # same validator id but an empty path (see the write-map test above).
+        return [
+            f for f in result["findings"]
+            if f["validator"] == "json-schema" and f["path"].startswith("/")
+        ]
+
+    header_key = {"in": "header", "name": "Idempotency-Key"}
+    body_key = {"in": "body", "name": "idempotency_key"}
+
+    ok = run_validator(
+        _write_endpoint_with_idempotency(tmp_path / "ok", idempotency=header_key),
+        "--json-only", schema_url=API_ENDPOINT_SCHEMA_URL,
+    )
+    assert ok["passed"] is True, f"header idempotency alone must validate; got {ok['findings']}"
+
+    both = run_validator(
+        _write_endpoint_with_idempotency(
+            tmp_path / "both", idempotency=header_key, batching={"max_records": 100}
+        ),
+        "--json-only", schema_url=API_ENDPOINT_SCHEMA_URL,
+    )
+    assert schema_errors(both), f"idempotency + batching must be rejected; got {both['findings']}"
+
+    body_no_body = run_validator(
+        _write_endpoint_with_idempotency(tmp_path / "nobody", idempotency=body_key),
+        "--json-only", schema_url=API_ENDPOINT_SCHEMA_URL,
+    )
+    assert schema_errors(body_no_body), (
+        f"body placement without a JSON-object request.body must be rejected; got {body_no_body['findings']}"
+    )
+
+    body_ok = run_validator(
+        _write_endpoint_with_idempotency(
+            tmp_path / "bodyok", idempotency=body_key, body={"name": {"ref": "stream.record.name"}}
+        ),
+        "--json-only", schema_url=API_ENDPOINT_SCHEMA_URL,
+    )
+    assert body_ok["passed"] is True, (
+        f"body placement with a JSON-object request.body must validate; got {body_ok['findings']}"
+    )
+
+
 def test_db_example_maps_present():
     """Guard against the network parametrize collapsing to zero cases. The
     examples are a small set of diverse archetypes (sqlalchemy + adbc), not one
