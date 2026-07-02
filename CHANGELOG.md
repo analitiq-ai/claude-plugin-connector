@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/analitiq-ai/claude-plugin-connector/compare/v0.1.3...v0.1.4) (2026-07-02)
+
+
+### Features
+
+* author WriteOperation.idempotency blocks (api-endpoint 9.1.0) ([#27](https://github.com/analitiq-ai/claude-plugin-connector/issues/27)) ([ffd835b](https://github.com/analitiq-ai/claude-plugin-connector/commit/ffd835b540e09bcddc142ff5c7f0c638dfb47afe))
+
 ## [0.1.3](https://github.com/analitiq-ai/claude-plugin-connector/compare/v0.1.2...v0.1.3) (2026-06-30)
 
 
