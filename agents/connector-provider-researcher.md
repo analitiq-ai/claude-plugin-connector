@@ -84,6 +84,18 @@ For each field of the resource's response:
   If the docs show no sample, say so in `notes`; do not assume a zone.
 - `nullable`, `enum`, `format` — fill whatever the docs document.
 
+## Write facts (endpoint scope)
+
+When the resource is writable, also ground:
+
+- `conflict_keys` — the provider-documented natural key an upsert
+  matches on.
+- `idempotency` — the provider's documented idempotency key for the
+  write, if any: `{"in": "header" | "body", "name": "<documented name,
+  verbatim>", "required": <bool>}` (e.g. Stripe header
+  `Idempotency-Key`; Square body field `idempotency_key`). Omit when
+  none is documented.
+
 ## Hard rules
 
 - Do not invent values. If the docs do not say it, leave it unset and note it.

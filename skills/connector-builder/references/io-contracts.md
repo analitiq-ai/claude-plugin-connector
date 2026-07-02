@@ -209,6 +209,16 @@ access and may not guess field types).
     "record_path": { "type": "string", "description": "Path to the iterable record collection in the response body (informs response.records, e.g. `response.body.data`)." },
     "writable": { "type": "boolean" },
     "conflict_keys": { "type": "array", "items": { "type": "string" }, "description": "Provider-documented natural key for upsert, when the resource is upsertable." },
+    "idempotency": {
+      "type": "object",
+      "required": ["in", "name"],
+      "description": "Provider-documented idempotency-key placement for this resource's write operation, when the provider exposes one. Placement only — the key value is engine-owned; endpoint-creator copies this into the write mode's `idempotency` block.",
+      "properties": {
+        "in": { "type": "string", "enum": ["header", "body"], "description": "Where the provider accepts the key: an HTTP request header or a top-level JSON body field." },
+        "name": { "type": "string", "minLength": 1, "description": "The documented header name (e.g. `Idempotency-Key`) or top-level body field name (e.g. `idempotency_key`), verbatim." },
+        "required": { "type": "boolean", "description": "true when the provider mandates the key on this operation (e.g. Square UpsertCatalogObject)." }
+      }
+    },
     "fields": {
       "type": "array",
       "minItems": 1,

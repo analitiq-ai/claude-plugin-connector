@@ -59,6 +59,11 @@ EXPECTED_DSN_ENCODINGS = {
     "url_query_value",
 }
 EXPECTED_PAGINATION_STYLES = {"offset", "page", "cursor", "link", "keyset"}
+# WriteOperation.idempotency `in` targets (infrastructure#890) — restated in
+# io-contracts.md EndpointFacts, endpoint-creator.md, and
+# connector-spec-api/SKILL.md. The matching test self-activates once the
+# block appears in the published api-endpoint schema; until then it skips.
+EXPECTED_IDEMPOTENCY_TARGETS = {"header", "body"}
 # Bare-marker arrow_type vocabulary the validator mirrors as
 # `_BARE_MARKER_ARROW_TYPES` to enforce the sibling-key contract
 # (Object→properties, List→items, Json→neither). Owned by
@@ -160,6 +165,49 @@ def test_dsn_encodings_match_schema(connector_schema: dict) -> None:
     enum, derived_from_live = v.known_encodings()
     assert derived_from_live is True, "known_encodings() fell back instead of deriving from live schema"
     assert enum == frozenset(EXPECTED_DSN_ENCODINGS)
+
+
+@pytest.mark.network
+def test_idempotency_targets_match_schema(api_endpoint_schema: dict) -> None:
+    """Pins `idempotency.in` once infrastructure#890 publishes.
+
+    Skips while the published WriteOperation has no `idempotency` block;
+    fails if the block exists but its `in` enum is at neither probed
+    pointer (`$defs/Idempotency` or inline under `WriteOperation`).
+    """
+    schema_set = v._enum_at(
+        api_endpoint_schema, "$defs", "Idempotency", "properties", "in"
+    )
+    if schema_set is None:
+        schema_set = v._enum_at(
+            api_endpoint_schema,
+            "$defs", "WriteOperation", "properties", "idempotency",
+            "properties", "in",
+        )
+    if schema_set is None:
+        if "idempotency" in (
+            api_endpoint_schema.get("$defs", {})
+            .get("WriteOperation", {})
+            .get("properties", {})
+        ):
+            pytest.fail(
+                "WriteOperation.idempotency published but its `in` enum is not "
+                "at either expected pointer — update this test's pointers and "
+                "re-verify the prose (io-contracts.md, endpoint-creator.md, "
+                "connector-spec-api/SKILL.md)."
+            )
+        pytest.skip(
+            "idempotency block not yet in the published api-endpoint schema "
+            "(infrastructure#890) — prose is pre-drafted; test activates on "
+            "publication"
+        )
+    assert schema_set == EXPECTED_IDEMPOTENCY_TARGETS, _diff_msg(
+        "idempotency.in",
+        schema_set,
+        EXPECTED_IDEMPOTENCY_TARGETS,
+        "update io-contracts.md EndpointFacts.idempotency, "
+        "endpoint-creator.md, and connector-spec-api/SKILL.md.",
+    )
 
 
 @pytest.mark.network
