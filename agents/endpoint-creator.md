@@ -135,11 +135,9 @@ was raised.
      a value expression, in `input.schema`, or in `request.headers` /
      `request.body`. Populate from `endpoint_facts.idempotency`; never
      invent the name. Declare on `insert` whenever the provider
-     documents a key (insert has no other retry dedup); on `upsert`
-     only when the provider requires it — `conflict_keys` already
-     covers upsert retries. When the provider documents both a key and
-     a batch cap, prefer `idempotency` unless the user asks for
-     throughput.
+     documents a key; on `upsert` only when the provider requires it.
+     When the provider documents both a key and a batch cap, prefer
+     `idempotency` unless the user asks for throughput.
    - `params` (optional) — same shape as read params.
    - `response` (optional) — write-result extraction. All keys
      optional; populate whichever the provider documents:

@@ -212,7 +212,7 @@ access and may not guess field types).
     "idempotency": {
       "type": "object",
       "required": ["in", "name"],
-      "description": "Provider-documented idempotency-key placement for this resource's write operation, when the provider exposes one. Placement only — the key value is engine-owned; endpoint-creator copies this into the write mode's `idempotency` block.",
+      "description": "Provider-documented idempotency-key placement for this resource's write operation, when the provider exposes one. Placement only — the key value is engine-owned. endpoint-creator carries `in`/`name` into the write mode's `idempotency` block; `required` informs whether to declare it on `upsert`.",
       "properties": {
         "in": { "type": "string", "enum": ["header", "body"], "description": "Where the provider accepts the key: an HTTP request header or a top-level JSON body field." },
         "name": { "type": "string", "minLength": 1, "description": "The documented header name (e.g. `Idempotency-Key`) or top-level body field name (e.g. `idempotency_key`), verbatim." },
