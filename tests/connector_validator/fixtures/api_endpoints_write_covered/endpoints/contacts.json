@@ -18,8 +18,7 @@
         "batching": { "max_records": 100 },
         "params": {
           "tenant_id": {
-            "in": "query", "type": "string", "format": "uuid", "required": true,
-            "native_type": "uuid", "arrow_type": "Utf8"
+            "in": "query", "type": "string", "format": "uuid", "required": true
           }
         }
       }

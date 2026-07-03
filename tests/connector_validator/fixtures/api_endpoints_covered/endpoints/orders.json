@@ -6,8 +6,7 @@
       "request": { "method": "GET", "path": "/orders" },
       "params": {
         "limit": {
-          "in": "query", "type": "integer", "required": false, "default": 50,
-          "native_type": "integer", "arrow_type": "Int64"
+          "in": "query", "type": "integer", "required": false, "default": 50
         }
       },
       "response": {

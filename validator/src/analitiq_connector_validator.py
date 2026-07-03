@@ -1862,6 +1862,16 @@ def check_type_map_coverage(doc: dict, doc_path: Path | None = None) -> list[dic
                         rule_doc="shared/type-maps.md",
                     )
                 )
+            elif problem_kind == "param_annotations":
+                findings.append(
+                    finding(
+                        "type-map-coverage",
+                        "error",
+                        "/",
+                        f"endpoint '{ep_path.name}' param at {problem_pointer} carries native_type / arrow_type; the api-endpoint schema's Param forbids both — a param is a request input, typed only by its `type` field. Remove the annotations.",
+                        rule_doc="shared/type-maps.md",
+                    )
+                )
             elif problem_kind == "non_dict_subtree":
                 findings.append(
                     finding(
@@ -2466,7 +2476,8 @@ def _collect_endpoint_native_arrow_pairs(endpoint_doc: dict) -> list[tuple[str, 
     Both `native_type` and `arrow_type` are required-paired annotations on
     typed field schemas per the published api-endpoint contract; the
     walker recurses into JSON-Schema-shaped sub-trees (properties / items
-    / *Of) and into operation params. Fields with only one of the pair
+    / *Of). Operation `params` are never collected — the contract forbids
+    annotations on them. Fields with only one of the pair
     are NOT collected here — `_collect_asymmetric_pairs` surfaces those
     as separate findings.
     """
@@ -2499,6 +2510,11 @@ def _collect_asymmetric_pairs(endpoint_doc: dict) -> list[tuple[str, str]]:
     `kind` is one of:
     - `"asymmetric"` — exactly one of `native_type` / `arrow_type` is declared.
     - `"both_non_string"` — both annotations present but at least one is not a string.
+    - `"param_annotations"` — a param carries `native_type` and/or
+      `arrow_type`. The published `Param` def forbids both (a param is a
+      request input, never a materialized column; its `type` enum is its
+      only typing), so this is a Layer 1 error surfaced here for
+      `--semantic-only` runs.
     - `"non_dict_subtree"` — a sub-tree at any structural level (operations,
       read, write, response/input, schema, params, properties, items,
       combiners) is not a dict and the walker could not recurse into it.
@@ -2575,7 +2591,8 @@ def _walk_endpoint_op_for_asymmetric(
                 if not isinstance(pspec, dict):
                     out.append((pointer, "non_dict_subtree"))
                     continue
-                _check_annotation_pair(pspec, pointer, out)
+                if "native_type" in pspec or "arrow_type" in pspec:
+                    out.append((pointer, "param_annotations"))
         else:
             out.append((f"{base_pointer}/params", "non_dict_subtree"))
 
@@ -2682,9 +2699,13 @@ def _walk_endpoint_op(
     """Collect typed-field pairs from one endpoint operation.
 
     `schema_field` is `"response"` for read ops (records + response
-    schema) and `"input"` for each write-mode op. Pairs from
-    `<schema_field>.schema` are walked recursively as JSON Schema; pairs
-    from `params` are flat (one annotation pair per param entry).
+    schema) and `"input"` for each write-mode op. Only
+    `<schema_field>.schema` is walked (recursively, as JSON Schema).
+    `params` are NOT a coverage source: the published `Param` def is
+    `additionalProperties: false` with a plain JSON `type` enum — a
+    param is a request input, never a materialized column, so it
+    carries no native/arrow annotations (`_walk_endpoint_op_for_asymmetric`
+    flags any that appear).
     Half-typed fields (only one of `native_type` / `arrow_type`) and
     non-string-both pairs are NOT collected here; they're surfaced
     instead by `_walk_endpoint_op_for_asymmetric` /
@@ -2701,15 +2722,6 @@ def _walk_endpoint_op(
         schema = body.get("schema")
         if isinstance(schema, dict):
             _walk_jsonschema_pairs(schema, f"{base_pointer}/{schema_field}/schema", out)
-    params = op.get("params")
-    if isinstance(params, dict):
-        for pname, pspec in params.items():
-            if not isinstance(pspec, dict):
-                continue
-            native = pspec.get("native_type")
-            arrow = pspec.get("arrow_type")
-            if isinstance(native, str) and isinstance(arrow, str):
-                out.append((native, arrow, f"{base_pointer}/params/{pname}"))
 
 
 def _walk_jsonschema_pairs(node: Any, pointer: str, out: list[tuple[str, str, str]]) -> None:
@@ -2891,35 +2903,24 @@ def _walk_jsonschema_markers(node: Any, pointer: str, out: list[tuple[str, str]]
 def _walk_op_for_markers(op: dict, base_pointer: str, schema_field: str, out: list[tuple[str, str]]) -> None:
     """Collect bare-marker sibling-key violations from one endpoint operation.
 
-    Visits the operation's `<schema_field>.schema` JSON-Schema tree (recursive)
-    and its flat `params`, matching the sub-trees `_walk_endpoint_op` walks for
-    coverage. A `Param` is `additionalProperties: false` and defines neither
-    `properties` nor `items` (nor `arrow_type` itself), so a param carrying
-    `arrow_type` is already a Layer 1 violation — this param branch only
-    matters under `--semantic-only`, where it flags an `Object` / `List` marker
-    the param can never satisfy (a `Json` param is opaque, forbids both, and is
-    left clean). Params are flat, so no recursion.
+    Visits the operation's `<schema_field>.schema` JSON-Schema tree (recursive),
+    matching the sub-tree `_walk_endpoint_op` walks for coverage. `params` are
+    not visited: the published `Param` def forbids `arrow_type`, so there is
+    no marker to check — an annotated param is flagged wholesale by the
+    asymmetric walker's `param_annotations` finding.
     """
     body = op.get(schema_field)
     if isinstance(body, dict) and isinstance(body.get("schema"), dict):
         _walk_jsonschema_markers(body["schema"], f"{base_pointer}/{schema_field}/schema", out)
-    params = op.get("params")
-    if isinstance(params, dict):
-        for pname, pspec in params.items():
-            if not isinstance(pspec, dict):
-                continue
-            arrow = pspec.get("arrow_type")
-            if isinstance(arrow, str) and arrow in _BARE_MARKER_ARROW_TYPES:
-                _check_marker_siblings(pspec, arrow, f"{base_pointer}/params/{pname}", out)
 
 
 def _collect_marker_sibling_violations(endpoint_doc: dict) -> list[tuple[str, str]]:
     """Return `(json_pointer, kind)` tuples for bare-marker sibling-key
-    violations across an api-endpoint document's response/input schemas + params.
+    violations across an api-endpoint document's response/input schemas.
 
     Walks the same `operations.read.response.schema` /
-    `operations.write.<mode>.input.schema` sub-trees and `params` maps the
-    coverage and asymmetric walkers visit.
+    `operations.write.<mode>.input.schema` sub-trees the coverage walker
+    visits (`params` carry no annotations and are not marker-checked).
     """
     out: list[tuple[str, str]] = []
     operations = endpoint_doc.get("operations")
@@ -2939,8 +2940,8 @@ def _collect_marker_sibling_violations(endpoint_doc: dict) -> list[tuple[str, st
 
 
 def check_endpoint_annotations(doc: Any) -> list[dict]:
-    """Run the asymmetric / non-string / non-dict-subtree pair walker on
-    an endpoint document validated directly.
+    """Run the asymmetric / non-string / param-annotation / non-dict-subtree
+    pair walker on an endpoint document validated directly.
 
     The same walker runs from `check_type_map_coverage` when a connector
     is validated (it walks sibling endpoints). When the orchestrator
@@ -2979,6 +2980,16 @@ def check_endpoint_annotations(doc: Any) -> list[dict]:
                     "error",
                     "/",
                     f"endpoint field at {problem_pointer} declares native_type / arrow_type with non-string value(s); both must be strings per the api-endpoint schema.",
+                    rule_doc="shared/type-maps.md",
+                )
+            )
+        elif problem_kind == "param_annotations":
+            findings.append(
+                finding(
+                    "endpoint-annotations",
+                    "error",
+                    "/",
+                    f"endpoint param at {problem_pointer} carries native_type / arrow_type; the api-endpoint schema's Param forbids both — a param is a request input, typed only by its `type` field. Remove the annotations.",
                     rule_doc="shared/type-maps.md",
                 )
             )

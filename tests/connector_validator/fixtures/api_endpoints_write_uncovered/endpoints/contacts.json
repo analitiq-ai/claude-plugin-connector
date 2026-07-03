@@ -16,8 +16,7 @@
         },
         "params": {
           "dry_run": {
-            "in": "query", "type": "boolean", "required": false,
-            "native_type": "boolean", "arrow_type": "Boolean"
+            "in": "query", "type": "boolean", "required": false
           }
         }
       }
