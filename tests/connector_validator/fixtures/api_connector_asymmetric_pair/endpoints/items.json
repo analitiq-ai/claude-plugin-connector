@@ -5,7 +5,8 @@
     "read": {
       "request": { "method": "GET", "path": "/items" },
       "params": {
-        "q": { "in": "query", "type": "string", "native_type": "string" }
+        "q": { "in": "query", "type": "string", "native_type": "string" },
+        "legacy": { "in": "query", "type": "string", "native_type": "weird", "arrow_type": "Utf8" }
       },
       "response": {
         "records": { "ref": "response.body" },

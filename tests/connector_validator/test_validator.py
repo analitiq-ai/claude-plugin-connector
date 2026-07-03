@@ -725,7 +725,8 @@ def test_type_map_empty_array_caught(tmp_path):
 
 
 def test_api_endpoint_coverage_passes_when_all_natives_covered():
-    """API connector with sibling type-map.json covering every (native_type, arrow_type) pair."""
+    """API connector with sibling type-map-read.json covering every
+    (native_type, arrow_type) pair; the (unannotated) read param is ignored."""
     result = run_validator(
         FIXTURES / "api_endpoints_covered" / "connector.json",
         "--semantic-only",
@@ -1075,6 +1076,17 @@ def test_api_connector_asymmetric_native_arrow_pair_caught():
     assert any("forbids both" in e["message"] and "/operations/write/insert/params/tenant" in e["message"]
                for e in errs), \
         f"expected param-annotations finding from write.insert.params; got {errs}"
+    # Both-keys param: rejected wholesale, never fed to coverage. Its native
+    # ('weird') has no read-map rule, so a revert of the coverage-source
+    # removal would surface as a spurious coverage finding at a /params/
+    # pointer.
+    assert any("forbids both" in e["message"] and "/operations/read/params/legacy" in e["message"]
+               for e in errs), \
+        f"expected param-annotations finding for both-keys param; got {errs}"
+    assert not any("/params/" in e["message"]
+                   and ("no matching rule" in e["message"] or "resolves to" in e["message"])
+                   for e in errs), \
+        f"params must never feed type-map coverage; got {errs}"
     # Non-string-both variant.
     assert any("non-string value(s)" in e["message"]
                and "/operations/read/response/schema/properties/raw" in e["message"]
@@ -1456,14 +1468,18 @@ def test_annotations_on_params_flagged(tmp_path):
         run_validator(path, "--semantic-only", schema_url=API_ENDPOINT_SCHEMA_URL),
         "endpoint-annotations",
     )
+    # Exactly one finding per annotated param — the wholesale rejection, and
+    # nothing else. A second finding at the same pointer means a param branch
+    # (marker or coverage walker) grew back.
     for pointer in (
         "/operations/read/params/shape",
         "/operations/read/params/q",
         "/operations/read/params/half",
         "/operations/write/insert/params/wshape",
     ):
-        assert any(pointer in e["message"] and "forbids both" in e["message"] for e in errs), \
-            f"expected annotated param at {pointer} to be flagged; got {errs}"
+        matches = [e for e in errs if pointer in e["message"]]
+        assert len(matches) == 1 and "forbids both" in matches[0]["message"], \
+            f"expected exactly one param-annotations finding at {pointer}; got {matches or errs}"
     assert not any("/params/clean" in e["message"] for e in errs), \
         f"unannotated param must not be flagged; got {errs}"
 

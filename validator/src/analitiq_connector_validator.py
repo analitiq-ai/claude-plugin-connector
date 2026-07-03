@@ -2513,8 +2513,9 @@ def _collect_asymmetric_pairs(endpoint_doc: dict) -> list[tuple[str, str]]:
     - `"param_annotations"` — a param carries `native_type` and/or
       `arrow_type`. The published `Param` def forbids both (a param is a
       request input, never a materialized column; its `type` enum is its
-      only typing), so this is a Layer 1 error surfaced here for
-      `--semantic-only` runs.
+      only typing): a Layer 1 error re-surfaced here so it is caught
+      under `--semantic-only` and on sibling endpoints (which Layer 1
+      never sees).
     - `"non_dict_subtree"` — a sub-tree at any structural level (operations,
       read, write, response/input, schema, params, properties, items,
       combiners) is not a dict and the walker could not recurse into it.
@@ -2712,10 +2713,12 @@ def _walk_endpoint_op(
     `_check_annotation_pair`. The two walkers are intentionally
     separate: this one collects WELL-FORMED pairs for coverage
     analysis; the asymmetric walker collects MALFORMED annotation
-    sites for direct error reporting. Both walkers visit the same
-    sub-trees but emit different finding categories, so silently
-    dropping a malformed pair here is correct — the asymmetric
-    walker has already flagged it.
+    sites for direct error reporting. The asymmetric walker visits a
+    superset of this walker's sub-trees (it additionally checks
+    `params`); within the schema trees both visit the same nodes but
+    emit different finding categories, so silently dropping a
+    malformed pair here is correct — the asymmetric walker has
+    already flagged it.
     """
     body = op.get(schema_field)
     if isinstance(body, dict):
@@ -2946,8 +2949,9 @@ def check_endpoint_annotations(doc: Any) -> list[dict]:
     The same walker runs from `check_type_map_coverage` when a connector
     is validated (it walks sibling endpoints). When the orchestrator
     validates an endpoint file by itself with `--schema-url=api-endpoint/latest.json`,
-    Layer 1 catches malformed annotation pairs via `dependentRequired`;
-    under `--semantic-only` Layer 1 is bypassed, so this validator
+    Layer 1 catches malformed annotation pairs via `dependentRequired`
+    and annotated params via the `Param` def's `additionalProperties:
+    false`; under `--semantic-only` Layer 1 is bypassed, so this validator
     surfaces the same findings the coverage walker would have emitted
     when invoked from a parent connector.
 
