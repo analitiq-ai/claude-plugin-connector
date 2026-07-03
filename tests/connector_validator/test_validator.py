@@ -1469,8 +1469,9 @@ def test_annotations_on_params_flagged(tmp_path):
         "endpoint-annotations",
     )
     # Exactly one finding per annotated param — the wholesale rejection, and
-    # nothing else. A second finding at the same pointer means a param branch
-    # (marker or coverage walker) grew back.
+    # nothing else. A second finding at the same pointer means the marker
+    # param branch grew back (the coverage-branch revert is pinned by
+    # test_api_connector_asymmetric_native_arrow_pair_caught).
     for pointer in (
         "/operations/read/params/shape",
         "/operations/read/params/q",
