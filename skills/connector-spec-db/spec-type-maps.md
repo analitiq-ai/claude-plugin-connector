@@ -87,11 +87,13 @@ hood at validation time. Authors write the ECMA-262 form.
   `native: "NUMERIC(${p}, ${s})"`.
 
 Placeholders are only legal in **parameter positions** of parameterized
-types (`Decimal128(${precision}, ${scale})`, `Timestamp(${unit},
-${tz})`, `FixedSizeBinary(${n})` on the read side; `NUMERIC(${p},
-${s})`, `VARCHAR(${len})` and similar on the write side). Templated
-renders are only legal on `regex` rules; `exact` rules must emit a
-fully-resolved literal on the rendered side.
+types (`Decimal128(${precision}, ${scale})`, `FixedSizeBinary(${n})` on
+the read side; `NUMERIC(${p}, ${s})`, `VARCHAR(${len})` and similar on
+the write side). Templated renders are only legal on `regex` rules;
+`exact` rules must emit a fully-resolved literal on the rendered side.
+(Timestamp precision is **not** a `${}` case — Arrow's unit is a
+symbolic enum, not a digit; capture the native's digit count and ladder
+it to a unit instead. See "Database coverage → Read map".)
 
 ## Schemaless / JSON-shaped natives
 
@@ -138,8 +140,9 @@ mechanical — the same judgment transfers across providers:
   network types `INET`/`CIDR`/`MACADDR`, `UUID`, `ENUM(...)`, `XML`) →
   `Utf8`. They are atomic strings on the wire; don't invent a numeric/Decimal
   canonical.
-- **Zoned time-of-day** (`TIME WITH TIME ZONE` / `TIMETZ`) → `Time64`
-  (the zone is dropped — a bare time-of-day carries no instant). Contrast
+- **Zoned time-of-day** (`TIME WITH TIME ZONE` / `TIMETZ`) →
+  `Time32`/`Time64` (unit per the precision ladder; the zone is dropped —
+  a bare time-of-day carries no instant). Contrast
   `TIMESTAMP WITH TIME ZONE` → `Timestamp(<unit>, UTC)`.
 - **Bare vs zoned timestamp**: choose the tz-aware canonical only when the
   native (or, for APIs, the sample value) actually carries a zone.
@@ -190,6 +193,23 @@ database-package concept (DDL rendering).
   let the runtime hard-error so the gap is visible.
 - Use `Utf8` (not `String`) for Arrow's UTF-8 string type — `String` is
   not a member of the published Arrow vocabulary.
+- Capture declared precision on parameterized natives — never collapse it
+  to a constant. The fixed default belongs only on the unparameterized
+  fallback rule.
+  - **Decimal:** regex `(precision, scale)` into named captures and route
+    by Arrow width — precision ≤ 38 → `Decimal128(${precision},
+    ${scale})`, 39–76 → `Decimal256(...)`. Precision > 76 exceeds Arrow,
+    so leave it uncovered (visible hard-error, per the no-wildcard rule
+    above); bare `NUMERIC` takes the fixed default.
+  - **Timestamp/time:** the native carries a fractional-second *digit
+    count*, but Arrow's unit is a symbolic enum — so ladder the digit
+    count to the smallest unit that holds it exactly: `(0)`→`SECOND`,
+    `(1–3)`→`MILLISECOND`, `(4–6)`→`MICROSECOND`, `(7–9)`→`NANOSECOND`,
+    with the bare form rendering the system's documented default unit.
+    A single flat unit truncates any system finer than it — this is a
+    per-system ladder, not a constant. Time-of-day picks the Arrow width
+    off the same unit: `Time32(SECOND|MILLISECOND)` for coarse,
+    `Time64(MICROSECOND|NANOSECOND)` for fine.
 
 **Write map:** cover the **full canonical vocabulary** — Boolean,
 Int8–64, UInt8–64, Float16/32/64, Decimal (regex with `${p}`/`${s}`
@@ -233,26 +253,27 @@ is wrong — `Timestamp` requires a unit).
 ## Worked example: Postgres (read)
 
 Excerpt from the reference read map — uppercase patterns, the
-split-rule pattern for `NUMERIC` (a `regex` family rule above an
-`exact` fallback), and a `JSONB` column mapped to the `Json` container
-canonical (not a scalar):
+width-tiered `NUMERIC` capture (`Decimal128` ≤ 38, `Decimal256` above,
+over a bare-`NUMERIC` fallback), the timestamp precision ladder (digit
+count → Arrow unit, here instantiated to Postgres's 0–6 range), and a
+`JSONB` column mapped to the `Json` container canonical (not a scalar):
 
 ```json
 [
-  { "match": "exact", "native": "SMALLINT",                                 "canonical": "Int16" },
-  { "match": "exact", "native": "INTEGER",                                  "canonical": "Int32" },
-  { "match": "exact", "native": "BIGINT",                                   "canonical": "Int64" },
-  { "match": "exact", "native": "BOOLEAN",                                  "canonical": "Boolean" },
-  { "match": "exact", "native": "TEXT",                                     "canonical": "Utf8" },
-  { "match": "regex", "native": "^CHARACTER VARYING(\\(.+\\))?$",           "canonical": "Utf8" },
-  { "match": "exact", "native": "UUID",                                     "canonical": "Utf8" },
-  { "match": "exact", "native": "JSONB",                                    "canonical": "Json" },
-  { "match": "exact", "native": "DATE",                                     "canonical": "Date32" },
-  { "match": "regex", "native": "^TIME(\\(.+\\))?( WITHOUT TIME ZONE)?$",   "canonical": "Time64(MICROSECOND)" },
-  { "match": "regex", "native": "^TIMESTAMP(\\(.+\\))?( WITHOUT TIME ZONE)?$", "canonical": "Timestamp(MICROSECOND)" },
-  { "match": "regex", "native": "^TIMESTAMP(\\(.+\\))? WITH TIME ZONE$",    "canonical": "Timestamp(MICROSECOND, UTC)" },
-  { "match": "regex", "native": "^NUMERIC(\\(.+\\))?$",                     "canonical": "Decimal128(38, 9)" },
-  { "match": "exact", "native": "BYTEA",                                    "canonical": "Binary" }
+  { "match": "exact", "native": "SMALLINT",                                    "canonical": "Int16" },
+  { "match": "exact", "native": "INTEGER",                                     "canonical": "Int32" },
+  { "match": "exact", "native": "BIGINT",                                      "canonical": "Int64" },
+  { "match": "exact", "native": "TEXT",                                        "canonical": "Utf8" },
+  { "match": "exact", "native": "JSONB",                                       "canonical": "Json" },
+  { "match": "exact", "native": "DATE",                                        "canonical": "Date32" },
+
+  { "match": "regex", "native": "^(?:NUMERIC|DECIMAL)\\((?<precision>[1-9]|[12]\\d|3[0-8]),\\s*(?<scale>\\d+)\\)$", "canonical": "Decimal128(${precision}, ${scale})" },
+  { "match": "regex", "native": "^(?:NUMERIC|DECIMAL)\\((?<precision>39|[4-6]\\d|7[0-6]),\\s*(?<scale>\\d+)\\)$",   "canonical": "Decimal256(${precision}, ${scale})" },
+  { "match": "regex", "native": "^(?:NUMERIC|DECIMAL)$",                                                           "canonical": "Decimal128(38, 9)" },
+
+  { "match": "regex", "native": "^TIMESTAMP\\(0\\)( WITHOUT TIME ZONE)?$",        "canonical": "Timestamp(SECOND)" },
+  { "match": "regex", "native": "^TIMESTAMP\\([1-3]\\)( WITHOUT TIME ZONE)?$",    "canonical": "Timestamp(MILLISECOND)" },
+  { "match": "regex", "native": "^TIMESTAMP(\\([4-6]\\))?( WITHOUT TIME ZONE)?$", "canonical": "Timestamp(MICROSECOND)" }
 ]
 ```
 
