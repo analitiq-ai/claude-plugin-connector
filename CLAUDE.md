@@ -104,7 +104,7 @@ The published schema is the single source of truth. **Never restate what it defi
 - **Fetch-once, pass-down** — the orchestrator hands the live contract schema URLs to the researcher (the mission spec) and the creators read the same schemas as vocabulary, so authoring and validation agree on one contract.
 - **Drift-check CI** for anything that must stay duplicated as decision logic (e.g. the `enum-mappers` that map provider facts onto schema enums): `tests/connector_validator/test_schema_drift.py` loads the live schemas and fails the build if the plugin's enum targets diverge.
 
-Enum lists that appear in this file and in skill prose are **illustrative**; the authoritative definition is always the live schema (or, for canonical Arrow types, `canonical-types.json` in `analitiq-infra`). Craft that the schema never defined (e.g. the `ssl_mode` vocabulary, the driver-selection decision order, datetime naive/tz judgment) is not drift-exposed and stays. Full rationale: `docs/design/contract-derived-research.md` §2.
+Enum lists that appear in this file and in skill prose are **illustrative**; the authoritative definition is always the live schema (or, for canonical Arrow types, `canonical-types.json` in `analitiq-infra`). Craft that the schema never defined (e.g. the `ssl_mode` vocabulary, the driver-selection decision order, datetime naive/tz judgment) is not drift-exposed and stays.
 
 ## Canonical Types
 

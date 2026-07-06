@@ -12,3 +12,6 @@ build/
 dist/
 *.egg-info/
 *.egg
+
+# Design docs kept local — not published to the public repo for now
+docs/
