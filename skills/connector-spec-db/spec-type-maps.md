@@ -92,7 +92,7 @@ the read side; `NUMERIC(${p}, ${s})`, `VARCHAR(${len})` and similar on
 the write side). Templated renders are only legal on `regex` rules;
 `exact` rules must emit a fully-resolved literal on the rendered side.
 (Timestamp precision is **not** a `${}` case — Arrow's unit is a
-symbolic enum, not a digit; capture the native's digit count and ladder
+symbolic enum, not a digit; match on the native's digit count and ladder
 it to a unit instead. See "Database coverage → Read map".)
 
 ## Schemaless / JSON-shaped natives
@@ -198,9 +198,11 @@ database-package concept (DDL rendering).
   fallback rule.
   - **Decimal:** regex `(precision, scale)` into named captures and route
     by Arrow width — precision ≤ 38 → `Decimal128(${precision},
-    ${scale})`, 39–76 → `Decimal256(...)`. Precision > 76 exceeds Arrow,
-    so leave it uncovered (visible hard-error, per the no-wildcard rule
-    above); bare `NUMERIC` takes the fixed default.
+    ${scale})`, 39–76 → `Decimal256(...)`. A precision-only declaration
+    (`NUMERIC(p)`, implicit scale 0) needs its own tier rendering
+    `Decimal{128,256}(${precision}, 0)`. Precision > 76 exceeds Arrow, so
+    leave it uncovered (visible hard-error, per the no-wildcard rule
+    above); the bare/unparameterized native takes the fixed default.
   - **Timestamp/time:** the native carries a fractional-second *digit
     count*, but Arrow's unit is a symbolic enum — so ladder the digit
     count to the smallest unit that holds it exactly: `(0)`→`SECOND`,
@@ -231,7 +233,7 @@ Arrow canonical types are fully-qualified PascalCase strings from the
 shared Arrow vocabulary — bare names where the type has no parameters
 (`Int32`, `Int64`, `Float64`, `Utf8`, `Boolean`, `Binary`, `Date32`),
 parens for parameterized scalars (`Decimal128(p, s)`,
-`Timestamp(MICROSECOND, UTC)`, `Time64(MICROSECOND)`,
+`Decimal256(p, s)`, `Timestamp(MICROSECOND, UTC)`, `Time64(MICROSECOND)`,
 `FixedSizeBinary(16)`), and angle brackets for nested types
 (`List<Int64>`, `Struct<id:Int64, name:Utf8>`, `Map<Utf8, Int64>`).
 
@@ -253,8 +255,9 @@ is wrong — `Timestamp` requires a unit).
 ## Worked example: Postgres (read)
 
 Excerpt from the reference read map — uppercase patterns, the
-width-tiered `NUMERIC` capture (`Decimal128` ≤ 38, `Decimal256` above,
-over a bare-`NUMERIC` fallback), the timestamp precision ladder (digit
+width-tiered `NUMERIC`/`DECIMAL` capture (`Decimal128` ≤ 38, `Decimal256`
+above, over a bare fallback; the on-disk file adds precision-only
+`(p)`→scale-0 tiers, trimmed here), the timestamp precision ladder (digit
 count → Arrow unit, here instantiated to Postgres's 0–6 range), and a
 `JSONB` column mapped to the `Json` container canonical (not a scalar):
 
