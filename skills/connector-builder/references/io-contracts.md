@@ -8,7 +8,7 @@ Pin every I/O between phases and sub-agents as a JSON Schema fragment.
 the facts the live schemas (`connector`, `api-endpoint`,
 `type-map-read`/`-write`) require in order to author a connector for the
 target system. It is shaped *like* the contract, not maintained as a curated
-parallel list (design: `docs/design/contract-derived-research.md`).
+parallel list.
 
 Read the schema below as a **floor, not a ceiling**: it pins the facts the
 pipeline depends on by name, but the researcher's mission is "ground every

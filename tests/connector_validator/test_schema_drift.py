@@ -3,8 +3,7 @@
 A handful of enums can't simply be deleted from the plugin: they ARE the
 mapping logic (`enum-mappers.md` maps researched provider facts onto schema
 enum values; `ProviderFacts` classifies into them; `CLAUDE.md` documents the
-closed sets). Per the drift policy
-(`docs/design/contract-derived-research.md` §2), anything that must stay
+closed sets). Per the drift policy, anything that must stay
 duplicated is pinned to the live schema here. If the published schema's enum
 changes, the matching test fails and names the divergence, so the prose +
 mappers are updated in the same change instead of silently drifting.
@@ -13,7 +12,7 @@ The live-schema tests fetch the published schemas FRESH (`cache=False`) so a
 warm disk cache can't mask real drift, and are marked `@pytest.mark.network`
 like the rest of the suite's live-fetch tests (run `-m "not network"` to skip
 them offline). The remaining tests exercise the validator's encoding-enum
-derivation offline. Companion inventory: `docs/design/drift-audit.md`.
+derivation offline.
 """
 
 from __future__ import annotations
