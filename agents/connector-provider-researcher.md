@@ -27,8 +27,7 @@ You run at one of two scopes per invocation:
   `type-map-read` schemas; research the system-wide facts and return a
   `ProviderFacts` object (auth model, base URLs / origins, pagination, rate
   limits, post-auth selections, dynamic discovery probes, the **resource
-  list** to author endpoints for (derive each entry's `key` as its full
-  locator, `__`-joined, version-first, path-params dropped — the
+  list** to author endpoints for (derive each entry's `key` per the
   `resources[].key` rule in io-contracts.md, never a free-picked slug), and
   the connector-wide **native-type
   vocabulary**). For databases also cover driver-selection facts, DSN shape,
