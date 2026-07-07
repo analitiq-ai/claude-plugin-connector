@@ -72,7 +72,8 @@ agent owns the authoring vocabulary for its kind via a dedicated spec skill
 
 The plugin validates against the prebuilt, released
 [`analitiq-connector-validator`](https://github.com/analitiq-ai/claude-plugin-connector/releases/tag/validator-v0.1.0)
-package — its source is no longer bundled here. The validator runs:
+package — its source is no longer on the main tree (it lives only at the
+`validator-v0.1.0` tag, which the pin below installs from). The validator runs:
 
 1. **JSON Schema validation** (Draft 2020-12) against the published schema:
    - Connector → `https://schemas.analitiq.ai/connector/latest.json`
@@ -106,8 +107,10 @@ and invokes the same entry point; the connector registry's CI installs it to
 run Layer 2 (`--semantic-only`, no network) as a required merge gate. One
 released artifact, consumed everywhere — the plugin no longer carries a copy.
 
-Tests live under `tests/connector_validator/` (`test_spec_doc_examples.py`,
-`test_schema_drift.py`); they import the installed package. Run with `pytest`.
+Tests live under `tests/connector_validator/`: `test_spec_doc_examples.py` and
+`test_schema_drift.py` import the installed package, and
+`test_prebuilt_validator.py` smoke-tests its console entry point and checks the
+pin is consistent across consumers. Run with `pytest`.
 
 ## Schema host
 

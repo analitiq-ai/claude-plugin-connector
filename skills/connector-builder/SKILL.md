@@ -167,8 +167,8 @@ sub-agents own those skills.
    verbatim and do not pre-filter, pre-diagnose, or read spec material to
    interpret them yourself. If `error`-severity findings persist after 5
    passes, halt and surface the diagnostics; do not write partial files.
-   The validator script itself is single-shot — iteration discipline
-   lives in the orchestrator's prose, not in the script. The cap is
+   The validator itself is single-shot — iteration discipline
+   lives in the orchestrator's prose, not in the validator. The cap is
    best-effort and not runtime-enforced; runtime enforcement is tracked at
    https://github.com/analitiq-ai/ai-plugins-official/issues/26.
 5. **Endpoint fan-out (api only)** — the domain is authored and clean, so
