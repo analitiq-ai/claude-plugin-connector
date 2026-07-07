@@ -168,7 +168,8 @@ KNOWN_SCOPES = {
 
 KNOWN_FUNCTIONS = {
     "basic_auth",
-    "jwt_sign",
+    "base64_encode",
+    "lookup",
     "url_encode",
 }
 
@@ -899,7 +900,20 @@ _GENERIC_RUNTIME_KEYS = {"run_id", "current_time", "batch_size"}
 _OPERATION_LOCAL_RUNTIME_KEYS = {"pagination"}
 # `runtime.pagination.*` is itself a closed set per the spec.
 _PAGINATION_RUNTIME_KEYS = {"offset"}
-_OAUTH_RUNTIME_KEYS = {"code", "state", "redirect_uri", "pkce_verifier"}
+_OAUTH_RUNTIME_KEYS = {
+    "code",
+    "state",
+    "redirect_uri",
+    "pkce_verifier",
+    "code_challenge",
+    "code_challenge_method",
+}
+# Per-operation availability within the OAuth2 authorization-code flow
+# (shared/lifecycle-phases.md). The browser-facing authorize request may carry
+# only the derived PKCE challenge; the back-channel token_exchange carries the
+# authorization code and the raw PKCE verifier. state/redirect_uri ride both.
+_OAUTH_AUTHORIZE_ONLY_KEYS = {"code_challenge", "code_challenge_method"}
+_OAUTH_TOKEN_EXCHANGE_ONLY_KEYS = {"code", "pkce_verifier"}
 
 
 _INDEXED_STORAGE = ("connection.parameters", "secrets")
@@ -1127,10 +1141,12 @@ def _runtime_phase_problem(
             return f"'runtime.oauth.{oauth_key}' is not in the closed set {sorted(_OAUTH_RUNTIME_KEYS)}."
         if auth_op == "refresh":
             return "'runtime.oauth.*' must not be referenced inside auth.refresh."
-        if oauth_key == "code" and auth_op != "token_exchange":
-            return f"'runtime.oauth.code' is only available inside auth.token_exchange (current op: {auth_op!r})."
         if auth_op not in ("authorize", "token_exchange"):
             return "'runtime.oauth.*' is only available in auth.authorize and auth.token_exchange."
+        if oauth_key in _OAUTH_TOKEN_EXCHANGE_ONLY_KEYS and auth_op != "token_exchange":
+            return f"'runtime.oauth.{oauth_key}' is only available inside auth.token_exchange (current op: {auth_op!r})."
+        if oauth_key in _OAUTH_AUTHORIZE_ONLY_KEYS and auth_op != "authorize":
+            return f"'runtime.oauth.{oauth_key}' is only available inside auth.authorize (current op: {auth_op!r})."
         return None
     return f"'runtime.{sub}' is not in the registered closed set."
 

@@ -30,19 +30,26 @@ target one of these scopes:
 | `connection.selections.*` | `post_auth` and later | Durable user choices declared as `post_auth_outputs` with `storage: "connection.selections"`. |
 | `connection.discovered.*` | `post_auth` and later | Auto-discovered non-secret context (e.g. `api_domain`) declared as `post_auth_outputs` with `storage: "connection.discovered"`. |
 | `auth.*` | `auth` and later | Auth tokens (access_token, refresh_token, expiry). |
-| `runtime.*` | varies by ref | OAuth state, redirect URI, PKCE verifier, code (transient values per `lifecycle-phases.md`). |
+| `runtime.*` | varies by ref | OAuth `state`, `redirect_uri`, `code`, `pkce_verifier`, `code_challenge`, `code_challenge_method`, and other transient values; per-operation availability per `lifecycle-phases.md`. |
 | `stream.*` | per stream | Stream-owned routing, tenant context, stream-specific auth context. |
 
 Any other scope is an `expression-resolver` validation error.
 
 ## Function catalog (registered)
 
-Inline function expressions may only call registered functions. Current
-catalog:
+Inline function expressions may only call **registered** functions — the
+engine's `DEFAULT_FUNCTIONS` registry. Current catalog:
 
-- `basic_auth` — produce `Basic <base64(username:password)>` from `username` and `password` inputs.
-- `jwt_sign` — sign a JWT from `key`, `algorithm`, and `claims` inputs.
-- `url_encode` — percent-encode a string for use as a URL component.
+- `basic_auth` — build a Basic credential/header from `username` + `password` (or client-credentials) inputs.
+- `base64_encode` — base64-encode a string/bytes value for provider auth formats.
+- `lookup` — map an input value through a connector-declared inline `map`, returning the mapped value.
+- `url_encode` — percent-encode a scalar for a URL component. Escapes every reserved character by default (`safe: ""`); pass a `safe` field to widen the unescaped set.
+
+**Planned — NOT yet registered; do not reference (validation rejects unknown
+function names):** `jwt_sign` (sign a JWT from key/algorithm/claims) and
+`pkce_challenge_s256` (derive a PKCE S256 challenge from a runtime verifier).
+Until the engine registers a function, connectors must not call it — this
+includes the inline-signing path for `jwt` auth.
 
 Unknown functions are validation errors. To extend the catalog, the
 engine's function registry must be updated first; do not invent function

@@ -74,7 +74,9 @@ The `connector-spec-api` skill is preloaded. Beyond that, read:
    one transport per origin and factor common headers into
    `transport_defaults`.
 3. **Auth** — populate `auth` per `auth.type` requirements. Use inline
-   `function` expressions (`basic_auth`, `jwt_sign`) where applicable.
+   `function` expressions (`basic_auth`; `base64_encode` / `lookup` as
+   needed) where applicable. (`jwt_sign` is planned, not yet registered —
+   do not emit it.)
    `transport_ref` on auth ops must point at a defined transport.
 4. **Connection contract** — populate `connection_contract.inputs`,
    `post_auth_outputs`, `required_for_activation`, and `validation` per

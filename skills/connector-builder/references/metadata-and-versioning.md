@@ -9,7 +9,7 @@ and `connectors/connector-schema-parameterization.md`.
 |---|---|---|
 | `$schema` | Yes (for standalone files) | Fixed const: `https://schemas.analitiq.ai/connector/latest.json`. The validator fetches from the same host. |
 | `kind` | Yes | One of `api`, `database`, `file`, `s3`, `stdout`. |
-| `connector_id` | Yes (plugin-authored) | Stable connector slug, lowercase `[a-z0-9_-]+`. Same value as the on-disk `{connector_id}/` directory name. Per the contract `connector_id` is *optional* on submission — the registry assigns one when omitted — but this plugin always emits it so the directory name and identifier stay in sync. |
+| `connector_id` | Yes | Stable connector slug matching `^[a-z0-9][a-z0-9_-]*$` (lowercase). Names the on-disk `{connector_id}/` directory so the identifier and directory stay in sync. The connector contract **requires** `connector_id` in every authored definition — the "service-assigns-when-omitted" rule is `connection_id`'s on *connection* documents, not `connector_id`'s. |
 | `display_name` | No | User-facing label. |
 | `description` | No | Human-readable summary. |
 | `tags` | No | Search/grouping labels. |
@@ -37,9 +37,9 @@ value names the on-disk directory (`{connector_id}/`), so the contract
 path `connectors/{connector_id}/definition/connector.json` and the
 plugin's output path align without a rewrite layer.
 
-The schema permits `connector_id` to be any non-empty string (UUID or
-slug); this plugin uses the slug convention `[a-z0-9_-]+` to keep
-directory names portable.
+The connector contract requires `connector_id` to match
+`^[a-z0-9][a-z0-9_-]*$` (a lowercase slug); this plugin authors that slug
+directly, so directory names stay portable and the identifier is stable.
 
 ## Registry-stamped fields
 

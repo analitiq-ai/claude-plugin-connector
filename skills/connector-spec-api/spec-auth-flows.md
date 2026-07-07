@@ -85,9 +85,9 @@ client credentials and gets an access token (no browser redirect):
 **Required children:** `type`.
 **Optional:** `test`.
 
-The signing key, algorithm, and claim inputs are declared in
-`connection_contract.inputs`. The `Authorization` header uses the
-`jwt_sign` function expression:
+Declare the signing key, algorithm, and claim inputs in
+`connection_contract.inputs` (see `examples/jwt/jwt.example.json`), and set
+the `Authorization` header from the minted token:
 
 ```json
 "Authorization": {
@@ -95,11 +95,12 @@ The signing key, algorithm, and claim inputs are declared in
 }
 ```
 
-…where `auth.access_token` is produced by an inline `jwt_sign` call in
-auth setup. (The exact wiring depends on the provider.)
-
-Example: `examples/jwt/jwt.example.json` (with sibling
-`examples/jwt/type-map-read.json`).
+> **Inline signing is not yet available.** The `jwt_sign` function that
+> would mint `auth.access_token` from the declared key/claims is **planned,
+> not registered** in the engine — connector validation rejects it. Until it
+> lands, a `jwt`-auth connector can declare its inputs but cannot mint the
+> token inline; do not author a `jwt_sign` call. Flag this capability gap
+> before shipping a `jwt` connector that depends on local signing.
 
 ## `credentials`
 
