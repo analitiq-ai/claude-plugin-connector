@@ -15,3 +15,8 @@ dist/
 
 # Design docs kept local — not published to the public repo for now
 docs/
+
+# Local env / direnv — may hold secrets (GitHub PATs, etc.), never commit
+.envrc
+.env
+.env.*
