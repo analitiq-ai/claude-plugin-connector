@@ -743,6 +743,29 @@ def test_oauth_code_in_authorize_caught():
         f"expected oauth.code-in-authorize finding; got {errs}"
 
 
+def test_oauth_pkce_verifier_in_authorize_caught():
+    """runtime.oauth.pkce_verifier is token_exchange-only; it must never ride authorize (PKCE)."""
+    result = run_validator(FIXTURES / "invalid_phase_oauth_pkce_verifier_in_authorize.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("pkce_verifier" in e["message"] and "token_exchange" in e["message"] for e in errs), \
+        f"expected pkce_verifier-in-authorize finding; got {errs}"
+
+
+def test_oauth_code_challenge_in_token_exchange_caught():
+    """runtime.oauth.code_challenge is authorize-only; token_exchange must not reference it."""
+    result = run_validator(FIXTURES / "invalid_phase_oauth_code_challenge_in_token_exchange.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("code_challenge" in e["message"] and "authorize" in e["message"] for e in errs), \
+        f"expected code_challenge-in-token_exchange finding; got {errs}"
+
+
+def test_oauth_pkce_correct_placement_passes():
+    """code_challenge/method in authorize + code/pkce_verifier in token_exchange is valid."""
+    result = run_validator(FIXTURES / "valid_phase_oauth_pkce.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert not errs, f"expected no phase-resolvability errors for correct PKCE placement; got {errs}"
+
+
 def test_stream_scope_in_auth_phase_caught():
     """stream.* is only available in the active phase; auth.authorize is at auth phase."""
     result = run_validator(FIXTURES / "invalid_phase_stream_in_authorize.json", "--semantic-only")

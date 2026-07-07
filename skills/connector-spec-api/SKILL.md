@@ -38,7 +38,7 @@ Pick what you need for the auth and pagination styles you're authoring:
   `credentials`, `aws_iam`, `none`.
 - `auth.authorize` / `auth.token_exchange` / `auth.refresh` / `auth.test`
   operation templates.
-- Inline function expressions: `basic_auth`, `jwt_sign`, `url_encode`.
+- Inline function expressions: `basic_auth`, `base64_encode`, `lookup`, `url_encode` (`jwt_sign` / `pkce_challenge_s256` are planned — not yet registered; do not use).
 - `headers_remove` semantics for inheriting transports.
 - `post_auth_outputs` with `options_request` / `discovery_request`.
 - Pagination styles (offset / cursor / page / link).

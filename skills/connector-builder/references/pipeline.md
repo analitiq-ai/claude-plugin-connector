@@ -101,14 +101,17 @@ docs, halt and ask the user for a URL or manually-supplied facts.
 
 Run the closed-enum mappers inline (see `enum-mappers.md`):
 
-- `KindMapper` → `kind` (one of `api`, `database`).
+- `KindMapper` → `kind` (authorable: `api`, `database`).
 - `AuthTypeMapper` → `auth.type`.
 - `TransportTypeMapper` → `transport_type` per transport.
 
-Storage kinds (`file`, `s3`, `stdout`) are accepted by the schema but not
-yet supported by the engine. If the user explicitly asked for one,
-dispatch to `storage-connector-creator` (which currently returns a
-structured refusal); otherwise fail closed and ask.
+Only `api` and `database` have an authoring path. The schema also defines
+`nosql`, `document`, `file`, `s3`, and `stdout`, but the plugin cannot yet
+author them — `nosql`/`document` share the `database-endpoint` schema but
+have no SQL authoring path, and `file`/`s3`/`stdout` are not executed by
+the engine. If the user explicitly asked for one of these, dispatch to
+`storage-connector-creator` (which returns a structured refusal);
+otherwise fail closed and ask.
 
 ### 3. Dispatch creator (domain body + type maps)
 
@@ -117,7 +120,8 @@ Based on `kind`:
 - `kind = api` → invoke `api-connector-creator` with `ProviderFacts` plus
   classifications.
 - `kind = database` → invoke `db-connector-creator` with the same.
-- `kind ∈ {file, s3, stdout}` → invoke `storage-connector-creator` (stub).
+- `kind ∈ {nosql, document, file, s3, stdout}` → invoke
+  `storage-connector-creator` (decline stub — no authoring path yet).
 
 Always pass `provider_facts`. The creator's **hard gate** refuses an
 initial authoring dispatch without it — research cannot be skipped. The

@@ -41,7 +41,20 @@ input correctly.
 
 ## Runtime OAuth scope
 
-`runtime.oauth.state`, `runtime.oauth.redirect_uri`, and
-`runtime.oauth.pkce_verifier` are available in both `auth.authorize` and
-`auth.token_exchange`. `runtime.oauth.code` is available only in
-`auth.token_exchange`. These values are never persisted.
+For `auth.type: "oauth2_authorization_code"` only, the closed
+`runtime.oauth.*` set is `code`, `state`, `redirect_uri`, `pkce_verifier`,
+`code_challenge`, and `code_challenge_method`. Per-operation availability:
+
+| Field(s) | Available in |
+|---|---|
+| `state`, `redirect_uri` | `auth.authorize` and `auth.token_exchange` |
+| `code_challenge`, `code_challenge_method` | `auth.authorize` only |
+| `code`, `pkce_verifier` | `auth.token_exchange` only |
+
+The PKCE **verifier must never appear in the authorize request** — only the
+derived `code_challenge` rides the browser-facing authorize — or it leaks
+through redirect/provider logs and defeats PKCE. `auth.refresh` must not
+reference `runtime.oauth.*` (refresh runs after the in-flight
+authorization-code workflow completes). Any `runtime.oauth.*` reference on a
+non-`oauth2_authorization_code` connector is an error. These values are
+never persisted.

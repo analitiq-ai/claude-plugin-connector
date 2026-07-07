@@ -18,13 +18,19 @@ and ask the user.
 | Input fact | Output `kind` |
 |---|---|
 | Provider is a SaaS / REST API | `api` |
-| Provider is a SQL or document database | `database` |
-| Provider is local file storage | `file` (storage stub only) |
-| Provider is S3 / object storage | `s3` (storage stub only) |
-| Provider is stdout / debug sink | `stdout` (storage stub only) |
+| Provider is a SQL (relational) database | `database` |
+| Provider is a document store (e.g. MongoDB) | `document` (decline — no authoring path yet) |
+| Provider is a wide-column / key-value / graph store | `nosql` (decline — no authoring path yet) |
+| Provider is local file storage | `file` (decline — no authoring path yet) |
+| Provider is S3 / object storage | `s3` (decline — no authoring path yet) |
+| Provider is stdout / debug sink | `stdout` (decline — no authoring path yet) |
 
-For storage kinds the orchestrator dispatches to the stub agent which
-declines until engine support lands.
+Only `api` and `database` have an authoring path. The published schema
+defines `nosql` and `document` connectors too (they share the
+`database-endpoint` schema), but the SQL-only `db-connector-creator` cannot
+author them — so, like the storage kinds, the orchestrator dispatches them
+to `storage-connector-creator`, which declines cleanly until a real
+document/nosql creator lands.
 
 ## AuthTypeMapper
 

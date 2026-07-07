@@ -21,13 +21,13 @@ Required: `source`, `phase`, `storage`, `type`, `required`.
 |---|---|
 | `source` | `"user"` (entered by end user) or `"platform"` (provisioned by the platform/admin). |
 | `phase` | `"pre_auth"` or `"auth"` — when the value must be available. |
-| `storage` | `"connection.parameters"` (non-secret, durable), `"secrets"` (secret, durable, materialized via secret refs), `"connection.selections"` or `"connection.discovered"` (filled later by post-auth outputs, not at input-collection time). |
+| `storage` | Closed enum for inputs: `"connection.parameters"` (non-secret, durable) or `"secrets"` (secret, durable, materialized via secret refs). Inputs **cannot** target `"connection.selections"` / `"connection.discovered"` — those are produced by `post_auth_outputs` (below), never collected as inputs. |
 | `type` | JSON Schema type: `string`, `integer`, `boolean`, `number`. |
 | `required` | Boolean. |
 | `secret` | Boolean (default false). Must be true for any input stored in `secrets`. |
 | `enum` | Array of allowed values (closed enum). |
 | `default` | Default value (for non-required inputs). |
-| `format` / `pattern` | Optional validation — e.g. `format: "uri"` or a regex `pattern`. |
+| `format` / `regex` | Optional string validation — `format: "uri"` or a `regex` pattern. The contract names this field `regex` (not `pattern`), and the input field set is closed. |
 | `ui` | Optional UI hint object (label, placeholder, widget). |
 
 ## API vs DB inputs
@@ -43,7 +43,7 @@ Both kinds emit the same outer shape. Concrete inputs differ:
 context. Required fields per output:
 
 - `mode` — closed enum: `user_selection` (a value the user picks from an `options_request`) or `auto_discovery` (a value read from a `discovery_request`).
-- `storage` — `"connection.selections"` for user choices (`user_selection`), `"connection.discovered"` for auto-discovered values.
+- `storage` — closed enum `"connection.selections"` (user choices, `user_selection`), `"connection.discovered"` (auto-discovered values, `auto_discovery`), or `"secrets"` (secret-valued outputs). See the connection contract for the mode↔storage pairing.
 - `type` — the value's type.
 - `value_path` — the **response-extraction path**: the field read out of the
   `options_request` / `discovery_request` response (e.g. `"id"` for a
