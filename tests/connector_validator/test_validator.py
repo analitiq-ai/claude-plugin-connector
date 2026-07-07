@@ -747,7 +747,8 @@ def test_oauth_pkce_verifier_in_authorize_caught():
     """runtime.oauth.pkce_verifier is token_exchange-only; it must never ride authorize (PKCE)."""
     result = run_validator(FIXTURES / "invalid_phase_oauth_pkce_verifier_in_authorize.json", "--semantic-only")
     errs = errors_of(result, "phase-resolvability")
-    assert any("pkce_verifier" in e["message"] and "token_exchange" in e["message"] for e in errs), \
+    assert len(errs) == 1, f"expected exactly one phase-resolvability finding; got {errs}"
+    assert "pkce_verifier" in errs[0]["message"] and "token_exchange" in errs[0]["message"], \
         f"expected pkce_verifier-in-authorize finding; got {errs}"
 
 
@@ -755,8 +756,26 @@ def test_oauth_code_challenge_in_token_exchange_caught():
     """runtime.oauth.code_challenge is authorize-only; token_exchange must not reference it."""
     result = run_validator(FIXTURES / "invalid_phase_oauth_code_challenge_in_token_exchange.json", "--semantic-only")
     errs = errors_of(result, "phase-resolvability")
-    assert any("code_challenge" in e["message"] and "authorize" in e["message"] for e in errs), \
+    assert len(errs) == 1, f"expected exactly one phase-resolvability finding; got {errs}"
+    assert "code_challenge" in errs[0]["message"] and "authorize" in errs[0]["message"], \
         f"expected code_challenge-in-token_exchange finding; got {errs}"
+
+
+def test_oauth_code_challenge_method_in_token_exchange_caught():
+    """code_challenge_method is authorize-only too — the other authorize-only key must be enforced."""
+    result = run_validator(FIXTURES / "invalid_phase_oauth_code_challenge_method_in_token_exchange.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert len(errs) == 1, f"expected exactly one phase-resolvability finding; got {errs}"
+    assert "code_challenge_method" in errs[0]["message"] and "authorize" in errs[0]["message"], \
+        f"expected code_challenge_method-in-token_exchange finding; got {errs}"
+
+
+def test_oauth_unknown_key_caught():
+    """A key outside the closed runtime.oauth.* set (e.g. a `code_challenge` typo) must still be rejected."""
+    result = run_validator(FIXTURES / "invalid_phase_oauth_unknown_key.json", "--semantic-only")
+    errs = errors_of(result, "phase-resolvability")
+    assert any("challenge" in e["message"] and "closed set" in e["message"] for e in errs), \
+        f"expected out-of-closed-set oauth key finding; got {errs}"
 
 
 def test_oauth_pkce_correct_placement_passes():
@@ -764,6 +783,31 @@ def test_oauth_pkce_correct_placement_passes():
     result = run_validator(FIXTURES / "valid_phase_oauth_pkce.json", "--semantic-only")
     errs = errors_of(result, "phase-resolvability")
     assert not errs, f"expected no phase-resolvability errors for correct PKCE placement; got {errs}"
+
+
+# (fn, expect_flagged) — pins the function catalog membership that the schema-drift
+# CI does NOT guard (functions are an engine registry, not a schema enum). Guards
+# against silently re-adding jwt_sign or dropping base64_encode/lookup.
+_CATALOG_CASES = [
+    ("basic_auth", False),
+    ("base64_encode", False),
+    ("lookup", False),
+    ("url_encode", False),
+    ("jwt_sign", True),
+    ("hmac_sign", True),
+]
+
+
+@pytest.mark.parametrize("fn, expect_flagged", _CATALOG_CASES, ids=[c[0] for c in _CATALOG_CASES])
+def test_function_catalog_membership(fn, expect_flagged, tmp_path):
+    base = json.loads(VALID_API_CONNECTOR.read_text())
+    base["transports"]["api"]["headers"]["X-Fn"] = {"function": fn, "input": {}}
+    doc = tmp_path / "connector.json"
+    doc.write_text(json.dumps(base))
+    errs = errors_of(run_validator(doc, "--semantic-only"), "expression-resolver")
+    flagged = any(f"function '{fn}'" in e["message"] for e in errs)
+    assert flagged == expect_flagged, \
+        f"function {fn!r}: expected flagged={expect_flagged}; got {errs}"
 
 
 def test_stream_scope_in_auth_phase_caught():

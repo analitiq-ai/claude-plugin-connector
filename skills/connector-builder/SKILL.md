@@ -18,9 +18,9 @@ writing files.
   omitted, `connector-provider-researcher` locates the provider's
   official docs via WebSearch; facts are still extracted from
   first-party documentation pages only.
-- `kind_hint` (optional) — `api` or `database` (the authorable kinds).
-  `nosql`, `document`, `file`, `s3`, and `stdout` are recognized by the
-  schema but have no authoring path yet, so the orchestrator declines them.
+- `kind_hint` (optional) — `api` or `database`. (Storage kinds `file`,
+  `s3`, `stdout` are recognized by the schema but not yet supported by
+  the engine.)
 - `mode` (optional) — `build` (default), `update`, or `validate`. See
   **Modes** below.
 - `connector_path` (required for `update` / `validate`) — path to the
@@ -123,8 +123,7 @@ sub-agents own those skills.
 3. **Dispatch creator (domain body + type maps)** — based on `kind`:
    - `kind = api` → `api-connector-creator`.
    - `kind = database` → `db-connector-creator`.
-   - `kind ∈ {nosql, document, file, s3, stdout}` →
-     `storage-connector-creator` (decline stub — no authoring path yet).
+   - `kind ∈ {file, s3, stdout}` → `storage-connector-creator` (stub).
 
    The creator authors the connector body and the type map(s) — **not**
    endpoints. Always pass `provider_facts`; without it the creator
@@ -278,9 +277,8 @@ Report to the user:
 - Authored documents declare `$schema` with the published host
   (`https://schemas.analitiq.ai/...`). The validator fetches from the
   same host.
-- Non-authorable kinds (`nosql`, `document`, `file`, `s3`, `stdout`)
-  currently produce a structured refusal. If the user asks for one,
-  surface the refusal note and stop.
+- Storage kinds (`file`, `s3`, `stdout`) currently produce a structured
+  refusal. If the user asks for one, surface the refusal note and stop.
 - In `build` mode, never overwrite an existing `{connector_id}/`
   directory — the phase-0 check halts the run and asks the user to
   remove it manually. In `update` mode, regeneration replaces the

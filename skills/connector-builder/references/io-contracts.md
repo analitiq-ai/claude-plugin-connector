@@ -27,7 +27,7 @@ fan-out and returned as `EndpointFacts` (below).
   "required": ["provider", "kind"],
   "properties": {
     "provider": { "type": "string" },
-    "kind": { "type": "string", "enum": ["api", "database"], "description": "Only the two authorable kinds get a ProviderFacts branch. The schema also defines `nosql`, `document`, `file`, `s3`, `stdout`, but the plugin declines those at classify (no authoring path yet) — like the storage kinds, they never reach research, so there is no branch for them here. A document store (e.g. MongoDB) is `kind: document` and is declined, NOT modeled as `database`." },
+    "kind": { "type": "string", "enum": ["api", "database"] },
     "notes": { "type": "string" }
   },
   "oneOf": [
@@ -131,8 +131,7 @@ fan-out and returned as `EndpointFacts` (below).
         "driver": { "type": "string" },
         "transport_family": {
           "type": "string",
-          "enum": ["sqlalchemy", "adbc", "flight_sql", "jdbc", "odbc"],
-          "description": "SQL/relational transport families for `kind: database`. Document-store transports (e.g. MongoDB) are out of scope — those providers are `kind: document` and declined at classify."
+          "enum": ["sqlalchemy", "adbc", "flight_sql", "jdbc", "odbc", "mongodb"]
         },
         "adbc_driver_package": {
           "type": "string",

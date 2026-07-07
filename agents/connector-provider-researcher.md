@@ -46,12 +46,10 @@ Both object shapes are pinned in
 ## Process
 
 1. **Determine kind** (domain scope) from the `kind_hint` if present, else
-   infer from the provider (SQL/relational databases like `postgresql`,
-   `mysql`, `snowflake` → `database`; SaaS → `api`). The supported set is
-   `api` and `database`. `nosql`, `document` (e.g. `mongodb`), `file`, `s3`,
-   and `stdout` are valid connector kinds but out of scope for this
-   researcher — the orchestrator declines them at classify, so they never
-   reach research.
+   infer from the provider (databases like `postgresql`, `mysql`,
+   `snowflake`, `mongodb` → `database`; SaaS → `api`). The supported set is
+   `api` and `database`. (`file`, `s3`, `stdout` are valid connector kinds
+   but out of scope for this researcher.)
 2. **Read the contract schema(s)** the orchestrator passed for this scope.
    Walk them to build your checklist of facts to find — every property is a
    question to answer from the docs. The schema is a **floor, not a ceiling**:

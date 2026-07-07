@@ -27,7 +27,7 @@ Required: `source`, `phase`, `storage`, `type`, `required`.
 | `secret` | Boolean (default false). Must be true for any input stored in `secrets`. |
 | `enum` | Array of allowed values (closed enum). |
 | `default` | Default value (for non-required inputs). |
-| `format` / `regex` | Optional string validation — `format: "uri"` or a `regex` pattern. The contract names this field `regex` (not `pattern`), and the input field set is closed. |
+| `format` / `pattern` | Optional string validation — `format: "uri"` or a regex `pattern`. The published schema names this field `pattern`; the input field set is closed (`additionalProperties: false`). |
 | `ui` | Optional UI hint object (label, placeholder, widget). |
 
 ## API vs DB inputs

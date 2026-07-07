@@ -8,7 +8,7 @@ and `connectors/connector-schema-parameterization.md`.
 | Field | Required | Notes |
 |---|---|---|
 | `$schema` | Yes (for standalone files) | Fixed const: `https://schemas.analitiq.ai/connector/latest.json`. The validator fetches from the same host. |
-| `kind` | Yes | One of `api`, `database`, `nosql`, `document`, `file`, `s3`, `stdout` (only `api` / `database` are authorable; the rest are declined). |
+| `kind` | Yes | One of `api`, `database`, `file`, `s3`, `stdout`. |
 | `connector_id` | Yes | Stable connector slug matching `^[a-z0-9][a-z0-9_-]*$` (lowercase). Names the on-disk `{connector_id}/` directory so the identifier and directory stay in sync. The connector contract **requires** `connector_id` in every authored definition — the "service-assigns-when-omitted" rule is `connection_id`'s on *connection* documents, not `connector_id`'s. |
 | `display_name` | No | User-facing label. |
 | `description` | No | Human-readable summary. |
