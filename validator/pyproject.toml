@@ -16,8 +16,13 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Quality Assurance",
 ]
-# Only external dependency; everything else the validator needs is stdlib.
-dependencies = ["jsonschema>=4.18"]
+# The validator validates via the Analitiq contract models (which pull pydantic).
+# Published installs resolve the models from the same public repo (they are
+# synced there together on release); run-by-path uses the vendored sibling
+# instead (see the sys.path bootstrap in the module).
+dependencies = [
+    "analitiq-contract-models @ git+https://github.com/analitiq-ai/claude-plugin-connector.git@validator-v0.1.0#subdirectory=contract-models",
+]
 
 [project.scripts]
 analitiq-validate-connector = "analitiq_connector_validator:main"
@@ -27,8 +32,10 @@ Homepage = "https://github.com/analitiq-ai/claude-plugin-connector"
 Issues = "https://github.com/analitiq-ai/claude-plugin-connector/issues"
 
 # Single-module package living under src/ (src layout). The module is the
-# same file the plugin runtime executes by path, so authoring, the plugin,
-# and registry CI all run one canonical source — no second copy to drift.
+# same file the plugin runtime executes by path, so the plugin and registry CI
+# run one file. Canonical source is the analitiq-ai/infrastructure repo
+# (validator/), which builds this directory and syncs it here on release; a
+# parity test there gates it against the Pydantic contract models.
 [tool.setuptools]
 package-dir = { "" = "src" }
 py-modules = ["analitiq_connector_validator"]

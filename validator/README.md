@@ -1,55 +1,53 @@
+<!-- GENERATED — do not edit here. Canonical source: analitiq-ai/infrastructure (validator/). Synced on release. -->
+
 # analitiq-connector-validator
 
-Standalone, CI-consumable packaging of the Analitiq connector validator
-(`analitiq_connector_validator`) — the same module the
-`analitiq-connector-builder` plugin runs, exposed as an installable
-distribution with a console entry point so it can run **outside** the Claude
-Code plugin runtime (e.g. in the connector registry's required merge gate).
+Validates Analitiq connector / endpoint / type-map JSON documents against the
+**contract models** — the same Pydantic models the published JSON Schemas are
+generated from — so authoring, the connector-builder plugin, and the registry's
+merge gate all enforce one contract with no drift.
 
-It runs two layers over connector / endpoint / type-map JSON documents:
+Single-document validity (structure **and** every cross-field rule) is delegated
+to `TypeAdapter(...).validate_python` from `analitiq-contract-models`. It runs
+**offline** — no schema fetch, no network. On top of the models it adds only what
+a single-document model cannot express:
 
-- **Layer 1** — Draft 2020-12 JSON Schema validation against the published
-  contract at `schemas.analitiq.ai` (requires network to fetch the schema).
-- **Layer 2** — semantic validators (reserved-field, expression-resolver,
-  phase-resolvability, transport-ref, dsn-binding, auth-shape,
-  tls-consistency, **type-map-coverage**, type-map-rule,
-  type-map-write-coverage, endpoint-annotations, endpoint-filename).
-  **No network.**
+- **cross-file coverage** — a connector ships the right sibling type-map files
+  for its kind, and an API connector's read map covers every
+  `(native_type, arrow_type)` its endpoint files declare;
+- **filename ↔ id** — an endpoint file is named `{endpoint_id}.json`;
+- **advisory warnings** the contract tolerates — duplicate type-map rules, dead
+  uppercase-only read patterns, write-map vocabulary gaps.
 
-The canonical source lives at `src/analitiq_connector_validator.py` and is the
-single source of truth: the plugin runtime executes this same file by path, so
-authoring, the plugin, and registry CI all run one implementation.
+## Source of truth
+
+The canonical source is the **`analitiq-ai/infrastructure`** repo, under
+`validator/` (with the contract models under `contract-models/` and the
+`alq-models` layer). That repo owns the models, generates the JSON Schemas from
+them, and builds + syncs this directory on release. The copy in
+`analitiq-ai/claude-plugin-connector` is **generated — do not edit here**; edits
+are overwritten by the next release sync. The plugin runtime still executes
+`src/analitiq_connector_validator.py` by path, so the layout is preserved.
 
 ## Install
-
-Pinned, from a tagged ref of this repo (no PyPI required):
 
 ```bash
 pip install "analitiq-connector-validator @ git+https://github.com/analitiq-ai/claude-plugin-connector.git@validator-vX.Y.Z#subdirectory=validator"
 ```
 
-The tag `validator-vX.Y.Z` is cut at release and its version must match
-`version` in `pyproject.toml` (the first release is `validator-v0.1.0`). Until
-that tag exists, pin to a commit SHA or branch instead.
+This pulls `analitiq-contract-models` (and pydantic) transitively.
 
 ## Use
 
 ```bash
-# Layer 2 only (no network) — what registry CI gates on:
-analitiq-validate-connector --document definition/connector.json --semantic-only
-
-# Full Layer 1 + Layer 2 (fetches the published schema):
-analitiq-validate-connector \
-  --schema-url https://schemas.analitiq.ai/connector/latest.json \
-  --document definition/connector.json
+analitiq-validate-connector --document definition/connector.json
 ```
 
-`--semantic-only` runs Layer 2 without fetching any schema, so `--schema-url`
-is not required in that mode. Point `--document` at `definition/connector.json`
-to trigger `type-map-coverage`: it is filesystem-anchored and discovers the
-sibling `type-map-read.json` and `endpoints/*.json` from the connector's
-directory.
+Point `--document` at `definition/connector.json` to trigger cross-file coverage:
+it discovers the sibling `type-map-read.json` / `type-map-write.json` and
+`endpoints/*.json` from the connector's directory. `--schema-url`,
+`--semantic-only`, `--json-only`, and `--no-cache` are accepted for backward
+compatibility but are no-ops (validation is always model-driven and offline).
 
 Output is a JSON report (`{"passed": bool, "findings": [...]}`) on stdout; the
-process exits non-zero when any finding has severity `error`, so CI can gate on
-the exit code.
+process exits non-zero when any finding has severity `error`.
