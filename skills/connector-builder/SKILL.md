@@ -136,8 +136,8 @@ sub-agents own those skills.
      `https://schemas.analitiq.ai/type-map-read/latest.json`.
    - Write map (`type-map-write.json`, database only) →
      `https://schemas.analitiq.ai/type-map-write/latest.json`. Both maps
-     run the full Layer 1 + Layer 2 pass; the validator derives the
-     direction from the filename. Do not pass `--semantic-only`.
+     run the full contract-model + semantic pass; the validator derives the
+     direction from the filename.
 
    The validator validates JSON documents only. The database package
    files (`connector.py`, `__init__.py`, `requirements.txt`,
@@ -275,8 +275,8 @@ Report to the user:
   scopes in `references/value-expressions.md`. Unknown scope = stop and
   ask.
 - Authored documents declare `$schema` with the published host
-  (`https://schemas.analitiq.ai/...`). The validator fetches from the
-  same host.
+  (`https://schemas.analitiq.ai/...`). The validator matches on this URL
+  offline; it does not fetch it.
 - Storage kinds (`file`, `s3`, `stdout`) currently produce a structured
   refusal. If the user asks for one, surface the refusal note and stop.
 - In `build` mode, never overwrite an existing `{connector_id}/`

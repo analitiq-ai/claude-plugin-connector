@@ -7,7 +7,7 @@ and `connectors/connector-schema-parameterization.md`.
 
 | Field | Required | Notes |
 |---|---|---|
-| `$schema` | Yes (for standalone files) | Fixed const: `https://schemas.analitiq.ai/connector/latest.json`. The validator fetches from the same host. |
+| `$schema` | Yes (for standalone files) | Fixed const: `https://schemas.analitiq.ai/connector/latest.json`. The validator matches on this URL offline; it does not fetch it. |
 | `kind` | Yes | One of `api`, `database`, `file`, `s3`, `stdout`. |
 | `connector_id` | Yes | Stable connector slug matching `^[a-z0-9][a-z0-9_-]*$` (lowercase). Names the on-disk `{connector_id}/` directory so the identifier and directory stay in sync. The connector contract **requires** `connector_id` in every authored definition — the "service-assigns-when-omitted" rule is `connection_id`'s on *connection* documents, not `connector_id`'s. |
 | `display_name` | No | User-facing label. |
@@ -84,5 +84,5 @@ Authored connector files declare:
 ```
 
 This is locked by a `const` inside the published schema. Do not write a
-different URL — the JSON Schema validator will reject it. The validator
-fetches from the same host.
+different URL — the validator will reject it. The validator matches on this
+URL offline; it does not fetch it.

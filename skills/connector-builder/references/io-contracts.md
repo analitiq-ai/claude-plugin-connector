@@ -261,7 +261,7 @@ access and may not guess field types).
           "validator": {
             "type": "string",
             "enum": [
-              "json-schema",
+              "contract-model",
               "reserved-field",
               "expression-resolver",
               "phase-resolvability",
@@ -367,7 +367,7 @@ Returned by `api-connector-creator` and `db-connector-creator`.
         {
           "type": "array",
           "minItems": 1,
-          "description": "On-disk shape of the standalone type-map-write.json (Arrow → native DDL render rules). REQUIRED for kind=database; MUST be null for kind=api. Same rule shape but the direction inverts: `canonical` is the matcher (regex with ECMA named captures for parameterized types) and `native` is the rendered DDL (may carry ${name} substitutions backed by captures in `canonical`). Must cover the full canonical vocabulary; deliberate gaps are allowed only when the dialect overrides render_column_type for that family. Written to {connector_id}/definition/type-map-write.json and validated against https://schemas.analitiq.ai/type-map-write/latest.json (full Layer 1 + Layer 2; direction derived from the filename).",
+          "description": "On-disk shape of the standalone type-map-write.json (Arrow → native DDL render rules). REQUIRED for kind=database; MUST be null for kind=api. Same rule shape but the direction inverts: `canonical` is the matcher (regex with ECMA named captures for parameterized types) and `native` is the rendered DDL (may carry ${name} substitutions backed by captures in `canonical`). Must cover the full canonical vocabulary; deliberate gaps are allowed only when the dialect overrides render_column_type for that family. Written to {connector_id}/definition/type-map-write.json and validated against https://schemas.analitiq.ai/type-map-write/latest.json (full contract-model + semantic pass; direction derived from the filename).",
           "items": {
             "type": "object",
             "required": ["match", "native", "canonical"],

@@ -70,17 +70,23 @@ agent owns the authoring vocabulary for its kind via a dedicated spec skill
 
 ## Validation
 
-The plugin includes a Python validator module
-(`validator/src/analitiq_connector_validator.py`) that runs:
+The plugin validates authored documents with the published
+[`analitiq-validator`](https://pypi.org/project/analitiq-validator/) package,
+which the `connector-schema-validator` agent **self-installs at runtime**. It is
+**offline and model-driven** — each document is validated against the Analitiq
+contract models (`analitiq-contract-models`), the same models the published JSON
+Schemas are generated from — so there is no schema fetch. It runs:
 
-1. **JSON Schema validation** (Draft 2020-12) against the published schema:
+1. **Contract-model validation** — structure **and** every cross-field rule for
+   the document's kind, keyed by its declared `$schema`:
    - Connector → `https://schemas.analitiq.ai/connector/latest.json`
    - Read map (`type-map-read.json`) → `https://schemas.analitiq.ai/type-map-read/latest.json`
    - Write map (`type-map-write.json`, database only) → `https://schemas.analitiq.ai/type-map-write/latest.json`
      (direction derives from the filename)
    - API endpoint → `https://schemas.analitiq.ai/api-endpoint/latest.json`
    - Database endpoint → `https://schemas.analitiq.ai/database-endpoint/latest.json`
-2. **Semantic validators** for rules JSON Schema can't express:
+2. **Semantic validators** for cross-file / cross-field rules a single-document
+   model can't express:
    - `reserved-field`, `expression-resolver`, `phase-resolvability`,
      `transport-ref`, `dsn-binding`, `auth-shape`, `tls-consistency`,
      `type-map-coverage`, `type-map-rule`, `type-map-write-coverage`,
@@ -89,28 +95,27 @@ The plugin includes a Python validator module
    The validator checks JSON documents only; the database package files
    (`connector.py`, `pyproject.toml`, …) are enforced by registry CI.
 
-Run directly:
+Run directly (console entry point `analitiq-validate`):
 
 ```bash
-python validator/src/analitiq_connector_validator.py \
+pip install --pre "analitiq-validator==1.0.0rc1"
+analitiq-validate \
   --schema-url https://schemas.analitiq.ai/connector/latest.json \
   --document path/to/connector.json
 ```
 
-Output is a single `Diagnostics` JSON object. Exit 0 iff `passed: true`.
+Output is a single `Diagnostics` JSON object. Exit 0 iff `passed: true`. The
+connector registry's CI installs the same package to run the semantic checks as
+a required merge gate outside the plugin runtime.
 
-The same module is packaged under [`validator/`](validator/) as the
-installable `analitiq-connector-validator` (console entry point
-`analitiq-validate-connector`) so the connector registry's CI can run Layer 2
-(`--semantic-only`, no network) as a required merge gate outside the plugin
-runtime. It is one canonical source — the plugin runs the module by path; CI
-`pip install`s the same module.
-
-Tests live under `tests/connector_validator/`. Run with `pytest`.
+The plugin's own schema enum-drift guard lives under `tests/schema_drift/`
+(network-marked; run `pytest tests/schema_drift/ -m network`).
 
 ## Schema host
 
-- The validator fetches schemas from `https://schemas.analitiq.ai`.
+- The published schemas are hosted at `https://schemas.analitiq.ai`. The
+  validator enforces the contract **offline** (via the contract models) and does
+  not fetch them.
 - Authored documents declare `$schema` with the same host — the URL is
   locked by a `const` inside the published schema.
 

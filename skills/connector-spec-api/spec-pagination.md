@@ -15,10 +15,8 @@ has its own definition in
 - `keyset` → `#/$defs/KeysetPagination`
 
 This page covers only the authoring decision the schema can't express —
-which strategy fits a provider. The examples below are validated against
-those definitions in CI
-(`tests/connector_validator/test_spec_doc_examples.py`), so they stay in
-step with the contract.
+which strategy fits a provider. The examples below illustrate those
+definitions; the published schema is the source of truth.
 
 ## `stop_when` is a predicate, not a keyword
 

@@ -30,7 +30,7 @@ shares the same three-key rule shape but inverts the direction
 (`canonical` matches, `native` renders) and validates against its own
 published schema, `https://schemas.analitiq.ai/type-map-write/latest.json`;
 the validator derives the direction from the filename and runs the full
-Layer 1 + Layer 2 pass on each. Neither map is ever embedded inside
+contract-model + semantic pass on each. Neither map is ever embedded inside
 `connector.json` or any endpoint document. Each present file must be
 **non-empty** — an empty array is rejected.
 

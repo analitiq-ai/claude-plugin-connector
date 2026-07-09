@@ -9,7 +9,7 @@ and ask the user.
 > and the transport/kind discriminators. This file is the *mapping logic*, not
 > a second source for the values; when the schema's enum changes, these tables
 > change with it. The values are pinned against the live schema by
-> `tests/connector_validator/test_schema_drift.py` (the drift-check CI), so a
+> `tests/schema_drift/test_schema_drift.py` (the drift-check CI), so a
 > schema change that isn't reflected here fails the build. Do not treat a
 > stale copy here as authoritative over the live schema.
 

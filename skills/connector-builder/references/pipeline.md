@@ -141,7 +141,7 @@ map(s):
 - Write map (`type-map-write.json`, database only) →
   `https://schemas.analitiq.ai/type-map-write/latest.json`.
 
-Both maps run the full Layer 1 + Layer 2 pass. The validator derives the
+Both maps run the full contract-model + semantic pass. The validator derives the
 rule direction from the filename, so write the maps under their exact
 filenames before standalone validation, or validate via the connector
 document so the sibling walk picks them up.
