@@ -1,17 +1,22 @@
-name: Tests
+name: Schema drift guards
 
-# Runs the validator test suite (tests/connector_validator/). Without this,
-# the Layer 1 + Layer 2 tests and the schema-drift guards only ran when a
-# contributor remembered to run pytest locally (issue #20).
+# The plugin restates a few schema-owned enum vocabularies as decision logic
+# (enum-mappers.md, CLAUDE.md, io-contracts.md). This suite
+# (tests/schema_drift/) pins them to the live published contract and fails if
+# they diverge. Every test is network-marked and fetches the live schema, so it
+# runs on a daily schedule + on demand — never on PRs — so a flaky or
+# unreachable schema host can't block merges.
+#
+# The connector validator itself is an external package (analitiq-validator),
+# tested upstream before release; the plugin no longer re-tests it, so there is
+# no offline unit suite here.
 
 on:
-  pull_request:
-  push:
-    branches: [main]
   schedule:
-    # Daily — exercises the network-marked tests (enum drift guards + live-schema
-    # fetch checks) so contract drift or an unreachable schema host is caught
-    # even when no one opens a PR.
+    # Daily — catches contract drift (or an unreachable schema host) even when
+    # no one opens a PR. If schemas.analitiq.ai is unreachable the guards
+    # `pytest.skip`, so an outage shows as a skipped (not failed) run; `-rs`
+    # prints the skip reasons in the log.
     - cron: '17 6 * * *'
   workflow_dispatch:
 
@@ -24,31 +29,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  unit:
-    name: Validator tests (offline)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: pip install pytest 'jsonschema>=4.18'
-      - name: Run offline tests
-        # The whole suite minus the live-fetch guards — fast and hermetic, so
-        # it gates every PR.
-        run: pytest tests/connector_validator/ -m "not network" -v
-
   drift:
-    name: Network tests (drift guards + live schema)
-    # The network-marked suite: the enum drift guards (which pin plugin-side
-    # vocabularies to the live published contract) plus the Layer-1 live-schema
-    # fetch checks. Scheduled / on-demand only, never on PRs, so a flaky schema
-    # host can't block merges.
-    # If schemas.analitiq.ai is unreachable the drift guards `pytest.skip`, but
-    # the Layer-1 fetch tests fail — so an outage shows up as a RED scheduled
-    # run, never a silent green. `-rs` prints any skip reasons in the log.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    name: Schema enum-drift guards (live schema)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +38,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dependencies
-        run: pip install pytest 'jsonschema>=4.18'
+        run: pip install pytest
       - name: Run network drift guards
-        run: pytest tests/connector_validator/ -m network -v -rs
+        run: pytest tests/schema_drift/ -m network -v -rs

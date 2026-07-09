@@ -15,9 +15,8 @@ against it and let the validator check you:
 (all in `https://schemas.analitiq.ai/api-endpoint/latest.json`). This page
 covers only the authoring decisions the schema can't express: which
 mapping variant fits a provider, and when to skip replication entirely.
-The examples below are validated against that schema in CI
-(`tests/connector_validator/test_spec_doc_examples.py`), so they stay in
-step with the contract instead of drifting from it.
+The examples below illustrate those variants; the published schema is the
+source of truth.
 
 ## What a replication block declares
 
