@@ -188,7 +188,7 @@ def test_auth_types_match_schema(connector_schema: dict) -> None:
         schema_set,
         EXPECTED_AUTH_TYPES,
         "update CLAUDE.md '## Supported Auth Types' and AuthTypeMapper in "
-        "skills/connector-builder/references/enum-mappers.md.",
+        "src/skills/connector-builder/references/enum-mappers.md.",
     )
 
 
@@ -263,7 +263,7 @@ def test_kinds_match_schema(connector_schema: dict) -> None:
         schema_set,
         EXPECTED_KINDS,
         "update CLAUDE.md ('kind (one of ...)') and KindMapper in "
-        "skills/connector-builder/references/enum-mappers.md.",
+        "src/skills/connector-builder/references/enum-mappers.md.",
     )
 
 
@@ -275,5 +275,5 @@ def test_transport_types_match_schema(connector_schema: dict) -> None:
         schema_set,
         EXPECTED_TRANSPORT_TYPES,
         "update TransportTypeMapper in "
-        "skills/connector-builder/references/enum-mappers.md.",
+        "src/skills/connector-builder/references/enum-mappers.md.",
     )
