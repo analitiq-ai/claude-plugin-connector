@@ -2,7 +2,7 @@ name: release-please
 
 # Derives the plugin's semver from Conventional Commit types and maintains a
 # rolling "Release PR". Merging that Release PR bumps the version in
-# .claude-plugin/plugin.json (via release-please-config.json extra-files),
+# src/.claude-plugin/plugin.json (via release-please-config.json extra-files),
 # updates CHANGELOG.md, and tags the release. The plugin is pre-1.0, so
 # breaking changes bump the minor and features bump the patch (configured in
 # release-please-config.json).

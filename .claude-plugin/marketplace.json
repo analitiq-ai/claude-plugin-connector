@@ -11,7 +11,7 @@
       "author": {
         "name": "Analitiq"
       },
-      "source": ".",
+      "source": "./src",
       "category": "development"
     }
   ]
