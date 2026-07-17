@@ -165,6 +165,10 @@ was raised.
   `kind` selects the correct endpoint schema.
 - Reuse the connector's transports via `request.transport_ref`. Never
   hardcode base URLs.
+- For an ordinary JSON `request.body`, declare `Content-Type:
+  application/json` in `request.headers` unless the selected transport
+  already provides an equivalent default. Provider-specific JSON media types
+  (e.g. `application/vnd.api+json`) are allowed when the provider requires them.
 - Do not author database endpoints. Database endpoint shape is
   connection-scoped and produced by the connector's `resource_discovery`
   workflow at runtime, not by this sub-agent.
