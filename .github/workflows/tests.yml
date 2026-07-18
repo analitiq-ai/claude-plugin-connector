@@ -2,22 +2,22 @@ name: Schema drift guards
 
 # The plugin restates a few schema-owned enum vocabularies as decision logic
 # (enum-mappers.md, CLAUDE.md, io-contracts.md). This suite
-# (tests/schema_drift/) pins them to the live published contract and fails if
-# they diverge. Every test is network-marked and fetches the live schema, so it
-# runs on a daily schedule + on demand — never on PRs — so a flaky or
-# unreachable schema host can't block merges.
+# (tests/schema_drift/) pins them to the contract and fails if they diverge.
 #
-# The connector validator itself is an external package (analitiq-validator),
-# tested upstream before release; the plugin no longer re-tests it, so there is
-# no offline unit suite here.
+# The guard reads the enums straight from the pinned `analitiq-contract-models`
+# package — the same contract the `connector-schema-validator` agent enforces —
+# so it runs OFFLINE and DETERMINISTIC (no schema fetch). That makes it a real
+# PR/push merge gate, which the old CDN-fetch version couldn't be. It pins the
+# plugin's prose to the contract the validator ENFORCES, not to whatever is live
+# on the CDN; catching a *newer* upstream contract release is a dependency-bump
+# concern (bump the pin below + in src/agents/connector-schema-validator.md),
+# not this guard's job.
 
 on:
-  schedule:
-    # Daily — catches contract drift (or an unreachable schema host) even when
-    # no one opens a PR. If schemas.analitiq.ai is unreachable the guards
-    # `pytest.skip`, so an outage shows as a skipped (not failed) run; `-rs`
-    # prints the skip reasons in the log.
-    - cron: '17 6 * * *'
+  pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 # Read-only: the suite only checks out and runs pytest — no secrets, no writes.
@@ -30,14 +30,24 @@ concurrency:
 
 jobs:
   drift:
-    name: Schema enum-drift guards (live schema)
+    name: Schema enum-drift guards (pinned contract models)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install dependencies
-        run: pip install pytest
-      - name: Run network drift guards
-        run: pytest tests/schema_drift/ -m network -v -rs
+      - name: Install pinned validator + contract models
+        # Pin BOTH and keep them in lockstep with the self-install pin in
+        # src/agents/connector-schema-validator.md. rc10's validator already
+        # pins analitiq-contract-models==1.0.0rc10 exactly, so double-pinning is
+        # defensive (explicit + reproducible, and safe if a future validator
+        # ever loosens that constraint).
+        run: pip install pytest --pre "analitiq-validator==1.0.0rc10" "analitiq-contract-models==1.0.0rc10"
+      - name: Run offline drift guards
+        # DRIFT_REQUIRE_CONTRACT_MODELS=1 turns a missing/broken contract package
+        # into a hard failure instead of an all-skipped green run — this job is a
+        # merge gate, so it must never pass without actually running the checks.
+        env:
+          DRIFT_REQUIRE_CONTRACT_MODELS: '1'
+        run: pytest tests/schema_drift/ -v -rs
