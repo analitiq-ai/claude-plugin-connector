@@ -47,9 +47,9 @@ on first use, then invoke it:
 ```bash
 # Ensure the pinned validator + contract models are present (installs only if
 # either exact version is missing; pip output goes to stderr so it can't
-# contaminate the Diagnostics JSON). Pin BOTH: the validator's own dependency
-# range on analitiq-contract-models is loose, so leaving the models to float can
-# resolve a newer, incompatible release.
+# contaminate the Diagnostics JSON). Pin BOTH and keep them in lockstep: rc10's
+# validator already pins analitiq-contract-models==1.0.0rc10 exactly, so this is
+# defensive (explicit + reproducible, and safe if a future validator loosens it).
 python3 -c "import sys; from importlib.metadata import version; sys.exit(0 if version('analitiq-validator') == '1.0.0rc10' and version('analitiq-contract-models') == '1.0.0rc10' else 1)" 2>/dev/null \
   || python3 -m pip install --quiet --disable-pip-version-check --pre "analitiq-validator==1.0.0rc10" "analitiq-contract-models==1.0.0rc10" 1>&2
 

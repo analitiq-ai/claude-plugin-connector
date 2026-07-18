@@ -38,10 +38,16 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install pinned validator + contract models
-        # Pin BOTH: the validator's dependency range on the contract models is
-        # loose, so leaving them to float can resolve a newer, incompatible
-        # release. Keep these in lockstep with the self-install pin in
-        # src/agents/connector-schema-validator.md.
+        # Pin BOTH and keep them in lockstep with the self-install pin in
+        # src/agents/connector-schema-validator.md. rc10's validator already
+        # pins analitiq-contract-models==1.0.0rc10 exactly, so double-pinning is
+        # defensive (explicit + reproducible, and safe if a future validator
+        # ever loosens that constraint).
         run: pip install pytest --pre "analitiq-validator==1.0.0rc10" "analitiq-contract-models==1.0.0rc10"
       - name: Run offline drift guards
+        # DRIFT_REQUIRE_CONTRACT_MODELS=1 turns a missing/broken contract package
+        # into a hard failure instead of an all-skipped green run — this job is a
+        # merge gate, so it must never pass without actually running the checks.
+        env:
+          DRIFT_REQUIRE_CONTRACT_MODELS: '1'
         run: pytest tests/schema_drift/ -v -rs

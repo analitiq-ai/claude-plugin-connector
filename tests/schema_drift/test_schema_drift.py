@@ -19,26 +19,38 @@ separately-hosted copy that can drift, 403, or 404.
 
 The package is pinned — by CI and by the `connector-schema-validator` agent — to
 `analitiq-validator==1.0.0rc10` / `analitiq-contract-models==1.0.0rc10`. When it
-isn't installed the whole module is skipped (offline-dev convenience); CI
-installs it, so CI runs the checks for real. Run `-rs` to print skip reasons.
+isn't installed the whole module is skipped (offline-dev convenience) — except in
+CI, which sets `DRIFT_REQUIRE_CONTRACT_MODELS=1` so a missing or broken package
+is a hard failure there, never a green all-skipped gate. Run `-rs` to print skip
+reasons.
 """
 
 from __future__ import annotations
 
+import os
+import re
+
 import pytest
 
-# Read the SAME contract models the validator validates against. Skip the module
-# if the package isn't installed rather than erroring — an offline dev run
-# without it can't perform the check; CI installs the pin, so CI runs for real.
-pytest.importorskip(
-    "analitiq.contracts",
-    reason=(
-        "analitiq-contract-models not installed — run "
-        "`pip install --pre analitiq-validator==1.0.0rc10` to run the drift guards"
-    ),
-)
+# Read the SAME contract models the validator validates against. When the package
+# is absent an offline dev run can't perform the check, so skip — BUT CI (this
+# suite is a merge gate) sets DRIFT_REQUIRE_CONTRACT_MODELS=1, making a missing or
+# broken package a HARD failure there, never a green all-skipped run. (A renamed
+# submodule already errors at the imports below, which this parent-package guard
+# does not cover — that asymmetry is intentional: both surface as red in CI.)
+try:
+    import analitiq.contracts  # noqa: F401
+except ImportError:  # pragma: no cover - environment guard
+    if os.environ.get("DRIFT_REQUIRE_CONTRACT_MODELS") == "1":
+        raise
+    pytest.skip(
+        "analitiq-contract-models not installed — run `pip install --pre "
+        '"analitiq-validator==1.0.0rc10" "analitiq-contract-models==1.0.0rc10"` '
+        "to run the drift guards",
+        allow_module_level=True,
+    )
 
-from pydantic import TypeAdapter  # noqa: E402  (import gated by importorskip above)
+from pydantic import TypeAdapter  # noqa: E402  (imports gated by the guard above)
 from analitiq.contracts.connector import Connector  # noqa: E402
 from analitiq.contracts.endpoints import ApiEndpointDoc  # noqa: E402
 
@@ -128,7 +140,7 @@ def _enum_at(schema: dict, *path: str) -> set[str] | None:
     return set(enum)
 
 
-def _const_types(schema: dict, def_suffix: str, const_field: str = "type") -> set[str]:
+def _const_types(schema: dict, def_suffix: str, const_field: str = "type") -> set[str] | None:
     """Collect the `<const_field>` const across `$defs/*<suffix>` definitions.
 
     Auth families, pagination styles, connector kinds, and transport types are
@@ -137,6 +149,13 @@ def _const_types(schema: dict, def_suffix: str, const_field: str = "type") -> se
     `properties.<const_field>.const` — not a single flat enum. The discriminator
     field name varies: `type` for auth/pagination, `kind` for connectors,
     `transport_type` for transports.
+
+    Matching is by `$def`-name suffix (pydantic derives `$def` keys from the
+    variant class names), so this couples to generated-schema naming. Returns
+    None when the suffix matches nothing, or no matched def carries the const —
+    i.e. the per-variant modelling changed — so the caller routes it through the
+    "contract was restructured" branch instead of misreporting total enum-drift
+    (and it can never silently equal an empty expected set).
     """
     out: set[str] = set()
     for name, node in schema.get("$defs", {}).items():
@@ -144,7 +163,7 @@ def _const_types(schema: dict, def_suffix: str, const_field: str = "type") -> se
             const_node = (node.get("properties") or {}).get(const_field) or {}
             if "const" in const_node:
                 out.add(const_node["const"])
-    return out
+    return out or None
 
 
 def _bare_marker_arrow_types() -> set[str] | None:
@@ -153,13 +172,18 @@ def _bare_marker_arrow_types() -> set[str] | None:
     `analitiq.contracts.endpoints._ARROW_AUTHORED_SHAPE` is the single
     definition of the marker alternation (`"Object|List|Json"`) — the same
     constant the api-endpoint `arrow_type` pattern is built from and the
-    endpoint-annotations validator keys off. Returns None if the symbol is gone
-    (renamed upstream), which the caller surfaces as a restructure failure.
+    endpoint-annotations validator keys off. There is no public generated-schema
+    pointer for this vocabulary (`arrow_type` doesn't surface in the endpoint
+    model schema), so this one check reaches a private symbol. Returns None if
+    the symbol is gone (renamed) or is no longer a plain `A|B|C` alternation of
+    word tokens (reshaped — e.g. compiled, or wrapped as `^(…)$`) — either way
+    the caller surfaces a restructure failure rather than splitting garbage
+    tokens off a regex.
     """
     from analitiq.contracts import endpoints
 
     raw = getattr(endpoints, "_ARROW_AUTHORED_SHAPE", None)
-    if not isinstance(raw, str) or not raw:
+    if not isinstance(raw, str) or not re.fullmatch(r"\w+(?:\|\w+)+", raw):
         return None
     return set(raw.split("|"))
 
