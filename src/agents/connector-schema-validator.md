@@ -45,10 +45,13 @@ contract models (`analitiq-contract-models`), no schema fetch. Self-install it
 on first use, then invoke it:
 
 ```bash
-# Ensure the pinned validator is present (installs only if the exact version is
-# missing; pip output goes to stderr so it can't contaminate the Diagnostics JSON).
-python3 -c "import sys; from importlib.metadata import version; sys.exit(0 if version('analitiq-validator') == '1.0.0rc1' else 1)" 2>/dev/null \
-  || python3 -m pip install --quiet --disable-pip-version-check --pre "analitiq-validator==1.0.0rc1" 1>&2
+# Ensure the pinned validator + contract models are present (installs only if
+# either exact version is missing; pip output goes to stderr so it can't
+# contaminate the Diagnostics JSON). Pin BOTH: the validator's own dependency
+# range on analitiq-contract-models is loose, so leaving the models to float can
+# resolve a newer, incompatible release.
+python3 -c "import sys; from importlib.metadata import version; sys.exit(0 if version('analitiq-validator') == '1.0.0rc10' and version('analitiq-contract-models') == '1.0.0rc10' else 1)" 2>/dev/null \
+  || python3 -m pip install --quiet --disable-pip-version-check --pre "analitiq-validator==1.0.0rc10" "analitiq-contract-models==1.0.0rc10" 1>&2
 
 # Run it — prints the Diagnostics JSON verbatim, exits non-zero on any error finding.
 python3 - "<schema_url>" "<document_path>" <<'PY'

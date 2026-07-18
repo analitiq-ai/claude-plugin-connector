@@ -48,8 +48,8 @@ Both object shapes are pinned in
 1. **Determine kind** (domain scope) from the `kind_hint` if present, else
    infer from the provider (databases like `postgresql`, `mysql`,
    `snowflake`, `mongodb` → `database`; SaaS → `api`). The supported set is
-   `api` and `database`. (`file`, `s3`, `stdout` are valid connector kinds
-   but out of scope for this researcher.)
+   `api` and `database`; a document/NoSQL provider is researched as
+   `database`. Other connector kinds are out of scope for this researcher.
 2. **Read the contract schema(s)** the orchestrator passed for this scope.
    Walk them to build your checklist of facts to find — every property is a
    question to answer from the docs. The schema is a **floor, not a ceiling**:

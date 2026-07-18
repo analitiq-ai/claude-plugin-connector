@@ -8,10 +8,11 @@ and ask the user.
 > published schema** — `auth.type` (the `*Auth` `$defs`), `AdbcTransport.driver`,
 > and the transport/kind discriminators. This file is the *mapping logic*, not
 > a second source for the values; when the schema's enum changes, these tables
-> change with it. The values are pinned against the live schema by
-> `tests/schema_drift/test_schema_drift.py` (the drift-check CI), so a
-> schema change that isn't reflected here fails the build. Do not treat a
-> stale copy here as authoritative over the live schema.
+> change with it. The values are pinned against the **pinned contract models**
+> (`analitiq-contract-models`, the same models the validator validates against)
+> by `tests/schema_drift/test_schema_drift.py` (the drift-check CI, offline), so
+> a contract change that isn't reflected here fails the build. Do not treat a
+> stale copy here as authoritative over the contract.
 
 ## KindMapper
 
@@ -24,7 +25,9 @@ and ask the user.
 | Provider is stdout / debug sink | `stdout` (storage stub only) |
 
 For storage kinds the orchestrator dispatches to the stub agent which
-declines until engine support lands.
+declines until engine support lands. The contract also defines distinct
+`nosql` / `document` kinds; this plugin recognizes them but authors none — a
+document or NoSQL provider is authored as `database` (routed above).
 
 ## AuthTypeMapper
 
