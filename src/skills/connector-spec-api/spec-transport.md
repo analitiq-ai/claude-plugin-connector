@@ -94,3 +94,12 @@ Effective headers per request are built as:
 4. Merge resolved operation `headers`.
 
 Header names match case-insensitively for override and removal.
+
+**Deleting an inherited header requires `headers_remove`.** There is no
+null-as-delete marker: `{"Authorization": null}` is not a deletion, and a block
+must not both set and remove the same header name (ADV-HTTP-001). Setting a
+header to an empty string is also not a deletion — it sends an empty header.
+
+`headers_remove` is available on endpoint operation requests too, not just on
+connector transports — that is how one endpoint drops an inherited default
+(e.g. an auth header a public sub-resource rejects).

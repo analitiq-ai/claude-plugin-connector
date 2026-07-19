@@ -34,8 +34,29 @@ Required: `source`, `phase`, `storage`, `type`, `required`.
 
 Both kinds emit the same outer shape. Concrete inputs differ:
 
-- **API connectors** — typically declare `api_key`, OAuth `client_id`/`client_secret`, optional region/subdomain/tenant fields used to template `base_url`.
+- **API connectors** — typically declare `api_key`, OAuth `client_id`/`client_secret`, and any tenant/account identifiers the provider requires.
 - **DB connectors** — typically declare `host`, `port`, `database`, `username`, `password`, `ssl_mode`, `ssl_ca_certificate`.
+
+## What belongs in the contract at all
+
+**A connector must not own customer-specific values.** A host, tenant id,
+account id, database name, profile, credential, or token belongs to a
+*connection*, not to the connector — the connector declares the *shape* of the
+input, and the connection supplies the value. A connector carrying a real
+customer's host is not reusable, which is the whole point of the split. (This
+is broader than "no secrets": a tenant slug isn't secret and still doesn't
+belong.)
+
+**Place a value by who owns it, not by who first references it.** The question
+is never "where is this interpolated from?" but "whose value is this?":
+
+| Value | Where |
+|---|---|
+| Secret supplied by the end user or platform | input, `storage: "secrets"`, `secret: true` |
+| Non-secret value the user supplies before auth | input, `storage: "connection.parameters"` |
+| A choice the user makes from a post-auth list | `post_auth_outputs`, `mode: "user_selection"` |
+| A value read from a post-auth probe | `post_auth_outputs`, `mode: "auto_discovery"` |
+| Operational tunable (API version, timeout, page size, warehouse) | a `default` in the contract, overridable in `connection.parameters` — not a hardcoded literal buried in a transport |
 
 ## Post-auth outputs
 
@@ -58,6 +79,54 @@ materializes at `connection.discovered.api_domain`, which is what refs and
 
 Discovery mechanics (`options_request` / `discovery_request`) are
 declared in the same output entry where applicable.
+
+**Don't hide a non-secret value in `secrets`.** An output's storage must
+reflect what the value *is*: `connection.discovered` for auto-discovered
+context, `connection.selections` for user choices, `secrets` only for genuinely
+secret values. Routing a tenant domain or account id through `secrets` because
+it "feels safer" makes it unreadable to the refs that need it and misreports the
+connector's secret surface. (The contract enforces the mode↔storage pairing,
+but it cannot tell whether a value is truly secret.)
+
+**Outputs resolve in dependency order.** When one output's request references
+another's value, the runtime orders them by those references — you do not
+declare an order, and the map's key order means nothing. Two consequences: a
+reference cycle between outputs is an error, and two outputs that don't
+reference each other have **no** guaranteed relative order, so never write one
+that quietly depends on the other having run.
+
+## Cross-input validation (`validation`)
+
+`validation.rules[]` expresses conditional requirements *between inputs* — "if
+the user picked X, then Y is required and Z is meaningless". Each rule is a
+`when` predicate plus `require` / `forbid` lists and an operator-authored
+`message`. The shape and the predicate operator set are contract-owned
+(ADV-CTOR-012, plus ADV-CTOR-008/009 requiring every referenced field to be a
+declared input); what the contract can't tell you is what the operators *mean*
+and where the boundary sits.
+
+| Operator | Fires when the field… |
+|---|---|
+| `eq` | equals the given value |
+| `in` | is one of the given values |
+| `not_in` | is none of the given values |
+| `present` | has any value at all (use for "the user filled this in") |
+| `regex` | matches the pattern |
+
+A predicate declares exactly one of these — they don't combine inside one
+predicate. Write the `message` for the person filling in the form, naming the
+field they must fix.
+
+**Scope boundary.** These predicates are for *cross-input* validation only —
+relationships among values already on the form. They are not a place to express:
+
+- provider reachability or credential correctness (that's `auth.test`),
+- anything requiring a network call (OAuth callbacks, post-auth probes —
+  those are `post_auth_outputs`),
+- runtime connection health.
+
+If a rule can't be decided from the submitted inputs alone, it doesn't belong
+here.
 
 ## Drift detection
 

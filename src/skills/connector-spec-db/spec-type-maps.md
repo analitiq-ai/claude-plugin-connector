@@ -240,15 +240,19 @@ database-package concept (DDL rendering).
     off the same unit: `Time32(SECOND|MILLISECOND)` for coarse,
     `Time64(MICROSECOND|NANOSECOND)` for fine.
 
-**Write map:** cover the **full canonical vocabulary** — Boolean,
-Int8–64, UInt8–64, Float16/32/64, Decimal (regex with `${p}`/`${s}`
-captures), Utf8/LargeUtf8, Json, Binary/LargeBinary/FixedSizeBinary,
-Date32/64, Time, Timestamp bare + tz variants. The validator probes
-every family and warns on gaps. A deliberate gap is legitimate only
-when the connector's dialect takes over that family's rendering via a
+**Write map:** cover the **full canonical vocabulary** — every Arrow type a
+source could hand this system needs a rendering, including the parameterized
+families (Decimal via a regex with `${p}`/`${s}` captures) and both the bare
+and tz-aware `Timestamp` forms.
+
+Don't work from a memorized list: run the validator and read its
+`type-map-write-coverage` warning, which names every family your map leaves
+unrendered. Reconcile each one — a gap is legitimate **only** when the
+connector's dialect takes over that family's rendering via a
 `render_column_type` override (BigQuery ships no Decimal rule because
-NUMERIC/BIGNUMERIC selection needs precision-range arithmetic rules
-cannot express) — never as a way to cut scope.
+NUMERIC/BIGNUMERIC selection needs precision-range arithmetic rules cannot
+express), never as a way to cut scope. Note the warning probes a representative
+sample, so a clean run is a floor, not proof of total coverage.
 
 Mind precision survival on the write side: MySQL's write map renders
 `DATETIME(6)` / `TIME(6)` so microseconds survive the round trip — a

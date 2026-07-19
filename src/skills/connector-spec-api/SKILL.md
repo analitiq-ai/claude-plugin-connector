@@ -20,6 +20,8 @@ Pick what you need for the auth and pagination styles you're authoring:
 
 - This skill's `spec-auth-flows.md` (for the chosen `auth.type`)
 - This skill's `spec-transport.md` (for HTTP transport idioms)
+- This skill's `spec-request-binding.md` (how `params` reach a `request` —
+  read this before authoring any endpoint request)
 - This skill's `spec-pagination.md` (for endpoint pagination)
 - This skill's `spec-replication.md` (for incremental sync)
 - `connector-spec-db/spec-type-maps.md` for authoring the standalone
@@ -46,23 +48,19 @@ Pick what you need for the auth and pagination styles you're authoring:
 
 ## Endpoint `operations` shape (cross-reference)
 
-Endpoint authoring lives in the `endpoint-creator` agent, but the
-operations vocabulary it consumes is API-specific and worth pinning here:
+Endpoint authoring lives in the `endpoint-creator` agent, and the shape of
+`operations` — which keys exist, which are required, which combinations are
+legal — is owned by the published api-endpoint contract and enforced by the
+validator. It is not restated here.
 
-- `operations.read` is a single object with required `request` + `response`
-  and optional `params` / `pagination` / `replication`.
-- `operations.write` is a **mode-keyed map** — keys are restricted to
-  `insert` and `upsert`. Each mode block holds required `request` +
-  `input` (`{"schema": <JsonSchemaPropertyNode>}` for one destination
-  record) and optional `batching` (`{"max_records": <int ≥ 2>}`),
-  `idempotency` (`{"in": "header" | "body", "name": "<non-empty>"}` —
-  provider idempotency-key placement; the value is engine-owned;
-  mutually exclusive with `batching`), `params`, `response`. `upsert`
-  additionally **requires** `conflict_keys` — an array of ≥1 top-level
-  field names from `input.schema` forming the natural key the upsert
-  matches on; `insert` forbids it (the schema pins it to `null`).
-- At least one of `read` / `write` must be present; omit the other when
-  the resource is one-directional.
+What to read instead:
+
+- `spec-request-binding.md` — how `params` reach a `request` (the part most
+  likely to fail validation).
+- `spec-pagination.md` / `spec-replication.md` — choosing and wiring those
+  blocks.
+- `connector-builder/references/advisory-rules.md` — the `api-endpoint`
+  cross-field rules, by id.
 
 ## What this skill does NOT cover
 

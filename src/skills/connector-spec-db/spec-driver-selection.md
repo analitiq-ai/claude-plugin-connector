@@ -40,10 +40,14 @@ ADBC driver values (currently `postgresql`, `snowflake`, `bigquery`).
 The engine derives the dbapi module from the `driver` value by the
 upstream packaging convention `adbc_driver_{driver}.dbapi` — the
 connector's `requirements.txt` must ship the matching
-`adbc-driver-{driver}` wheel (plus `adbc-driver-manager`). Adding a
-driver requires the enum entry plus the wheel — no engine change. If
-the system's driver is not yet in the enum, that is a schema-contract
-gap to raise, not a freeform workaround.
+`adbc-driver-{driver}` wheel (plus `adbc-driver-manager`).
+
+If the system's driver is not yet in the enum, that is a **contract gap to
+raise, not a freeform workaround** — and it is not a one-line change. Adding a
+driver means extending the published enum *and* provisioning the platform-side
+support for it, so treat it as coordinated work with the contract and platform
+owners rather than something a connector author can unblock alone. Until the
+enum entry exists, select the next tier in the decision order.
 
 **Redshift** is served by the libpq-compatible PostgreSQL ADBC driver:
 `transport_type: "adbc"`, driver `postgresql`, dsn template

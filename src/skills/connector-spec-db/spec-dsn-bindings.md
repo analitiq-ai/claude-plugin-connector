@@ -7,7 +7,7 @@ fields are:
 
 | `transport_type` | Identity field | Extras |
 |---|---|---|
-| `sqlalchemy` | `driver` — an **async** DBAPI (e.g. `"postgresql+asyncpg"`, `"mysql+aiomysql"`; sync drivers fail at connect) | optional `tls` block (`ssl_mode` + `ssl_ca_certificate` refs; mode vocabulary is connector-defined) |
+| `sqlalchemy` | `driver` — an **async** DBAPI (e.g. `"postgresql+asyncpg"`, `"mysql+aiomysql"`; sync drivers fail at connect). Optional in the contract, since SQLAlchemy can derive it from the DSN's scheme — but **declare it anyway**: it is the one place a reader can see the async choice was deliberate. | optional `tls` block (`ssl_mode` + `ssl_ca_certificate` refs; mode vocabulary is connector-defined) |
 | `adbc` | `driver` — closed enum: `postgresql`, `snowflake`, `bigquery` | `db_kwargs` (object; values may be value expressions). **AdbcTransport requires at least one of `dsn` / `db_kwargs`.** TLS lives inside `db_kwargs` (e.g. `adbc.postgresql.sslmode`); no `tls` block. |
 
 Transport choice follows the decision order in

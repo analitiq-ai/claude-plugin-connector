@@ -85,6 +85,34 @@ Reach for the window variant only when the provider *requires* both
 bounds. If an open "since" filter works, the single-param variant is
 simpler and spares the runtime from computing an upper bound.
 
+## Wiring (same three places as pagination)
+
+A cursor mapping's `param` must be declared in `params` with
+`controlled_by: "replication"` and bound into the request with
+`{"from_param": …}` (ADV-ENDP-011). Window mappings wire **both**
+`start_param` and `end_param` that way. A `controlled_by` param must not
+declare `operators`.
+
+Each `cursor_field` must resolve to a field in the record shape of
+`response.schema` (ADV-ENDP-013) — so a cursor on `updated_at` requires
+`updated_at` to be a declared field of the record, not merely something the
+provider mentions.
+
+## More than one cursor mapping
+
+An endpoint may declare several mappings when the provider exposes more than
+one usable watermark (e.g. `updated_at` and `created_at`). Declaring them does
+not pick one — it advertises the choices, and the consuming stream selects
+which to sync on. List every mapping the provider genuinely supports rather
+than pre-choosing on the operator's behalf.
+
+## What the endpoint does and does not own
+
+The endpoint declares **how the watermark is sent** — which param, which
+operator, which encoding. It does not own sync *policy*: lookback/safety
+windows, overlap handling, and how far back a backfill reaches are decided per
+run, not baked into the endpoint. Don't encode a fudge factor into the mapping.
+
 ## Supported methods
 
 `supported_methods` lists what the endpoint can do — `full_refresh`,
