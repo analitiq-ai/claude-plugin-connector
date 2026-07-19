@@ -353,6 +353,25 @@ def test_write_coverage_probe_gaps_are_documented() -> None:
         "Drop them from that list."
     )
 
+    # The other direction: families the prose implies ARE probed. Without this,
+    # the check only catches gaps closing, never new gaps opening — and the
+    # prose would quietly become an incomplete list of what to verify by hand.
+    expected_probed = {
+        "Boolean": lambda p: p == "Boolean",
+        "Json": lambda p: p == "Json",
+        "Decimal": lambda p: p.startswith("Decimal"),
+        "bare Timestamp": lambda p: p.startswith("Timestamp(") and "UTC" not in p,
+        "Utf8": lambda p: p == "Utf8",
+    }
+    stopped_probing = sorted(
+        name for name, matches in expected_probed.items() if not any(matches(p) for p in probes)
+    )
+    assert not stopped_probing, (
+        f"write-coverage no longer probes {stopped_probing}, so authors get no "
+        "warning for those families. Add them to the by-hand list in "
+        "src/skills/connector-spec-db/spec-type-maps.md."
+    )
+
 
 def test_validator_ids_match_package() -> None:
     """The finding ids the plugin's prose enumerates must be the ones emitted.

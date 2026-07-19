@@ -46,10 +46,10 @@ shared core.
 - [ ] **Every `function` name is in the registered catalog.** Nothing
   validates function names, so a typo or a planned-but-unregistered function
   (e.g. `jwt_sign`) ships silently and fails at connect.
-- [ ] **Every ref resolves to something a declaration produces.** Connector
-  refs are not scope-checked at all, and endpoint refs only have their leading
-  token checked — so a `connection.discovered.*` ref with no post-auth output
-  behind it passes validation. Trace each one by hand
+- [ ] **Every ref resolves to something a declaration produces.** Scope
+  checking is narrow and never proves resolvability (see
+  `value-expressions.md`), so a `connection.discovered.*` ref with no post-auth
+  output behind it passes validation. Trace each one by hand
   (`lifecycle-phases.md`).
 - [ ] **`default_transport` is the right default**, and any
   multi-transport split (auth / discovery / api origins) reflects the

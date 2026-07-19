@@ -108,7 +108,21 @@ def test_scope_covers_every_authored_resource() -> None:
     )
 
 
-ADV_ID_RE = re.compile(r"ADV-[A-Z]+-\d+")
+# Matches a full id and any `/NNN` shorthand suffixes: prose writes
+# `ADV-TMAP-001/002` for a pair, and the trailing halves must be checked too —
+# a guard that only saw the first id would miss exactly the dangling citation it
+# exists to catch.
+ADV_ID_RE = re.compile(r"ADV-([A-Z]+)-(\d+)((?:/\d+)*)")
+
+
+def _cited_ids(text: str) -> set[str]:
+    """Expand every `ADV-*` citation, including `ADV-X-001/002` shorthand."""
+    found: set[str] = set()
+    for prefix, first, rest in ADV_ID_RE.findall(text):
+        found.add(f"ADV-{prefix}-{first}")
+        for suffix in filter(None, rest.split("/")):
+            found.add(f"ADV-{prefix}-{suffix}")
+    return found
 
 
 def test_prose_rule_citations_resolve() -> None:
@@ -129,8 +143,7 @@ def test_prose_rule_citations_resolve() -> None:
         if path == generated:
             continue  # generated from the registry; covered by the sync test
         searched += 1
-        cited = set(ADV_ID_RE.findall(path.read_text(encoding="utf-8")))
-        missing = cited - known
+        missing = _cited_ids(path.read_text(encoding="utf-8")) - known
         if missing:
             dangling[str(path.relative_to(REPO_ROOT))] = missing
 

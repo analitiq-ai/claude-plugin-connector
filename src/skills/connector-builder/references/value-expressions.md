@@ -40,13 +40,18 @@ connector or endpoint actually writes.
 | `state.*` | per run | Replication watermarks and other carried-over run state. |
 | `connector.*` | any | Connector-level declared values. |
 
-**Scope checking is narrow.** It runs only on an endpoint's **request slots**
-(`headers`, `query`, `body`, `path_params`) and `response.metadata`, and only
-on the **leading token** — the rest of the path is never checked, so
-`connection.discovered.nope` passes and resolves empty. Everywhere else there
-is no check at all: a bogus scope in a pagination `stop_when`, or in a
-connector transport's header, validates clean. Treat every ref as unverified
-and trace it to the declaration that produces it yourself.
+**Scope checking is narrow.** It runs on an endpoint's `request.headers` /
+`query` / `body`, and on typed ref fields such as `response.records` and
+`response.metadata` — and only on the **leading token**. The rest of the path is
+never checked, so `connection.discovered.nope` passes and resolves empty.
+
+Everywhere else there is no check at all: a bogus scope in a pagination
+`stop_when`, or anywhere in a **connector** document (a transport header, an
+auth template), validates clean. Treat every ref as unverified and trace it to
+the declaration that produces it yourself.
+
+(`request.path_params` is not scope-checked either — it is separately restricted
+to `{from_param: …}`, so a raw ref there is rejected on different grounds.)
 
 > **`stream.*`, `state.*`, and `runtime.*` are barred from endpoint request
 > slots.** They may not appear as direct refs in `request.headers` / `query` /

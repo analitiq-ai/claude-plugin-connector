@@ -82,15 +82,15 @@ you must satisfy. Concretely:
   documented (`TIMESTAMP WITHOUT TIME ZONE`), or use a regex tolerant of the
   variation.
 
-> **How much protection you get depends on the connector kind.** Coverage
-> probes natives only on an **API** connector, driven by the `native_type`
-> annotations in its endpoint files — there, a lowercase `exact` native is
-> reported as uncovered. A **database** connector has no endpoints to probe
-> from, so nothing validates its read map's matchers at all: a map with every
-> native lowercased validates completely clean. The runtime tolerates it
-> (it normalizes both sides), so this is a consistency convention there rather
-> than a correctness one — but author uppercase regardless, because it is the
-> one spelling that works under both.
+> **`exact` natives are the unguarded half.** The lowercase-`regex` warning
+> above fires on either connector kind. Coverage — the check that catches a
+> lowercase `exact` native — probes only on an **API** connector, driven by the
+> `native_type` annotations in its endpoint files. A **database** connector has
+> no endpoints to drive that walk, so its `exact` natives are never probed: a
+> read map with every `exact` native lowercased validates with zero findings.
+> The runtime tolerates it (it normalizes both sides), making this a consistency
+> convention on a DB connector rather than a correctness one — but author
+> uppercase regardless, since that is the one spelling that works under both.
 
 Write-map matchers run against PascalCase canonical strings **case-preserving**
 (the Arrow vocabulary is mixed-case), so case is significant there too — and
