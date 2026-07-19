@@ -1,8 +1,14 @@
-name: Schema drift guards
+name: Contract drift guards
 
-# The plugin restates a few schema-owned enum vocabularies as decision logic
-# (enum-mappers.md, CLAUDE.md, io-contracts.md). This suite
-# (tests/schema_drift/) pins them to the contract and fails if they diverge.
+# The plugin's prose has to stay true to the contract it authors against. This
+# suite (tests/schema_drift/) is the gate, in three parts:
+#   - enum/vocabulary pins: values the plugin restates as decision logic
+#     (enum-mappers.md, CLAUDE.md, io-contracts.md, value-expressions.md) must
+#     match the contract, including the validator ids and resolution scopes;
+#   - generated-reference sync: references/advisory-rules.md is rendered from the
+#     contract's advisory registry and must not be stale;
+#   - example validity: every connector/endpoint under skills/*/examples/ must
+#     validate, since creator agents copy them as archetypes.
 #
 # The guard reads the enums straight from the pinned `analitiq-contract-models`
 # package — the same contract the `connector-schema-validator` agent enforces —
@@ -30,7 +36,7 @@ concurrency:
 
 jobs:
   drift:
-    name: Schema enum-drift guards (pinned contract models)
+    name: Contract drift guards (pinned contract models)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
