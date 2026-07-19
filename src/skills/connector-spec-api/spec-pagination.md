@@ -17,6 +17,17 @@ has its own definition in
 This page covers only the authoring decisions the schema can't express —
 which strategy fits a provider, and how to wire it.
 
+> **Validating is not the same as executing.** The contract defines all five
+> strategies, but engine support has historically lagged the contract, and the
+> gaps are per-strategy — one may be unimplemented, another may read a
+> differently-named field than the one you authored. A pagination block can
+> therefore validate clean and still not paginate correctly at read time.
+> `offset` and `page` are the best-exercised; for anything else, confirm
+> against the engine version you are targeting before shipping, and treat a
+> mismatch as a gap to raise rather than something to work around in the
+> connector. This is a version-skew problem, not a reason to prefer a worse-fit
+> strategy — pick what the provider actually supports, then verify.
+
 ## Pagination is wired in three places
 
 This is the part authors get wrong. A pagination block **does not create a
@@ -129,12 +140,6 @@ the runtime sends it only from page two onward.
 ```
 
 ## `link`
-
-> **Check executability before choosing this.** `link` is a valid contract
-> strategy, but engine support for it has lagged the contract — a connector can
-> validate clean and then fail at read time with an unsupported-pagination-type
-> error. Confirm the target engine version handles `link`; if in doubt, prefer
-> `cursor`, which is equivalent for most providers that offer both.
 
 The next-page URL comes from the response. `link.next_url` resolves to that URL
 and **replaces the entire request URL**, so it must resolve to a bare,
