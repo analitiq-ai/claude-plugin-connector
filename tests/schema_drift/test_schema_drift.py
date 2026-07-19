@@ -102,6 +102,34 @@ EXPECTED_BARE_MARKER_ARROW_TYPES = {"Object", "List", "Json"}
 # `database`), the same posture it holds for `file` / `s3` / `stdout`.
 EXPECTED_KINDS = {"api", "database", "nosql", "document", "file", "s3", "stdout"}
 EXPECTED_TRANSPORT_TYPES = {"http", "sqlalchemy", "adbc", "s3", "file", "stdout"}
+# Validator ids a connector/endpoint/type-map finding may carry — restated in
+# io-contracts.md's `Diagnostics` enum and the connector-schema-validator agent's
+# id table. Owned by `analitiq.validator.VALIDATOR_IDS`, minus the `bundle-*` ids,
+# which only apply to pipeline bundles this plugin never validates.
+EXPECTED_VALIDATOR_IDS = {
+    "contract-model",
+    "document",
+    "type-map-coverage",
+    "type-map-rule",
+    "type-map-write-coverage",
+    "endpoint-filename",
+    "endpoint-id-unique",
+    "endpoint-id-locator",
+    "embedded-json-schema",
+}
+# Resolution scopes a `ref` / `${...}` placeholder may lead with — restated as the
+# scope table in references/value-expressions.md.
+EXPECTED_RESOLUTION_SCOPES = {
+    "connector",
+    "connection",
+    "secrets",
+    "auth",
+    "stream",
+    "state",
+    "runtime",
+    "request",
+    "response",
+}
 
 
 # --- helpers ---------------------------------------------------------------
@@ -294,6 +322,39 @@ def test_kinds_match_schema(connector_schema: dict) -> None:
         EXPECTED_KINDS,
         "update CLAUDE.md ('kind (one of ...)') and KindMapper in "
         "src/skills/connector-builder/references/enum-mappers.md.",
+    )
+
+
+def test_validator_ids_match_package() -> None:
+    """The finding ids the plugin's prose enumerates must be the ones emitted.
+
+    `bundle-*` ids are excluded: they belong to pipeline-bundle validation, which
+    this plugin never invokes, so carrying them in an authoring reference would
+    imply findings an author can never see.
+    """
+    from analitiq.validator import VALIDATOR_IDS
+
+    package_set = {vid for vid in VALIDATOR_IDS if not vid.startswith("bundle-")}
+    assert package_set == EXPECTED_VALIDATOR_IDS, _diff_msg(
+        "validator ids",
+        package_set,
+        EXPECTED_VALIDATOR_IDS,
+        "update the Diagnostics enum in "
+        "src/skills/connector-builder/references/io-contracts.md and the id table "
+        "in src/agents/connector-schema-validator.md.",
+    )
+
+
+def test_resolution_scopes_match_contract() -> None:
+    from analitiq.contracts.value_expression import RESOLUTION_SCOPES
+
+    package_set = set(RESOLUTION_SCOPES)
+    assert package_set == EXPECTED_RESOLUTION_SCOPES, _diff_msg(
+        "resolution scopes",
+        package_set,
+        EXPECTED_RESOLUTION_SCOPES,
+        "update the scope table in "
+        "src/skills/connector-builder/references/value-expressions.md.",
     )
 
 

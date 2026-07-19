@@ -13,9 +13,12 @@ containing one endpoint document body.
 
 ## Required reading
 
+- `${CLAUDE_PLUGIN_ROOT}/skills/connector-spec-api/spec-request-binding.md`
 - `${CLAUDE_PLUGIN_ROOT}/skills/connector-spec-api/spec-pagination.md`
 - `${CLAUDE_PLUGIN_ROOT}/skills/connector-spec-api/spec-replication.md`
 - `${CLAUDE_PLUGIN_ROOT}/skills/connector-builder/references/value-expressions.md`
+- `${CLAUDE_PLUGIN_ROOT}/skills/connector-builder/references/advisory-rules.md`
+  (the `api-endpoint` section — the cross-field rules your document must satisfy)
 
 ## Inputs
 
@@ -64,6 +67,13 @@ was raised.
    The orchestrator writes the file as `endpoints/{endpoint_id}.json`, and
    the `endpoint-filename` check requires the file's basename to equal this
    value.
+
+   The id is **not** free-form: the `endpoint-id-locator` check recomputes it
+   from the read operation's `request.path` (lowercase each segment, drop
+   `{placeholder}` segments, join with `__`) and errors when they diverge. So
+   `/v1/accounts/{account_id}/invoices` → `v1__accounts__invoices`. If the
+   researched key and the path disagree, the path wins — fix the key, not the
+   path.
 3. Author `operations.read` when the resource is readable. Required keys
    are `request` and `response` (and inside `response`, both `records`
    and `schema` are required); `params`, `pagination`, `replication`
@@ -71,13 +81,19 @@ was raised.
    - `request.method` (`GET` or `POST`) and `request.path` — from
      `endpoint_facts.method` / `endpoint_facts.path`.
    - `request.transport_ref` — only if not the default transport.
-   - `request.query` / `request.headers` / `request.path_params` /
-     `request.body` — declarative request shape. Values are
-     value expressions (e.g. `{"ref": "connection.parameters.foo"}`).
    - `params` — declared operation inputs, each a `Param` with `in`
-     (`query` / `header` / `path` / `body`), `type`, `required`,
-     optional `default` (value expression), `operators` for filterable
-     params, and `controlled_by` when pagination / replication owns it.
+     (`query` / `header` / `path` / `body`), `type` (the *request-input*
+     type, not an Arrow type), `required`, optional `default` (value
+     expression), `operators` for stream-filterable params, and
+     `controlled_by` when pagination / replication owns it.
+   - `request.query` / `request.headers` / `request.path_params` /
+     `request.body` — the declarative request shape. Dynamic values are
+     bound to declared params with `{"from_param": "<name>"}`, **not** with
+     a bare `ref`; `path_params` accepts nothing else, and a direct
+     `stream.*` / `state.*` / `runtime.*` ref anywhere in a request slot is
+     rejected. Fixed protocol values stay direct (`{"literal": …}`, or a
+     `connection.parameters.*` / `secrets.*` ref). Every declared param must
+     be bound by exactly one binding. Full rules: `spec-request-binding.md`.
    - `pagination` — when `endpoint_facts.paginated` is true, populate per
      `endpoint_facts.pagination` (the connector-wide `style` + `params`,
      echoed into the branch — the API connector body carries no
@@ -86,9 +102,16 @@ was raised.
      cursor field is `endpoint_facts.replication_cursor`.
    - `response.records` — `ref` whose path starts with `response.body`,
      selecting the iterable record collection (use `endpoint_facts.record_path`).
-   - `response.schema` — JSON Schema describing the response body, authored
-     **from `endpoint_facts.fields`** — one typed property per field. For
-     each field, the declared `arrow_type` is the field's
+   - `response.schema` — JSON Schema describing the **entire response body**,
+     envelope included — not just the record. `response.records` must resolve
+     to an **array** node inside it (ADV-ENDP-012), so a `record_path` of
+     `response.body.data` requires a `data` property typed as an array whose
+     `items` carry the record's fields. Authoring only the record's fields at
+     the top level is the most common way to fail validation.
+     `endpoint_facts.fields` describes the **record**, so they land under
+     `properties.<envelope>.items.properties`. A read operation yields
+     zero-to-many records; a single-object resource is not a read endpoint.
+     For each field, the declared `arrow_type` is the field's
      `endpoint_facts.fields[].arrow_type` and the `native_type` annotation is
      its `native_type`. These are **not** two independent sources: the
      connector's `type-map-read` must render that `native_type` to a canonical
@@ -113,9 +136,16 @@ was raised.
    `conflict_keys`. Each mode block holds:
    - `request` (required) — `method` (`POST` / `PUT` / `PATCH`), `path`,
      and the same optional `query` / `headers` / `path_params` / `body`
-     / `transport_ref` keys as the read request.
+     / `transport_ref` keys as the read request. The **body must reference
+     the record being written** via `{"from_input": …}` — `record` (or
+     `record.<field>`) when unbatched, `records` when `batching` is
+     declared (ADV-ENDP-017). Author the provider's envelope literally
+     around it (`{"data": {"from_input": "records"}}`); no wrapper key is
+     special. `from_input` is legal **only** here, never in a read request,
+     a header, a query, or a param default.
    - `input` (required) — `{"schema": <JsonSchemaPropertyNode>}`
-     describing one provider-facing destination record.
+     describing one provider-facing destination record. Every field a
+     `from_input` path addresses must be declared here.
    - `conflict_keys` — **required for `upsert`, forbidden for `insert`.**
      An array of one or more strings, each a top-level field name
      declared in this mode's `input.schema`; together they are the

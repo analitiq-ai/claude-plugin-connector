@@ -1,17 +1,8 @@
 [
-  {
-    "match": "exact",
-    "native": "string",
-    "canonical": "Utf8"
-  },
-  {
-    "match": "exact",
-    "native": "integer",
-    "canonical": "Int64"
-  },
-  {
-    "match": "exact",
-    "native": "boolean",
-    "canonical": "Boolean"
-  }
+  { "match": "exact", "native": "STRING", "canonical": "Utf8" },
+  { "match": "exact", "native": "INTEGER", "canonical": "Int64" },
+  { "match": "exact", "native": "NUMBER", "canonical": "Float64" },
+  { "match": "exact", "native": "BOOLEAN", "canonical": "Boolean" },
+  { "match": "exact", "native": "OBJECT", "canonical": "Json" },
+  { "match": "exact", "native": "ARRAY", "canonical": "Json" }
 ]

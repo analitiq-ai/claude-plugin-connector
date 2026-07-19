@@ -46,9 +46,7 @@
     },
     "api": {
       "transport_type": "http",
-      "base_url": {
-        "template": "https://${connection.discovered.api_domain}.example.com/api/v1"
-      }
+      "base_url": "https://api.example.com/v1"
     }
   },
   "auth": {

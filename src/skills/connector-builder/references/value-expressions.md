@@ -18,10 +18,13 @@ A value expression is one of:
 Anywhere the schema accepts a value expression, exactly one of the four
 shapes is allowed.
 
-## Logical scopes (closed list)
+## Logical scopes
 
-Every `ref` and every `${...}` interpolation inside a `template` must
-target one of these scopes:
+Every `ref` and every `${...}` interpolation inside a `template` must begin
+with one of the contract's resolution scopes. The authoritative set is
+`RESOLUTION_SCOPES` in `analitiq.contracts.value_expression` (pinned by
+`tests/schema_drift/`); the table below is the authoring guide to the ones a
+connector or endpoint actually writes.
 
 | Scope | Phase available | Holds |
 |---|---|---|
@@ -30,10 +33,26 @@ target one of these scopes:
 | `connection.selections.*` | `post_auth` and later | Durable user choices declared as `post_auth_outputs` with `storage: "connection.selections"`. |
 | `connection.discovered.*` | `post_auth` and later | Auto-discovered non-secret context (e.g. `api_domain`) declared as `post_auth_outputs` with `storage: "connection.discovered"`. |
 | `auth.*` | `auth` and later | Auth tokens (access_token, refresh_token, expiry). |
-| `runtime.*` | varies by ref | OAuth `state`, `redirect_uri`, `code`, `pkce_verifier`, `code_challenge`, `code_challenge_method`, and other transient values; per-operation availability per `lifecycle-phases.md`. |
+| `runtime.*` | varies by ref | Per-run values — `run_id`, `current_time`, `batch_size`, the OAuth set (`state`, `redirect_uri`, `code`, `pkce_verifier`, `code_challenge`, `code_challenge_method`), and operation-local values like `runtime.pagination.offset`. Availability per `lifecycle-phases.md`. |
+| `response.*` | endpoint response handling | The response being processed — `response.body.*`, `response.headers.*`. This is what pagination `stop_when` / `next_cursor` and `response.metadata` refs target. |
+| `request.*` | endpoint request handling | The request being built. |
 | `stream.*` | per stream | Stream-owned routing, tenant context, stream-specific auth context. |
+| `state.*` | per run | Replication watermarks and other carried-over run state. |
+| `connector.*` | any | Connector-level declared values. |
 
-Any other scope is an `expression-resolver` validation error.
+Only the **leading token** is contract-checked. A ref with a valid scope but a
+path nothing produces (`connection.discovered.nope`) passes validation and
+resolves empty at runtime — the check is a spelling guard, not a resolvability
+proof.
+
+> **`stream.*`, `state.*`, and `runtime.*` are barred from endpoint request
+> slots.** They may not appear as direct refs in `request.headers` / `query` /
+> `body` / `path_params`; route them through a declared param instead. See
+> `connector-spec-api/spec-request-binding.md`.
+
+Two paths that *look* like scopes but are not, and so fail at runtime after
+passing validation (the leading token `connection` is legal, the rest is not):
+`connection.auth_state.*` and `connection.secret_refs.*`.
 
 ## Function catalog (registered)
 
@@ -45,15 +64,27 @@ engine's `DEFAULT_FUNCTIONS` registry. Current catalog:
 - `lookup` — map an input value through a connector-declared inline `map`, returning the mapped value.
 - `url_encode` — percent-encode a scalar for a URL component. Escapes every reserved character by default (`safe: ""`); pass a `safe` field to widen the unescaped set.
 
+**`lookup` maps must be total.** The inline `map` has to cover every value of
+the input's declared `enum`, and add no keys outside it. Nothing validates this
+— a value with no entry resolves to nothing and the request goes out missing
+that field, so an uncovered enum member fails silently at connect time rather
+than loudly at authoring time.
+
+**Never call `url_encode` inside a DSN binding.** The binding's declared
+`encoding` already owns percent-encoding; wrapping the value encodes it twice.
+`url_encode` is for URL components you build yourself in a `template`.
+
 **Planned — NOT yet registered; do not reference (validation rejects unknown
 function names):** `jwt_sign` (sign a JWT from key/algorithm/claims) and
 `pkce_challenge_s256` (derive a PKCE S256 challenge from a runtime verifier).
 Until the engine registers a function, connectors must not call it — this
 includes the inline-signing path for `jwt` auth.
 
-Unknown functions are validation errors. To extend the catalog, the
-engine's function registry must be updated first; do not invent function
-names in connector JSON.
+**Nothing validates the function name.** An unregistered name (including
+`jwt_sign`) passes every check and fails only when the engine tries to resolve
+it at connect time. Treat the catalog above as closed and verify by hand; the
+validator will not catch a typo or a planned-but-unregistered function. To
+extend the catalog, the engine's function registry must be updated first.
 
 ## DSN placeholders are not value expressions
 

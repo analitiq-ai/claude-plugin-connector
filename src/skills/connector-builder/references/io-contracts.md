@@ -260,20 +260,17 @@ access and may not guess field types).
         "properties": {
           "validator": {
             "type": "string",
+            "description": "Validator id. Owned by `analitiq.validator.VALIDATOR_IDS` and pinned by tests/schema_drift/. Most rules — including every ADV-* cross-field rule — report under `contract-model`; the rest cover cross-file relationships the contract models cannot see.",
             "enum": [
               "contract-model",
-              "reserved-field",
-              "expression-resolver",
-              "phase-resolvability",
-              "transport-ref",
-              "dsn-binding",
-              "auth-shape",
-              "tls-consistency",
+              "document",
               "type-map-coverage",
               "type-map-rule",
               "type-map-write-coverage",
-              "endpoint-annotations",
-              "endpoint-filename"
+              "endpoint-filename",
+              "endpoint-id-unique",
+              "endpoint-id-locator",
+              "embedded-json-schema"
             ]
           },
           "severity": { "type": "string", "enum": ["error", "warning"] },

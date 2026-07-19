@@ -56,20 +56,30 @@ readability when the pattern would otherwise look ambiguous.
 
 ## Uppercase rule (read maps)
 
-Read-map rules are matched against **UPPERCASED, whitespace-collapsed**
-native strings — the engine normalizes the native label before
-matching. Consequences:
+Read-map matching **uppercases the incoming native and compares the rule's
+matcher verbatim**. Normalization applies to the probe, never to the rule. So
+**every read-map matcher must be authored uppercase** — both directions of that
+sentence matter:
 
+- **`exact` natives must be uppercase.** `{"match": "exact", "native":
+  "varchar"}` can never fire, because the probe arrives as `VARCHAR` and the
+  matcher is compared as authored. This is the most dangerous authoring
+  mistake in a type map: **nothing flags it.** The rule is structurally valid,
+  the map validates clean, and the miss only surfaces as a runtime type
+  resolution failure.
 - **Author `regex` patterns uppercase** (`^VARCHAR\(\d+\)$`, not
-  `^varchar\(\d+\)$`). A lowercase literal in the pattern can never
-  match; the validator warns on it.
-- `exact` natives are normalized automatically — authored case doesn't
-  matter, but uppercase is the convention.
-- **Named capture group names stay lowercase** (`(?<precision>…)`) —
-  only the matched text is normalized, not the group names.
+  `^varchar\(\d+\)$`). A lowercase literal in the pattern can never match;
+  unlike the `exact` case, the validator does warn on this one.
+- **Named capture group names stay lowercase** (`(?<precision>…)`) — only the
+  matched text is uppercased, not the group names.
 
-Write-map matchers run against PascalCase canonical strings verbatim —
-no normalization, case is significant.
+Normalization is **uppercase only** — there is no whitespace collapsing. A
+native carrying internal spacing (`TIMESTAMP WITHOUT TIME ZONE`) must be
+matched with its spacing exactly as the engine reports it, or with a regex that
+tolerates the variation.
+
+Write-map matchers run against PascalCase canonical strings verbatim — no
+normalization at all, so case is significant there too.
 
 ## `${name}` substitution in regex rules
 
@@ -89,8 +99,25 @@ hood at validation time. Authors write the ECMA-262 form.
 Placeholders are only legal in **parameter positions** of parameterized
 types (`Decimal128(${precision}, ${scale})`, `FixedSizeBinary(${n})` on
 the read side; `NUMERIC(${p}, ${s})`, `VARCHAR(${len})` and similar on
-the write side). Templated renders are only legal on `regex` rules;
-`exact` rules must emit a fully-resolved literal on the rendered side.
+the write side).
+
+On the **read** side a templated render is only legal on a `regex` rule — an
+`exact` native has no captures to substitute from, so its `canonical` must be a
+fully-resolved literal.
+
+On the **write** side an `exact` rule **may** carry `${…}` in its rendered
+`native`. Those placeholders are not regex captures but **per-column DDL
+hints** supplied by the column being rendered, which is how a fixed canonical
+renders a length-carrying native:
+
+```json
+{ "match": "exact", "canonical": "Utf8", "native": "VARCHAR(${length})" }
+```
+
+Prefer this to a bare `TEXT` when the target system's string type takes a
+length and the column declares one — it preserves the width across the round
+trip.
+
 (Timestamp precision is **not** a `${}` case — Arrow's unit is a
 symbolic enum, not a digit; match on the native's digit count and ladder
 it to a unit instead. See "Database coverage → Read map".)

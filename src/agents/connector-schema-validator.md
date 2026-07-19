@@ -69,25 +69,38 @@ offline). Single-document violations (structure **and** every cross-field rule
 the contract defines) surface with `validator: "contract-model"`; the
 cross-cutting checks below carry their own ids.
 
-## Semantic validators
+## Validator ids
 
-The validator also runs each of the following. Skip those that don't apply to
-the document type:
+Findings carry one of the ids below. **Most rules report under
+`contract-model`** — the contract models enforce structure *and* every
+cross-field rule in one pass, so there is no separate id per rule family. The
+other ids cover only what a single document cannot express: cross-file
+relationships and quality warnings.
+
+Do not expect a finding id per rule; match on the message, not on a guessed id.
 
 | Validator id | Rule |
 |---|---|
-| `reserved-field` | No `created_at` / `updated_at` in the authored doc. |
-| `expression-resolver` | Every `ref` / `template` / `function` parses; refs target known scopes; functions are in the registered catalog. Nodes shaped like `{ref\|template\|function: <non-string>}` are flagged (the kind key must point at a string — `literal` is exempt, its payload is opaque to the validator). Multi-keyed nodes (more than one of `ref`/`template`/`literal`/`function` present together) are rejected as ambiguous. |
-| `phase-resolvability` | Refs to `connection.discovered.*` are produced by a declared post-auth output. |
-| `transport-ref` | Every `transport_ref` resolves to a key in `transports`; `default_transport` exists in `transports`. |
-| `dsn-binding` | Every `{placeholder}` has a binding; every binding is referenced; `encoding` is in the closed enum. |
-| `auth-shape` | OAuth2 variants (`oauth2_authorization_code` requires `authorize`+`token_exchange`; `oauth2_client_credentials` requires `token_exchange` and forbids `authorize`) and `none` (forbids all auth ops). Other auth types are validated by JSON Schema only. |
-| `tls-consistency` | If `ssl_mode` enum allows a certificate-verification mode (`verify-ca` / `verify-full`, or MySQL-style `VERIFY_CA` / `VERIFY_IDENTITY` — matching is case- and `_`/`-`-normalized), then `ssl_ca_certificate` is declared in `connection_contract.inputs`. |
-| `type-map-coverage` | Connector docs require a sibling `type-map-read.json` (non-empty array); database connectors additionally require a sibling `type-map-write.json`, and API connectors must NOT ship one. A pre-split `type-map.json` sibling is an error with a migration pointer. For API connectors, every endpoint `(native_type, arrow_type)` pair must resolve through the read map — natives are normalized (UPPERCASE, whitespace-collapsed) before matching — with rendered canonical equal to the endpoint's `arrow_type` (`Object` / `List` are accepted narrowings of `Json`). |
-| `type-map-rule` | For type-map documents (direction derived from the filename: `type-map-write.json` → write, else read; the write direction swaps matcher and render sides — `canonical` matches, `native` renders): `exact` rules must not use `${…}` substitution on the render side; `regex` rules' matcher must always compile (even when the render side is not templated); `regex` rules must use ECMA-262 named-group syntax `(?<name>…)` — non-ECMA `(?P[<=>]…)` extensions (Python stdlib `(?P<…>)` / `(?P=…)`, PyPI `regex`-library's `(?P>…)`) are rejected; `regex` rules referencing `${name}` on the render side must define a matching `(?<name>…)` capture in the matcher; read-direction regex matchers containing lowercase literals warn (patterns are matched against UPPERCASED natives); read-direction rules whose `native` is a schemaless/structured container (`JSON`, `JSONB`, `VARIANT`, `OBJECT`, `ARRAY`, `MAP`, `STRUCT`, `array<…>`, `…[]`) must render a container canonical (`Json`/`Object`/`List`/`Struct`/`Map`), never a scalar like `Utf8` (error); duplicate (match, matcher) pairs warn. Also runs against the sibling map files when validating a connector. |
-| `type-map-write-coverage` | For `type-map-write.json` documents (standalone or as a database connector's sibling): probes the map against the full canonical vocabulary (Boolean, Int8–64, UInt8–64, Float16/32/64, Decimal, Utf8/LargeUtf8, Json, Binary/LargeBinary/FixedSizeBinary, Date32/64, Time, Timestamp bare + tz). Gaps are a single grouped **warning** — a dialect may deliberately leave a family to a `render_column_type` override. |
-| `endpoint-annotations` | For api-endpoint documents validated directly (under `api-endpoint/latest.json`): every typed field's `(native_type, arrow_type)` pair must be both-present and both-string; sub-trees that aren't JSON objects emit a `non_dict_subtree` warning. Bare-marker `arrow_type` values carry a recursive sibling-key contract the contract model leaves open (the node is `additionalProperties: true`): `Object` requires a non-empty `properties` map and forbids `items`; `List` requires an `items` sub-schema and forbids `properties`; `Json` is opaque and forbids both (each violation is an error; checked on response/input schema trees and `params`). (When walking endpoints from a connector, the same checks fire via `type-map-coverage`.) |
-| `endpoint-filename` | For api-endpoint documents: the file's basename must equal `{endpoint_id}.json` (the engine locates an endpoint as `endpoints/{endpoint_id}.json`, so a divergent filename is unreachable at runtime). The contract model constrains `endpoint_id` but cannot see the filename, so this is a semantic check. An **error** when they diverge; a **warning** when the basename can't be compared — either the validator was invoked without a filesystem-anchored document path, or `endpoint_id` is absent/non-string (the model owns the hard required/pattern error, but sibling endpoints have no model backstop, so the gap is surfaced rather than passed silently). Enforced on every sibling endpoint during connector validation and on an endpoint validated directly. |
+| `contract-model` | Single-document validity against the pinned contract models: field shapes, enums, required/forbidden combinations, and every `ADV-*` cross-field rule (see `connector-builder/references/advisory-rules.md`). Reserved fields (`created_at` / `updated_at`), `transport_ref` resolution, DSN placeholder↔binding pairing, auth-shape requirements, request-param wiring, and response-schema annotations all surface here. |
+| `document` | The document matches no known artifact kind. A connector must declare `kind`, an api-endpoint `operations`, a type-map is a bare JSON array of rules. Also emitted when the file cannot be read. |
+| `type-map-coverage` | Connector docs require a sibling `type-map-read.json` (non-empty array); database connectors additionally require `type-map-write.json`, and API connectors must NOT ship one. A pre-split `type-map.json` sibling is an error with a migration pointer. For API connectors, every endpoint `(native_type, arrow_type)` pair must resolve through the read map — the native is UPPERCASED before matching while the rule's matcher is compared verbatim — with rendered canonical equal to the endpoint's `arrow_type` (`Object` / `List` are accepted narrowings of `Json`). |
+| `type-map-rule` | Rule-level checks on a type-map (direction from the filename: `type-map-write.json` → write, else read). Read-direction `exact` rules must not template their render side; `regex` matchers must compile; ECMA-262 named-group syntax `(?<name>…)` is required and Python-only `(?P…)` rejected; every `${name}` on the render side needs a matching capture; read-direction regex matchers containing lowercase literals **warn**; a schemaless/structured native must render a container canonical, never a scalar (error); duplicate (match, matcher) pairs **warn**. Also runs against sibling maps during connector validation. |
+| `type-map-write-coverage` | Probes a write map against the canonical vocabulary and reports unrendered families as one grouped **warning** — a dialect may deliberately leave a family to a `render_column_type` override. |
+| `endpoint-filename` | An endpoint file's basename must equal `{endpoint_id}.json` — the engine resolves an endpoint as `endpoints/{endpoint_id}.json`, so a divergent filename is unreachable. **Error** on divergence; **warning** when the basename can't be compared (no filesystem-anchored path, or a missing/non-string `endpoint_id`). |
+| `endpoint-id-unique` | Each `endpoint_id` is unique within the connector release. |
+| `endpoint-id-locator` | An `endpoint_id` must equal the handle derived from its locator — for an API endpoint, its read `request.path` lowercased with `__` between segments and `{placeholder}` segments dropped, so `/v1/x` and `/v2/x` cannot collide. |
+| `embedded-json-schema` | An embedded JSON Schema (e.g. `response.schema`, `input.schema`) must be valid Draft 2020-12 and must not declare a different `$schema`. |
+
+Checks the plugin's prose once claimed but the validator does **not** perform —
+do not rely on them, and treat these as author-side discipline:
+
+- **Function names are never checked.** An unregistered or misspelled
+  `{"function": …}` passes validation and fails at connect time.
+- **Ref *resolvability* is never checked on a connector.** Only the leading
+  scope token of an endpoint expression is validated; a
+  `connection.discovered.*` ref with no post-auth output that produces it
+  validates clean.
+- **TLS `ssl_mode` ↔ `ssl_ca_certificate` consistency is not checked.**
 
 ## Output
 
