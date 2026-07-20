@@ -290,8 +290,9 @@ parens for parameterized scalars (`Decimal128(p, s)`,
 `FixedSizeBinary(16)`), and angle brackets for nested types
 (`List<Int64>`, `Struct<id:Int64, name:Utf8>`, `Map<Utf8, Int64>`).
 
-The full vocabulary lives in
-`docs/schema-contracts/shared/canonical-types.json`.
+The full vocabulary is owned by the pinned contract models —
+`ARROW_TYPE_PATTERN` in `analitiq.contracts.endpoints` is the authoritative
+alternation, and the validator matches every canonical against it.
 
 For parameterized canonicals whose database native carries an implicit
 default, encode the default explicitly:

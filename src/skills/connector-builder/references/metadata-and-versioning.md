@@ -1,7 +1,8 @@
 # Metadata and versioning
 
-Excerpts from `docs/schema-contracts/shared/identity-and-versioning.md`
-and `connectors/connector-schema-parameterization.md`.
+The authored top-level shape of a connector document, and how its `version`
+moves between releases. Field shapes are owned by the contract models; the
+release table is the plugin's own policy.
 
 ## Authored top-level fields
 

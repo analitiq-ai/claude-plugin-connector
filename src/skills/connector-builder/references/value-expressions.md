@@ -1,8 +1,8 @@
 # Value expressions
 
-Shared invariant both creator agents must follow. Excerpted from the
-authoritative spec at
-`docs/schema-contracts/shared/value-expression-parameterization.md`.
+Shared invariant both creator agents must follow. The shapes and scopes below
+are owned by the contract models (`analitiq.contracts.value_expression`); this
+page is the authoring guide to them.
 
 ## Four expression kinds
 
