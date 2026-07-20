@@ -47,11 +47,11 @@ on first use, then invoke it:
 ```bash
 # Ensure the pinned validator + contract models are present (installs only if
 # either exact version is missing; pip output goes to stderr so it can't
-# contaminate the Diagnostics JSON). Pin BOTH and keep them in lockstep: rc10's
-# validator already pins analitiq-contract-models==1.0.0rc10 exactly, so this is
+# contaminate the Diagnostics JSON). Pin BOTH and keep them in lockstep: rc11's
+# validator already pins analitiq-contract-models==1.0.0rc11 exactly, so this is
 # defensive (explicit + reproducible, and safe if a future validator loosens it).
-python3 -c "import sys; from importlib.metadata import version; sys.exit(0 if version('analitiq-validator') == '1.0.0rc10' and version('analitiq-contract-models') == '1.0.0rc10' else 1)" 2>/dev/null \
-  || python3 -m pip install --quiet --disable-pip-version-check --pre "analitiq-validator==1.0.0rc10" "analitiq-contract-models==1.0.0rc10" 1>&2
+python3 -c "import sys; from importlib.metadata import version; sys.exit(0 if version('analitiq-validator') == '1.0.0rc11' and version('analitiq-contract-models') == '1.0.0rc11' else 1)" 2>/dev/null \
+  || python3 -m pip install --quiet --disable-pip-version-check --pre "analitiq-validator==1.0.0rc11" "analitiq-contract-models==1.0.0rc11" 1>&2
 
 # Run it — prints the Diagnostics JSON verbatim, exits non-zero on any error finding.
 python3 - "<schema_url>" "<document_path>" <<'PY'
@@ -83,7 +83,7 @@ Do not expect a finding id per rule; match on the message, not on a guessed id.
 |---|---|
 | `contract-model` | Single-document validity against the pinned contract models: field shapes, enums, required/forbidden combinations, and every `ADV-*` cross-field rule (see `connector-builder/references/advisory-rules.md`). Reserved fields (`created_at` / `updated_at`), `transport_ref` resolution, DSN placeholder↔binding pairing, auth-shape requirements, request-param wiring, and response-schema annotations all surface here. |
 | `document` | The document matches no known artifact kind. A connector must declare `kind`, an api-endpoint `operations`, a type-map is a bare JSON array of rules. Also emitted when the file cannot be read. |
-| `type-map-coverage` | Connector docs require a sibling `type-map-read.json` (non-empty array); database connectors additionally require `type-map-write.json`, and API connectors must NOT ship one. A pre-split `type-map.json` sibling is an error with a migration pointer. For API connectors, every endpoint `(native_type, arrow_type)` pair must resolve through the read map — the native is UPPERCASED before matching while the rule's matcher is compared verbatim, so a lowercase `exact` native reports as uncovered — with rendered canonical equal to the endpoint's `arrow_type` (`Object` / `List` are accepted narrowings of `Json`). |
+| `type-map-coverage` | Connector docs require a sibling `type-map-read.json` (non-empty array); database connectors additionally require `type-map-write.json`, and API connectors must NOT ship one. A pre-split `type-map.json` sibling is an error with a migration pointer. For API connectors, every endpoint `(native_type, arrow_type)` pair must resolve through the read map — natives are normalized (trimmed, whitespace-collapsed, uppercased) on both sides for `exact` rules and on the probe only for `regex` — with rendered canonical equal to the endpoint's `arrow_type` (`Object` / `List` are accepted narrowings of `Json`). |
 | `type-map-rule` | **Warnings only**, never errors. Two are rule-quality: a read-direction regex matcher containing lowercase literals (it can never match an uppercased native), and a duplicate (match, matcher) pair. A third is operational — the map's read/write direction had to be guessed because the filename is neither `type-map-read.json` nor `type-map-write.json`; treat that one as a signal you invoked the validator wrongly (pass the matching `--schema-url`), not as a defect in the document. The rule-shape *errors* — templated `exact` render sides, uncompilable or non-ECMA-262 patterns, a `${name}` with no matching capture, a structured native rendering a scalar — are enforced by the contract models and report under `contract-model` (ADV-TMAP-001…007). Also runs against sibling maps during connector validation. |
 | `type-map-write-coverage` | Probes a write map against a representative sample of the canonical vocabulary and reports unrendered families as one grouped **warning** — a dialect may deliberately leave a family to a `render_column_type` override. The warning names the families, so report it verbatim rather than summarizing. |
 | `endpoint-filename` | An endpoint file's basename must equal `{endpoint_id}.json` — the engine resolves an endpoint as `endpoints/{endpoint_id}.json`, so a divergent filename is unreachable. **Error** on divergence; **warning** when the basename can't be compared (no filesystem-anchored path, or a missing/non-string `endpoint_id`). |

@@ -102,7 +102,7 @@ Schemas are generated from — so there is no schema fetch. It runs:
 Run directly (console entry point `analitiq-validate`):
 
 ```bash
-pip install --pre "analitiq-validator==1.0.0rc10" "analitiq-contract-models==1.0.0rc10"
+pip install --pre "analitiq-validator==1.0.0rc11" "analitiq-contract-models==1.0.0rc11"
 analitiq-validate \
   --schema-url https://schemas.analitiq.ai/connector/latest.json \
   --document path/to/connector.json
@@ -115,7 +115,7 @@ a required merge gate outside the plugin runtime.
 The plugin's own schema enum-drift guard lives under `tests/schema_drift/`. It
 reads the enum vocabularies straight from the pinned `analitiq-contract-models`
 package — the same contract the validator enforces — so it runs **offline** with
-no schema fetch: `pip install --pre "analitiq-validator==1.0.0rc10" "analitiq-contract-models==1.0.0rc10"`
+no schema fetch: `pip install --pre "analitiq-validator==1.0.0rc11" "analitiq-contract-models==1.0.0rc11"`
 then `pytest tests/schema_drift/`. Without the package installed the guards skip.
 
 ## Schema host

@@ -42,8 +42,9 @@ so it can never be the transport for an `auth`-phase operation. Declare a
 separate transport for the discovery request itself, which needs only `auth`
 scopes.
 
-> A discovered value cannot currently reach a transport's `base_url` — that
-> field takes a literal string. See `connector-spec-api/spec-transport.md`.
+A discovered value can be templated straight into the data transport's
+`base_url` (see `connector-spec-api/spec-transport.md`), which is the usual
+shape for a per-tenant host.
 
 ## The failure this prevents
 

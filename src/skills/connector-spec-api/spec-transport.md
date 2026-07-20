@@ -65,24 +65,34 @@ and factor common headers into `transport_defaults`.
 The `auth` transport overrides the inherited Bearer `Authorization` with
 Basic auth.
 
-## `base_url` must be a literal string (current limitation)
+## Templated `base_url`
 
-`base_url` is typed as a plain string. A value expression — `{"template":
-"https://${connection.parameters.region}.example.com"}` or a `ref` — is
-**rejected**, so a host that varies per connection cannot be expressed today.
-That rules out:
+`base_url` takes either a literal string or a value expression resolving to
+one. The expression is resolved once, at connection-materialization time, so a
+host that varies per connection is expressed directly on the transport.
 
-- per-tenant hosts discovered after auth (`connection.discovered.api_domain`),
-- region / subdomain hosts taken as user input,
-- any provider whose data origin is not knowable at authoring time.
+A region or subdomain the user supplies before auth:
 
-This is a **contract gap, not a design rule**: the runtime resolver already
-handles an expression here, and sibling fields on the same transport (`headers`,
-the rate limit's `time_window_seconds`) do accept expressions. Until the
-contract catches up, a multi-tenant provider cannot be authored — surface that
-as a blocker rather than working around it. Nor can you smuggle the host into
-an operation's `request.path` as an absolute URL: `endpoint_id` is derived from
-that path, so `endpoint-id-locator` rejects it at authoring time.
+```json
+"base_url": { "template": "https://${connection.parameters.region}.example.com" }
+```
+
+The matching `region` input must be declared in `connection_contract.inputs`
+with `phase: "pre_auth"` so the template resolves before auth.
+
+A per-tenant host discovered *after* auth:
+
+```json
+"base_url": { "template": "https://${connection.discovered.api_domain}.example.com/api/v1" }
+```
+
+That value comes from a `post_auth_outputs` entry, so the transport is only
+usable once post-auth discovery has run — it cannot serve an `auth`-phase
+operation. Declare a separate transport for the discovery request itself (see
+`connector-builder/references/lifecycle-phases.md`).
+
+Do not put the host in an operation's `request.path` as an absolute URL:
+`endpoint_id` is derived from that path, so `endpoint-id-locator` rejects it.
 
 ## Header resolution order
 

@@ -2,10 +2,8 @@
 
 The `examples/` trees are what creator agents read as authoring archetypes, so a
 stale example is worse than no example — it teaches a shape the validator
-rejects. (All three API examples were silently invalid before this guard: a
-`response.records` ref over a non-array node, a lowercase `exact` read-map
-native that can never match an uppercased probe, and a templated `base_url` the
-contract types as a plain string.)
+rejects. (All three API examples were silently invalid when this guard was
+added, including a `response.records` ref over a non-array node.)
 
 Examples are laid out for readability (`<name>/<name>.example.json` beside its
 type maps and `endpoints/`), not as an on-disk connector, so each is staged into

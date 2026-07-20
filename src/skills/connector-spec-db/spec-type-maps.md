@@ -56,50 +56,33 @@ readability when the pattern would otherwise look ambiguous.
 
 ## Uppercase rule (read maps)
 
-**Author every read-map matcher uppercase**, with whitespace exactly as the
-system reports it. That is the safe intersection of two slightly different
-normalizations:
+Read-side normalization — trim, collapse internal whitespace runs, uppercase —
+is applied differently to the two rule kinds, and that difference is the whole
+rule:
 
-- **The validator** uppercases only the *incoming* native and compares your
-  matcher **verbatim**, with no whitespace handling.
-- **The runtime** normalizes the incoming native the same way (plus trimming and
-  collapsing internal whitespace) and additionally normalizes an **`exact`**
-  rule's `native`. A **`regex`** pattern is used verbatim by both — deliberately,
-  since uppercasing a pattern would turn `\d` into `\D`.
-
-So the runtime is more forgiving for `exact` rules only; for `regex` rules the
-two behave identically. The validator is the gate you must satisfy either way.
-Concretely:
-
-- **`exact` natives must be authored uppercase.** `{"match": "exact", "native":
-  "varchar"}` would resolve fine at runtime, but the validator's coverage check
-  cannot match it against the `VARCHAR` probe and reports the native as
-  uncovered — an **error** on the owning connector. Author `VARCHAR`.
-- **Author `regex` patterns uppercase** (`^VARCHAR\(\d+\)$`, not
-  `^varchar\(\d+\)$`). A lowercase literal can never match the uppercased
-  probe; the validator warns on this one.
+- **`exact` rules are normalized symmetrically.** The rule's `native` is
+  normalized at map-build time and the probed native at lookup, so
+  `{"native": "varchar"}` and `{"native": "CHARACTER  VARYING"}` both match.
+  Case and spacing genuinely don't matter here — SQL type names are
+  case-insensitive and drivers report inconsistent casing, so matching verbatim
+  would be a silent-miss footgun.
+- **`regex` rules normalize the probe only.** The pattern is used exactly as
+  authored, deliberately: uppercasing it would corrupt classes like `\d` into
+  `\D`. So **literals inside a pattern must be uppercase** —
+  `^VARCHAR\(\d+\)$`, never `^varchar\(\d+\)$`, which can never match. The
+  validator warns on this one.
 - **Named capture group names stay lowercase** (`(?<precision>…)`) — only the
   matched text is uppercased, not the group names.
-- **Don't rely on whitespace collapsing.** The runtime collapses internal runs,
-  the validator does not. Write the native with single spaces exactly as
-  documented (`TIMESTAMP WITHOUT TIME ZONE`), or use a regex tolerant of the
-  variation.
 
-> **`exact` natives are the unguarded half.** The lowercase-`regex` warning
-> above fires on either connector kind. Coverage — the check that catches a
-> lowercase `exact` native — probes only on an **API** connector, driven by the
-> `native_type` annotations in its endpoint files. A **database** connector has
-> no endpoints to drive that walk, so its `exact` natives are never probed: a
-> read map with every `exact` native lowercased validates with zero findings.
-> The runtime tolerates it (it normalizes both sides), making this a consistency
-> convention on a DB connector rather than a correctness one — but author
-> uppercase regardless, since that is the one spelling that works under both.
+Uppercase remains the house style for `exact` natives too — it reads
+consistently against the regex rules that sit beside them — but it is a
+convention there, not a correctness requirement.
 
 Write-map matchers run against PascalCase canonical strings **case-preserving**
-(the Arrow vocabulary is mixed-case), so case is significant there too. How
-loudly a mistake fails depends on the rule kind, the same split as the read
-side: a lowercase **`exact`** canonical is rejected outright (it fails the Arrow
-type pattern), while a lowercase **`regex`** canonical is not checked at all —
+(the Arrow vocabulary is mixed-case), so case *is* significant there. How
+loudly a mistake fails depends on the rule kind: a lowercase **`exact`**
+canonical is rejected outright (it fails the Arrow type pattern), while a
+lowercase **`regex`** canonical is not checked at all —
 `{"match": "regex", "canonical": "^utf8$"}` validates with zero findings and
 simply never fires.
 

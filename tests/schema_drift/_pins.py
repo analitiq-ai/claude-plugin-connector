@@ -1,6 +1,6 @@
 """The single place the drift suite states its pinned contract version.
 
-The `1.0.0rc10` pin is necessarily repeated outside the test suite (the CI
+The `1.0.0rc11` pin is necessarily repeated outside the test suite (the CI
 workflow's install step, the README's install command, the validator agent's
 self-install snippet) because those are different runtimes. Inside the suite it
 is stated **once**, here, and imported — per `.claude/rules/no-drift-surfaces.md`
@@ -20,7 +20,7 @@ import pytest
 
 #: Keep in lockstep with `.github/workflows/tests.yml`, `README.md`, and
 #: `src/agents/connector-schema-validator.md`.
-PINNED_VERSION = "1.0.0rc10"
+PINNED_VERSION = "1.0.0rc11"
 
 INSTALL_HINT = (
     'run `pip install --pre "analitiq-validator=={v}" '

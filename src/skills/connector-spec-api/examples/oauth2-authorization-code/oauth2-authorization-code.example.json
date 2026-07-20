@@ -3,7 +3,7 @@
   "kind": "api",
   "connector_id": "oauth2-auth-code-example",
   "display_name": "OAuth2 Authorization Code Example",
-  "description": "Reference connector demonstrating OAuth2 authorization code with multi-origin transports and post-auth account discovery.",
+  "description": "Reference connector demonstrating OAuth2 authorization code with multi-origin transports and a post-auth discovered per-tenant host.",
   "tags": [
     "example",
     "api",
@@ -46,11 +46,8 @@
     },
     "api": {
       "transport_type": "http",
-      "base_url": "https://api.example.com/v1",
-      "headers": {
-        "X-Account-Id": {
-          "ref": "connection.discovered.account_id"
-        }
+      "base_url": {
+        "template": "https://${connection.discovered.api_domain}.example.com/api/v1"
       }
     }
   },
@@ -103,11 +100,11 @@
       }
     },
     "post_auth_outputs": {
-      "account_id": {
+      "api_domain": {
         "mode": "auto_discovery",
         "storage": "connection.discovered",
         "type": "string",
-        "value_path": "account_id",
+        "value_path": "company_domain",
         "discovery_request": {
           "transport_ref": "discovery",
           "method": "GET",
@@ -116,7 +113,7 @@
       }
     },
     "required_for_activation": [
-      "connection.discovered.account_id"
+      "connection.discovered.api_domain"
     ]
   }
 }

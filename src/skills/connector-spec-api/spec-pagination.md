@@ -17,16 +17,6 @@ has its own definition in
 This page covers only the authoring decisions the schema can't express —
 which strategy fits a provider, and how to wire it.
 
-> **Validating is not the same as executing.** The contract defines all five
-> strategies, but engine support has historically lagged the contract, and the
-> gaps are per-strategy — one may be unimplemented, another may read a
-> differently-named field than the one you authored. A pagination block can
-> therefore validate clean and still not paginate correctly at read time.
-> `offset` and `page` are the best-exercised; for anything else, confirm
-> against the engine version you are targeting before shipping, and treat a
-> mismatch as a gap to raise rather than something to work around in the
-> connector. This is a version-skew problem, not a reason to prefer a worse-fit
-> strategy — pick what the provider actually supports, then verify.
 
 ## Pagination is wired in three places
 
