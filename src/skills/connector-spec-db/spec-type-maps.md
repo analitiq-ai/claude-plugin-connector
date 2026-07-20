@@ -290,9 +290,15 @@ parens for parameterized scalars (`Decimal128(p, s)`,
 `FixedSizeBinary(16)`), and angle brackets for nested types
 (`List<Int64>`, `Struct<id:Int64, name:Utf8>`, `Map<Utf8, Int64>`).
 
-The full vocabulary is owned by the pinned contract models —
-`ARROW_TYPE_PATTERN` in `analitiq.contracts.endpoints` is the authoritative
-alternation, and the validator matches every canonical against it.
+The full vocabulary is published as
+[`https://schemas.analitiq.ai/canonical-types.json`](https://schemas.analitiq.ai/canonical-types.json)
+— Analitiq's profile of the Arrow logical type system, and the readable
+reference when you need to check a family's exact spelling. Note the flat path:
+unlike the connector and endpoint schemas there is no `/latest.json` variant.
+
+Validation itself never fetches it. The enforced form is `ARROW_TYPE_PATTERN` in
+`analitiq.contracts.endpoints`, generated from the same source, which the
+validator matches every canonical against offline.
 
 For parameterized canonicals whose database native carries an implicit
 default, encode the default explicitly:

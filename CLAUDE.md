@@ -105,11 +105,11 @@ The published schema is the single source of truth. **Never restate what it defi
 - **Fetch-once, pass-down** — the orchestrator hands the live contract schema URLs to the researcher (the mission spec) and the creators read the same schemas as vocabulary, so authoring and validation agree on one contract.
 - **Drift-check CI** for anything that must stay duplicated as decision logic (e.g. the `enum-mappers` that map provider facts onto schema enums): `tests/schema_drift/test_schema_drift.py` reads the enum sets from the pinned `analitiq-contract-models` package (offline, the same models the validator enforces) and fails the build if the plugin's enum targets diverge.
 
-Enum lists that appear in this file and in skill prose are **illustrative**; the authoritative definition is always the live schema (or, for canonical Arrow types, the published `analitiq-contract-models` package). Craft that the schema never defined (e.g. the `ssl_mode` vocabulary, the driver-selection decision order, datetime naive/tz judgment) is not drift-exposed and stays.
+Enum lists that appear in this file and in skill prose are **illustrative**; the authoritative definition is always the live schema (or, for canonical Arrow types, the published `analitiq-contract-models` package and the live `canonical-types.json` schema). Craft that the schema never defined (e.g. the `ssl_mode` vocabulary, the driver-selection decision order, datetime naive/tz judgment) is not drift-exposed and stays.
 
 ## Canonical Types
 
-Canonical types are Apache Arrow logical types in PascalCase (e.g. `Int32`, `Int64`, `Float64`, `Utf8`, `Boolean`, `Binary`, `Date32`, `Time64`, `Timestamp`, `Decimal128`, `List`, `Struct`, `Map`). The vocabulary is owned by the published `analitiq-contract-models` package — `ARROW_TYPE_PATTERN` in `analitiq.contracts.endpoints` is the authoritative alternation. Authoring guidance: `src/skills/connector-spec-db/spec-type-maps.md`.
+Canonical types are Apache Arrow logical types in PascalCase (e.g. `Int32`, `Int64`, `Float64`, `Utf8`, `Boolean`, `Binary`, `Date32`, `Time64`, `Timestamp`, `Decimal128`, `List`, `Struct`, `Map`). The vocabulary is published at `https://schemas.analitiq.ai/canonical-types.json` (a flat path — there is no `/latest.json` variant) and enforced offline from the same source as `ARROW_TYPE_PATTERN` in `analitiq.contracts.endpoints`. Authoring guidance: `src/skills/connector-spec-db/spec-type-maps.md`.
 
 ## Conventions
 
