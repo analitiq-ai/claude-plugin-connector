@@ -80,15 +80,17 @@ Separately, the plugins **self-install a published release at runtime** — end
 users have no checkout, so this must be a real PyPI version:
 
 The pin is currently **`analitiq-validator==1.0.0rc12`** (which resolves
-`analitiq-contract-models==1.0.0rc12`). Five places state it and must move
-together:
+`analitiq-contract-models==1.0.0rc12`). Four places state it, each pinned by a
+test so none can rot silently:
 
 - `VALIDATOR_PIN` in `plugins/analitiq-pipeline-builder/scripts/_analitiq.py`
 - the self-install line in
   `plugins/analitiq-connector-builder/agents/connector-schema-validator.md`
   (three occurrences: the comment, the version probe, and the install command)
-- `tests/connector_builder/test_schema_drift.py`'s docstring and skip message
+- `PINNED_VERSION` in `tests/connector_builder/_pins.py`
 - this section
+
+The drift suite itself states no version — it imports `_pins`.
 
 `test_validator_pin_matches_the_package_this_repo_ships` requires the pin to be
 **at or behind** `packages/validator/pyproject.toml`. Not equal: release-please

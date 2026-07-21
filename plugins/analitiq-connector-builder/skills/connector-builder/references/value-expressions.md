@@ -23,7 +23,7 @@ shapes is allowed.
 Every `ref` and every `${...}` interpolation inside a `template` must begin
 with one of the contract's resolution scopes. The authoritative set is
 `RESOLUTION_SCOPES` in `analitiq.contracts.value_expression` (pinned by
-`tests/schema_drift/`); the table below is the authoring guide to the ones a
+`tests/connector_builder/`); the table below is the authoring guide to the ones a
 connector or endpoint actually writes.
 
 | Scope | Phase available | Holds |

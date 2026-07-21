@@ -305,7 +305,7 @@ def test_bare_marker_arrow_types_match_schema() -> None:
         schema_set,
         EXPECTED_BARE_MARKER_ARROW_TYPES,
         "update CLAUDE.md and the container-shape guidance in "
-        "src/skills/connector-spec-db/spec-type-maps.md.",
+        "plugins/analitiq-connector-builder/skills/connector-spec-db/spec-type-maps.md.",
     )
 
 
@@ -335,7 +335,7 @@ def test_write_coverage_probe_gaps_are_documented() -> None:
     assert probes, (
         "_WRITE_VOCABULARY_PROBES not found — the validator was restructured; "
         "recheck the write-coverage guidance in "
-        "src/skills/connector-spec-db/spec-type-maps.md."
+        "plugins/analitiq-connector-builder/skills/connector-spec-db/spec-type-maps.md."
     )
 
     # Families spec-type-maps.md tells authors to verify by hand.
@@ -350,7 +350,7 @@ def test_write_coverage_probe_gaps_are_documented() -> None:
     )
     assert not now_probed, (
         f"write-coverage now probes {now_probed}, which "
-        "src/skills/connector-spec-db/spec-type-maps.md still lists as unprobed. "
+        "plugins/analitiq-connector-builder/skills/connector-spec-db/spec-type-maps.md still lists as unprobed. "
         "Drop them from that list."
     )
 
@@ -370,7 +370,7 @@ def test_write_coverage_probe_gaps_are_documented() -> None:
     assert not stopped_probing, (
         f"write-coverage no longer probes {stopped_probing}, so authors get no "
         "warning for those families. Add them to the by-hand list in "
-        "src/skills/connector-spec-db/spec-type-maps.md."
+        "plugins/analitiq-connector-builder/skills/connector-spec-db/spec-type-maps.md."
     )
 
 

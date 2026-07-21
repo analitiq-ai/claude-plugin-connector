@@ -161,7 +161,7 @@ def _model_tree(root: Any) -> set[type[BaseModel]]:
             # leak came through. Walking only `model_fields` would let a
             # computed_field returning a private model reach `$defs` unseen.
             for computed in node.model_computed_fields.values():
-                walk(getattr(computed, "return_type", None))
+                walk(computed.return_type)
             return
         for arg in typing.get_args(node):
             walk(arg)

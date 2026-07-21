@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from packaging.version import Version
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "plugins" / "analitiq-pipeline-builder"
@@ -185,21 +186,6 @@ def test_active_pipeline_requires_a_stream(tmp_path):
 
 
 
-def _le(a: str, b: str) -> bool:
-    """`a <= b` over PEP 440-ish versions, without adding a dependency.
-
-    Compares numeric release segments first, then treats a missing pre-release
-    suffix as newer (1.0.0 > 1.0.0rc1).
-    """
-    def key(v: str):
-        m = re.match(r"^(\d+(?:\.\d+)*)(?:(a|b|rc)(\d+))?$", v)
-        assert m, f"unparseable version {v!r}"
-        release = tuple(int(n) for n in m.group(1).split("."))
-        # No suffix sorts last among equal releases.
-        pre = (1, "", 0) if m.group(2) is None else (0, m.group(2), int(m.group(3)))
-        return (release, pre)
-    return key(a) <= key(b)
-
 
 # --- the pin itself --------------------------------------------------------
 
@@ -233,7 +219,7 @@ def test_validator_pin_matches_the_package_this_repo_ships():
     # Requiring equality would make the Release PR permanently red and
     # unmergeable. The dangerous direction is the other one - a pin AHEAD of
     # what this repo has shipped points at something users cannot install.
-    assert _le(pin_version, shipped.group(1)), (
+    assert Version(pin_version) <= Version(shipped.group(1)), (
         f"_analitiq.VALIDATOR_PIN is {VALIDATOR_PIN!r}, ahead of the "
         f"{shipped.group(1)} this repo ships. Agents would try to install a "
         "version that is not published.")
@@ -259,27 +245,11 @@ def test_suite_exercises_in_repo_source_not_an_installed_wheel():
     by the move: the contract is now SOURCE here, so "the installed version
     matches the pin" is the wrong invariant — nothing should be installed.
 
-    This guards a failure mode that is silent and easy to reintroduce. The wheel
-    ships a generated `analitiq/contracts/__init__.py`, making it a regular
-    package; the in-repo tree deliberately has none, making it a namespace
-    portion. A regular package always wins, so a stray
-    `pip install analitiq-contract-models` would shadow the source no matter
-    what sys.path says, and every test here would quietly grade the wrong code.
+    The assertion itself lives in `tests/connector_builder/_pins.py` so the two
+    suites share one implementation; duplicating it here is exactly the drift
+    surface `.claude/rules/no-drift-surfaces.md` forbids.
     """
-    import analitiq.contracts as contracts
-    import analitiq.validator as validator
+    sys.path.insert(0, str(REPO_ROOT / "tests" / "connector_builder"))
+    from _pins import assert_pinned_versions
 
-    src = REPO_ROOT / "packages"
-    for mod in (contracts, validator):
-        # EVERY portion, not just __path__[0]. A namespace package can span
-        # several roots; an editable install or a .pth entry appends a second
-        # one under site-packages while index 0 still points at source, so
-        # checking only the first would pass while submodules resolved from the
-        # wheel.
-        origins = ([Path(mod.__file__).resolve()] if mod.__file__
-                   else [Path(p).resolve() for p in mod.__path__])
-        stray = [o for o in origins if not o.is_relative_to(src)]
-        assert not stray, (
-            f"{mod.__name__} resolves partly outside {src}: {stray}. An installed "
-            "analitiq-contract-models / analitiq-validator is shadowing the "
-            "in-repo source — uninstall it (see requirements-dev.txt).")
+    assert_pinned_versions()

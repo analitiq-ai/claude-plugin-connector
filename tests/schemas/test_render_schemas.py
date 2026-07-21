@@ -20,9 +20,17 @@ from pydantic import BaseModel, RootModel, TypeAdapter, computed_field
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "tests" / "connector_builder"))
 
-render_schemas = pytest.importorskip(
-    "render_schemas", reason="requires the in-repo contract source on sys.path")
+# Skipping here would defeat the point: this module exists because
+# `render_schemas.py check` alone would stay green if the guard were deleted, so
+# these tests going quietly absent is the same failure one level up. CI sets
+# DRIFT_REQUIRE_CONTRACT_MODELS=1, which turns the skip into a hard failure.
+from _pins import require_contract_models  # noqa: E402
+
+require_contract_models("analitiq.contracts", "render_schemas")
+
+import render_schemas  # noqa: E402
 
 Resource = render_schemas.Resource
 _model_tree = render_schemas._model_tree

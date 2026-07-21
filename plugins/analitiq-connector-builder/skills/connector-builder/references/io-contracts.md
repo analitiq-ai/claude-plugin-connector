@@ -260,7 +260,7 @@ access and may not guess field types).
         "properties": {
           "validator": {
             "type": "string",
-            "description": "Validator id. Owned by `analitiq.validator.VALIDATOR_IDS` and pinned by tests/schema_drift/. Most rules — including every ADV-* cross-field rule — report under `contract-model`; the rest cover cross-file relationships the contract models cannot see.",
+            "description": "Validator id. Owned by `analitiq.validator.VALIDATOR_IDS` and pinned by tests/connector_builder/. Most rules — including every ADV-* cross-field rule — report under `contract-model`; the rest cover cross-file relationships the contract models cannot see.",
             "enum": [
               "contract-model",
               "document",

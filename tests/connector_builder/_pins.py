@@ -33,8 +33,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGES_ROOT = REPO_ROOT / "packages"
 
 #: What this repo ships. The source of truth is
-#: `packages/contract-models/pyproject.toml`; this is the human-facing copy and
-#: is checked against it by `test_pinned_version_matches_the_shipped_package`.
+#: `packages/contract-models/pyproject.toml`; this is the human-facing copy,
+#: pinned to it by `assert_pinned_version_matches_pyproject()` below so it
+#: cannot rot silently.
 PINNED_VERSION = "1.0.0rc12"
 
 INSTALL_HINT = (
@@ -86,4 +87,23 @@ def assert_pinned_versions() -> None:
         f"contract modules resolved outside {PACKAGES_ROOT}: {stray}. An "
         "installed analitiq-contract-models / analitiq-validator is shadowing "
         f"the in-repo source, so these guards would prove nothing — {INSTALL_HINT}."
+    )
+
+
+def assert_pinned_version_matches_pyproject() -> None:
+    """`PINNED_VERSION` restates a value pyproject.toml owns — pin the copy.
+
+    Per `.claude/rules/no-drift-surfaces.md` an unavoidable restatement of a
+    contract value must be pinned by a test, or it is a defect rather than
+    documentation.
+    """
+    import re
+
+    pyproject = (PACKAGES_ROOT / "contract-models" / "pyproject.toml").read_text()
+    project = pyproject.split("[project]", 1)[-1].split("\n[", 1)[0]
+    match = re.search(r'^version\s*=\s*"([^"]+)"', project, re.M)
+    assert match, "packages/contract-models/pyproject.toml has no [project] version"
+    assert PINNED_VERSION == match.group(1), (
+        f"_pins.PINNED_VERSION is {PINNED_VERSION!r} but "
+        f"packages/contract-models ships {match.group(1)!r}"
     )

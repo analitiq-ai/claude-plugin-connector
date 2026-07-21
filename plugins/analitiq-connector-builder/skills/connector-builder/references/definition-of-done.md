@@ -3,7 +3,7 @@
 A self-check the creator agents run against their own output **before
 returning `CreatorOutput`**. It is a gate, not a substitute for the
 `connector-schema-validator`: the validator owns structural and cross-field
-conformance (see `src/agents/connector-schema-validator.md` for what it does
+conformance (see `plugins/analitiq-connector-builder/agents/connector-schema-validator.md` for what it does
 and does not check). This checklist deliberately covers **only what the
 validator cannot enforce** — classification correctness, completeness against
 the provider's documentation, the both-directions principle, driver-choice

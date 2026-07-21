@@ -65,19 +65,19 @@ jobs:
           DRIFT_REQUIRE_CONTRACT_MODELS: '1'
         run: pytest -v -rs
       - name: Check generated prose blocks match the pinned contract
-        # Gated on the INSTALL, not on `success()`. test_generated_blocks_in_sync
-        # computes the same predicate, so on a stale block pytest fails first and
-        # a plain `if: success()` would skip this step in exactly the runs it
-        # exists to explain. `success()` is also false when any EARLIER gate
-        # failed, which would silently skip the two gates below. Keying on the
-        # install step keeps each gate independent while preserving the one
-        # carve-out that matters: if the install failed, this script would
-        # re-enter its dependency bootstrap and bury the real error.
+        # Gated on the INSTALL, and `!cancelled()` is load-bearing: an `if:`
+        # containing no status-check function gets an implicit `success() &&`
+        # prepended, which would skip this step whenever ANY earlier step failed
+        # - including the test step, i.e. exactly the runs it exists to explain.
+        # test_generated_blocks_in_sync computes the same predicate, so on a
+        # stale block pytest fails first and this step is what prints the diff.
+        # The one carve-out worth keeping: if the install failed, this script
+        # would re-enter its dependency bootstrap and bury the real error.
         #
         # The env vars stop that bootstrap. Without them the generator installs
         # the PUBLISHED wheel into a venv and re-execs, grading the docs against
         # the last release rather than this PR's source.
-        if: steps.install.conclusion == 'success'
+        if: ${{ !cancelled() && steps.install.conclusion == 'success' }}
         env:
           ANALITIQ_VALIDATOR_FROM_SOURCE: '1'
           PYTHONPATH: packages/contract-models/src:packages/validator/src
@@ -89,7 +89,7 @@ jobs:
       - name: Check the generated advisory reference is current
         # references/advisory-rules.md is rendered from the contract's advisory
         # registry; stale prose here misleads every creator agent that reads it.
-        if: steps.install.conclusion == 'success'
+        if: ${{ !cancelled() && steps.install.conclusion == 'success' }}
         run: python3 scripts/render_advisory.py check
       - name: Package build guards
         # These are what keep the private runtime out of the public wheels:
@@ -98,7 +98,7 @@ jobs:
         # generated __init__ / PEP 420 layout. The release workflows run them
         # too, but only at tag time - by then a leak is already merged. This is
         # the PR-time gate (it was validator-ci.yml in the infra repo).
-        if: steps.install.conclusion == 'success'
+        if: ${{ !cancelled() && steps.install.conclusion == 'success' }}
         run: |
           python3 packages/contract-models/scripts/build.py --check
           python3 packages/validator/scripts/build.py --check
@@ -107,5 +107,5 @@ jobs:
         # gate the two drift silently: a model change that never reaches the
         # published JSON is invisible until something downstream breaks.
         # Same reasoning as the step above, hence the same condition.
-        if: steps.install.conclusion == 'success'
+        if: ${{ !cancelled() && steps.install.conclusion == 'success' }}
         run: python3 scripts/render_schemas.py check
