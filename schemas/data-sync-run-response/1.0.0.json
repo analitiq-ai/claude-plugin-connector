@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "PipelineRunTriggeredData": {
+      "additionalProperties": false,
+      "description": "`data` payload of a run trigger \u2014 the Batch job was submitted.",
+      "properties": {
+        "invocation_id": {
+          "description": "Unique identifier of this run \u2014 joins run history rows and real-time status messages.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Invocation Id",
+          "type": "string"
+        },
+        "job_id": {
+          "description": "AWS Batch job ID of the submitted run.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "job_name": {
+          "description": "AWS Batch job name (`{org_id}__{pipeline_id}`).",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Job Name",
+          "type": "string"
+        },
+        "pipeline_id": {
+          "description": "Pipeline the run was triggered for.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Pipeline Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "job_name",
+        "pipeline_id",
+        "invocation_id"
+      ],
+      "title": "PipelineRunTriggeredData",
+      "type": "object"
+    }
+  },
+  "$id": "https://schemas.analitiq.ai/data-sync-run-response/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "PUBLIC JSON Schema contract for the SUCCESS response body of the Data Sync API POST /pipelines/{pipeline_id}/run \u2014 the canonical `{success, message?, data}` envelope where `data` is the submitted run (job_id, job_name, pipeline_id, invocation_id), always present on a successful trigger. Error responses use the canonical error envelope and are documented in the Data Sync OpenAPI rather than here. Absent optional fields are omitted from the wire, never null. Served at schemas.<domain> for external API-key consumers. Source of truth: k2m.models.pipelines.data_sync_api.PipelineRunResponse.",
+  "properties": {
+    "data": {
+      "$ref": "#/$defs/PipelineRunTriggeredData",
+      "description": "The submitted run \u2014 always present on a successful trigger."
+    },
+    "message": {
+      "description": "Human-readable outcome.",
+      "title": "Message",
+      "type": "string"
+    },
+    "success": {
+      "const": true,
+      "description": "Always true on this 2xx body. Error responses use the canonical `{success: false, message, ...}` error envelope.",
+      "title": "Success",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "success",
+    "data"
+  ],
+  "title": "Analitiq Data Sync API \u2014 Pipeline Run Response",
+  "type": "object",
+  "version": "1.0.0"
+}

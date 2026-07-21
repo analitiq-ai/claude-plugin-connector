@@ -1,0 +1,8 @@
+{
+  "source": "c1",
+  "destinations": [
+    "d1",
+    "d2",
+    "d1"
+  ]
+}

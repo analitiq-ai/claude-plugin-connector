@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connector/latest.json",
+  "connector_id": "sevdesk",
+  "kind": "api",
+  "display_name": "sevdesk",
+  "description": "Cloud-based accounting and invoicing platform for small businesses and freelancers in the DACH region.",
+  "documentation_url": "https://api.sevdesk.de/",
+  "version": "1.2.1",
+  "default_transport": "ghost",
+  "transports": {
+    "api": {
+      "transport_type": "http",
+      "base_url": "https://my.sevdesk.de/api/v1",
+      "headers": {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Authorization": {
+          "template": "${secrets.api_token}"
+        }
+      },
+      "timeout_seconds": 30
+    },
+    "api2": {
+      "transport_type": "http",
+      "base_url": "https://my.sevdesk.de/api/v1",
+      "headers": {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Authorization": {
+          "template": "${secrets.api_token}"
+        }
+      },
+      "timeout_seconds": 30
+    }
+  },
+  "auth": {
+    "type": "api_key"
+  },
+  "connection_contract": {
+    "inputs": {
+      "api_token": {
+        "source": "user",
+        "phase": "pre_auth",
+        "storage": "secrets",
+        "type": "string",
+        "required": true,
+        "secret": true,
+        "ui": {
+          "label": "API Token",
+          "widget": "password",
+          "help_text": "32-character hexadecimal token from my.sevdesk.de under Extensions > API (reveal with your account password)."
+        }
+      }
+    },
+    "required_for_activation": [
+      "secrets.api_token"
+    ]
+  }
+}

@@ -1,0 +1,268 @@
+{
+  "$defs": {
+    "Column": {
+      "additionalProperties": false,
+      "description": "Database column metadata.\n\nSpec: the published Analitiq schema documentation\n\u00a7Native and Arrow Types.",
+      "patternProperties": {
+        "^x-": {}
+      },
+      "properties": {
+        "arrow_type": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Za-z0-9]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Apache Arrow canonical transport type in PascalCase.",
+          "title": "Arrow Type"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment"
+        },
+        "default": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "native_type": {
+          "description": "Provider-native database type label. Use 'unknown' when unavailable.",
+          "minLength": 1,
+          "title": "Native Type",
+          "type": "string"
+        },
+        "nullable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nullable"
+        },
+        "ordinal_position": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ordinal Position"
+        }
+      },
+      "required": [
+        "name",
+        "native_type"
+      ],
+      "title": "Column",
+      "type": "object"
+    },
+    "DatabaseObject": {
+      "additionalProperties": false,
+      "description": "Provider-native database object identity.\n\nIdentifier strings are stored verbatim from introspection \u2014 no\ncase-folding, quoting, or normalization. Spec:\nthe published Analitiq schema documentation.",
+      "patternProperties": {
+        "^x-": {}
+      },
+      "properties": {
+        "catalog": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog"
+        },
+        "name": {
+          "description": "Provider-native object name.",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "object_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Open-string descriptive type (table, view, materialized_view, external_table, collection, \u2026). Read execution must not branch on it.",
+          "title": "Object Type"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "DatabaseObject",
+      "type": "object"
+    }
+  },
+  "$id": "https://schemas.analitiq.ai/database-endpoint/2.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Public JSON Schema contract for database endpoint documents (owned by connectors with `kind: 'database'`) \u2014 authored shape only. Endpoint documents have no top-level `kind` field; the owning connector's `kind` selects this schema. Reserved server-managed fields are forbidden in the authored shape. Source of truth: k2m.models.endpoints.DatabaseEndpointDoc (Pydantic).",
+  "patternProperties": {
+    "^x-": {}
+  },
+  "properties": {
+    "$schema": {
+      "const": "https://schemas.analitiq.ai/database-endpoint/latest.json",
+      "description": "Per-kind schema URL declared by every persisted database endpoint document. Per spec \u00a7Schema URLs.",
+      "title": "$Schema",
+      "type": "string"
+    },
+    "alias": {
+      "description": "Stable endpoint alias within the owner. Per the published Analitiq schema documentation \u00a7Alias.",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "title": "Alias",
+      "type": "string"
+    },
+    "columns": {
+      "items": {
+        "$ref": "#/$defs/Column"
+      },
+      "minItems": 1,
+      "title": "Columns",
+      "type": "array"
+    },
+    "database_object": {
+      "$ref": "#/$defs/DatabaseObject"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "User-facing summary (\u22642000 chars).",
+      "title": "Description"
+    },
+    "display_name": {
+      "anyOf": [
+        {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "User-facing label (1-120 chars trimmed).",
+      "title": "Display Name"
+    },
+    "documentation_url": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional provider documentation URL (\u22642048 chars).",
+      "format": "uri",
+      "title": "Documentation Url"
+    },
+    "primary_keys": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Primary Keys"
+    },
+    "tags": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Grouping/search labels (max 50 unique trimmed strings of 1-64 chars).",
+      "title": "Tags"
+    }
+  },
+  "required": [
+    "alias",
+    "$schema",
+    "database_object",
+    "columns"
+  ],
+  "title": "Analitiq Database Endpoint",
+  "type": "object",
+  "version": "2.0.0"
+}

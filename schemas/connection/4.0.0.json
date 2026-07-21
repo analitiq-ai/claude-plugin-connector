@@ -1,0 +1,116 @@
+{
+  "$id": "https://schemas.analitiq.ai/connection/4.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Public JSON Schema contract for Analitiq connection documents \u2014 the authored shape used in source control, PR review, and author-time tooling. Server-managed fields (connection_id, version, org_id, connector_id, connector_version, auth_state, created_at, updated_at) are forbidden in the authored shape and assigned by the connection service on ingest. The persisted-record shape is internal and not published. Source of truth: k2m.models.connection.ConnectionInput (Pydantic).",
+  "properties": {
+    "$schema": {
+      "anyOf": [
+        {
+          "const": "https://schemas.analitiq.ai/connection/latest.json",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Connection schema URL (optional in API payloads, required for standalone files).",
+      "title": "$Schema"
+    },
+    "alias": {
+      "description": "Stable connection slug; matches '^[a-z0-9][a-z0-9_-]*$'. Immutable and unique within the owning organization.",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "title": "Alias",
+      "type": "string"
+    },
+    "connector_alias": {
+      "description": "Stable alias of the connector this connection configures.",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "title": "Connector Alias",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "User-facing summary.",
+      "title": "Description"
+    },
+    "discovered": {
+      "additionalProperties": true,
+      "description": "Durable provider-discovered non-secret values keyed by post-auth output key. Spec: \u00a7Post-Auth Outputs.",
+      "title": "Discovered",
+      "type": "object"
+    },
+    "display_name": {
+      "anyOf": [
+        {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "User-facing connection label (1-120 chars, no leading/trailing whitespace).",
+      "title": "Display Name"
+    },
+    "parameters": {
+      "additionalProperties": true,
+      "description": "Non-secret submitted values keyed by connection-contract input key. Optional `ssl_mode` must be one of `disable, allow, prefer, require, verify-ca, verify-full` per the database-endpoint TLS contract.",
+      "title": "Parameters",
+      "type": "object"
+    },
+    "secret_refs": {
+      "additionalProperties": {
+        "pattern": "^(?:(?:connections|secrets)/[A-Za-z0-9_./\\-]+|ssm:/[A-Za-z0-9_./\\-]+|arn:aws:secretsmanager:[A-Za-z0-9\\-]+:\\d+:secret:[A-Za-z0-9/_\\-+=.@]+|arn:aws:ssm:[A-Za-z0-9\\-]+:\\d+:parameter/[A-Za-z0-9_./\\-]+|s3://[A-Za-z0-9._\\-]+/[A-Za-z0-9_./\\-]+)$",
+        "type": "string"
+      },
+      "description": "Opaque secret-store pointers keyed by connection-contract input or post-auth output key. Values must match a known reference scheme: `connections/<path>`, `secrets/<path>`, `ssm:/<path>`, `arn:aws:secretsmanager:<region>:<acct>:secret:<id>`, `arn:aws:ssm:<region>:<acct>:parameter/<id>`, or `s3://<bucket>/<key>`. Spec: \u00a7Secret Storage Materialization.",
+      "title": "Secret Refs",
+      "type": "object"
+    },
+    "selections": {
+      "additionalProperties": true,
+      "description": "Durable user-selected post-auth values keyed by post-auth output key. Spec: \u00a7Post-Auth Outputs.",
+      "title": "Selections",
+      "type": "object"
+    },
+    "tags": {
+      "anyOf": [
+        {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 50,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Grouping/search labels (max 50, each 1-64 chars, unique, trimmed).",
+      "title": "Tags"
+    }
+  },
+  "required": [
+    "alias",
+    "connector_alias"
+  ],
+  "title": "Analitiq Connection",
+  "type": "object",
+  "version": "4.0.0"
+}

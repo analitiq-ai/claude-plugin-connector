@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
+  "endpoint_id": "e1",
+  "database_object": {
+    "name": "t"
+  },
+  "columns": [
+    {
+      "name": "a",
+      "native_type": "varchar",
+      "arrow_type": "Utf8",
+      "ordinal_position": 1
+    },
+    {
+      "name": "b",
+      "native_type": "varchar",
+      "arrow_type": "Utf8",
+      "ordinal_position": 2
+    }
+  ],
+  "primary_keys": [
+    "a",
+    "zzz"
+  ]
+}

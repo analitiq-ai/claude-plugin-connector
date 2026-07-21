@@ -1,0 +1,186 @@
+{
+  "$defs": {
+    "PipelineRunStatusData": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "failed"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "error"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "error"
+            ]
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "failed",
+                  "partial"
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "description": "`data` payload of GET /pipelines/{pipeline_id}/runs/{invocation_id}.\n\nA small, stable projection of one `pipeline_run_logs` row. Optional fields\nare dropped from the wire when absent (`exclude_none`) \u2014 a consumer treats a\nmissing field as \"not recorded yet for this run\" (an in-flight run has no\n`finished_at` or counts), never as a defect. No internal infrastructure\ndetail is exposed.",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/PublicRunError",
+          "description": "Customer-safe failure category; present only for failed/partial runs."
+        },
+        "finished_at": {
+          "description": "ISO-8601 timestamp the run reached a terminal state.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}",
+          "title": "Finished At",
+          "type": "string"
+        },
+        "invocation_id": {
+          "description": "Unique identifier of this run (the id returned by the 202 accept).",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Invocation Id",
+          "type": "string"
+        },
+        "pipeline_id": {
+          "description": "Pipeline the run belongs to.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Pipeline Id",
+          "type": "string"
+        },
+        "records_failed": {
+          "description": "Records that failed to replicate.",
+          "title": "Records Failed",
+          "type": "integer"
+        },
+        "records_processed": {
+          "description": "Records successfully replicated.",
+          "title": "Records Processed",
+          "type": "integer"
+        },
+        "records_total": {
+          "description": "Total records read from the source.",
+          "title": "Records Total",
+          "type": "integer"
+        },
+        "started_at": {
+          "description": "ISO-8601 timestamp the run began executing.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/PublicRunStatus",
+          "description": "Coarse run status. Terminal: succeeded, partial, failed, cancelled."
+        },
+        "submitted_at": {
+          "description": "ISO-8601 timestamp the run was accepted. Always present.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}",
+          "title": "Submitted At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "invocation_id",
+        "pipeline_id",
+        "status",
+        "submitted_at"
+      ],
+      "title": "PipelineRunStatusData",
+      "type": "object"
+    },
+    "PublicErrorCode": {
+      "description": "Customer-safe failure category. Mirrors the engine's `ErrorCode`\n(analitiq-engine #258). `INTERNAL` is the catch-all for failures with no\nengine-reported category (e.g. a failure before the engine started).",
+      "enum": [
+        "SOURCE_AUTH_FAILED",
+        "SOURCE_UNREACHABLE",
+        "DESTINATION_WRITE_FAILED",
+        "RATE_LIMITED",
+        "CONFIG_INVALID",
+        "INTERNAL"
+      ],
+      "title": "PublicErrorCode",
+      "type": "string"
+    },
+    "PublicRunError": {
+      "additionalProperties": false,
+      "description": "Customer-safe failure category for a run. Present only on `failed`\n(always) and `partial` (when the engine reported a category).",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/PublicErrorCode",
+          "description": "Stable failure category. Mirrors the engine's error codes."
+        },
+        "message": {
+          "description": "Fixed, customer-safe description of the failure category.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "PublicRunError",
+      "type": "object"
+    },
+    "PublicRunStatus": {
+      "description": "Coarse, stable run status for external API-key consumers.\n\nA deliberate reduction of the internal run lifecycle so the public contract\nstays stable and infra-agnostic: the execution states we run on can change\nwithout reshaping what an external consumer sees. The last four members are\nterminal.",
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "partial",
+        "failed",
+        "cancelled"
+      ],
+      "title": "PublicRunStatus",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.analitiq.ai/data-sync-run-status/2.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "PUBLIC JSON Schema contract for the SUCCESS (200) response body of the Data Sync API GET /pipelines/{pipeline_id}/runs/{invocation_id} (rest.<domain>/v1, API-key auth) \u2014 the canonical `{success, message?, data}` envelope where `data` carries the run's public status: a coarse `status`, run timestamps, record counts, and \u2014 on failure \u2014 a customer-safe error category. A deliberately small, stable projection of the internal run-log that exposes no infrastructure detail (batch job ids, raw error strings, ...). A client that accepted a run (202) polls this by invocation_id for the outcome. Error responses use the canonical error envelope and are documented in the Data Sync OpenAPI rather than here. Absent optional fields are omitted from the wire, never null. Served at schemas.<domain> for external API-key consumers.",
+  "properties": {
+    "data": {
+      "$ref": "#/$defs/PipelineRunStatusData",
+      "description": "The run's public status \u2014 always present on a 200."
+    },
+    "message": {
+      "description": "Human-readable outcome.",
+      "title": "Message",
+      "type": "string"
+    },
+    "success": {
+      "const": true,
+      "description": "Always true on this 2xx body. Error responses use the canonical `{success: false, message, ...}` error envelope.",
+      "title": "Success",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "success",
+    "data"
+  ],
+  "title": "Analitiq Data Sync API \u2014 Pipeline Run Status",
+  "type": "object",
+  "version": "2.0.0"
+}

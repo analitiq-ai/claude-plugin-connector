@@ -1,0 +1,25 @@
+# Dev/test dependencies for the whole monorepo.
+#
+# DO NOT add `analitiq-contract-models` or `analitiq-validator` here. This repo
+# is their SOURCE (packages/*/src), and the root conftest.py puts both source
+# trees on sys.path.
+#
+# Installing the published wheels alongside does not merely duplicate them, it
+# SILENTLY WINS: a built wheel ships a generated `analitiq/contracts/__init__.py`,
+# which makes it a regular package, and a regular package beats the in-repo
+# namespace portion no matter what sys.path says. The suite would then exercise
+# the last published release instead of the source you are editing.
+#
+# Only the packages' own runtime dependencies belong here.
+
+# analitiq-contract-models runtime deps
+pydantic>=2.12,<3
+tzdata
+
+# analitiq-validator runtime deps
+jsonschema>=4.18,<5
+
+# Test runner. The documented workflow is
+# `pip install -r requirements-dev.txt && pytest`, so it belongs here rather
+# than being assumed present on the machine.
+pytest

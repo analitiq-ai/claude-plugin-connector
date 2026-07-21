@@ -1,17 +1,20 @@
-name: Schema drift guards
+name: tests
 
-# The plugin restates a few schema-owned enum vocabularies as decision logic
-# (enum-mappers.md, CLAUDE.md, io-contracts.md). This suite
-# (tests/schema_drift/) pins them to the contract and fails if they diverge.
+# One suite for the whole monorepo. `pytest.ini` sets `testpaths = tests`, so a
+# bare `pytest` runs every plugin's suite (tests/<plugin>/).
 #
-# The guard reads the enums straight from the pinned `analitiq-contract-models`
-# package — the same contract the `connector-schema-validator` agent enforces —
-# so it runs OFFLINE and DETERMINISTIC (no schema fetch). That makes it a real
-# PR/push merge gate, which the old CDN-fetch version couldn't be. It pins the
-# plugin's prose to the contract the validator ENFORCES, not to whatever is live
-# on the CDN; catching a *newer* upstream contract release is a dependency-bump
-# concern (bump the pin below + in src/agents/connector-schema-validator.md),
-# not this guard's job.
+# What the suites gate:
+#   connector_builder/ - the plugin restates a few schema-owned enum vocabularies
+#     as decision logic (enum-mappers.md, skill prose). These guards pin them to
+#     the contract and fail if they diverge. They read the enums straight from the
+#     pinned `analitiq-contract-models` package, so they run OFFLINE and
+#     DETERMINISTIC (no schema fetch) - which is what makes them usable as a merge
+#     gate. They pin prose to the contract the validator ENFORCES, not to whatever
+#     is live on the CDN; catching a newer upstream release is a dependency-bump
+#     concern, not this guard's job.
+#   pipeline_builder/  - the same problem solved the other way: contract-owned
+#     facts are GENERATED into the prose, and the suite fails when a generated
+#     block is stale relative to the pin.
 
 on:
   pull_request:
@@ -20,7 +23,7 @@ on:
       - main
   workflow_dispatch:
 
-# Read-only: the suite only checks out and runs pytest — no secrets, no writes.
+# Read-only: the suite only checks out and runs pytest - no secrets, no writes.
 permissions:
   contents: read
 
@@ -29,25 +32,63 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  drift:
-    name: Schema enum-drift guards (pinned contract models)
+  pytest:
+    name: pytest (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The published packages declare `requires-python = ">=3.10"`. These two
+        # are what the plugins are actually exercised on; keep both green so a
+        # 3.13-only or 3.12-only regression cannot land silently.
+        python-version: ['3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Install pinned validator + contract models
-        # Pin BOTH and keep them in lockstep with the self-install pin in
-        # src/agents/connector-schema-validator.md. rc10's validator already
-        # pins analitiq-contract-models==1.0.0rc10 exactly, so double-pinning is
-        # defensive (explicit + reproducible, and safe if a future validator
-        # ever loosens that constraint).
-        run: pip install pytest --pre "analitiq-validator==1.0.0rc10" "analitiq-contract-models==1.0.0rc10"
-      - name: Run offline drift guards
+          python-version: ${{ matrix.python-version }}
+      - name: Install pinned contract packages
+        # The pin lives in requirements-dev.txt only - see CLAUDE.md
+        # "The contract pin". Never inline a version here; that would be a
+        # second copy of a fact one file already owns.
+        run: pip install -r requirements-dev.txt
+      - name: Run the suites
+        id: tests
         # DRIFT_REQUIRE_CONTRACT_MODELS=1 turns a missing/broken contract package
-        # into a hard failure instead of an all-skipped green run — this job is a
+        # into a hard failure instead of an all-skipped green run - this job is a
         # merge gate, so it must never pass without actually running the checks.
         env:
           DRIFT_REQUIRE_CONTRACT_MODELS: '1'
-        run: pytest tests/schema_drift/ -v -rs
+        run: pytest -v -rs
+      - name: Check generated prose blocks match the pinned contract
+        # The condition is load-bearing. test_generated_blocks_in_sync computes
+        # the same predicate as --check, so on a stale block pytest fails first;
+        # under the default `if: success()` this step would be skipped in exactly
+        # the runs it exists to explain. Running it anyway prints the offending
+        # diff, so a contributor sees what to regenerate without reproducing
+        # locally.
+        #
+        # Gated on the tests step specifically, NOT `always()` or `success() ||
+        # failure()`: both of those also fire when the install step failed, and
+        # this script re-enters the dependency bootstrap, which would reinstall
+        # the pin and bury the real error under a second, noisier failure.
+        if: success() || steps.tests.conclusion == 'failure'
+        run: python3 plugins/analitiq-pipeline-builder/scripts/gen_contract_docs.py --check
+      - name: Package build guards
+        # These are what keep the private runtime out of the public wheels:
+        # build.py AST-scans for imports outside (stdlib + pydantic/jsonschema),
+        # runs the staged package with `alq` and boto3 absent, and asserts the
+        # generated __init__ / PEP 420 layout. The release workflows run them
+        # too, but only at tag time - by then a leak is already merged. This is
+        # the PR-time gate (it was validator-ci.yml in the infra repo).
+        if: success() || steps.tests.conclusion == 'failure'
+        run: |
+          python3 packages/contract-models/scripts/build.py --check
+          python3 packages/validator/scripts/build.py --check
+      - name: Check published schemas match the contract models
+        # schemas/ is RENDERED OUTPUT of packages/contract-models. Without this
+        # gate the two drift silently: a model change that never reaches the
+        # published JSON is invisible until something downstream breaks.
+        # Same reasoning as the step above, hence the same condition.
+        if: success() || steps.tests.conclusion == 'failure'
+        run: python3 scripts/render_schemas.py check

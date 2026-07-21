@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "analitiq-contract-models"
+# Pre-release while the packages are still being shaken out — PyPI versions are
+# immutable/single-use, so iterate with rcN and cut the final 1.0.0 once stable.
+version = "1.0.0rc12"
+description = "Analitiq's public contract surface (Pydantic): the authored connector/connection/stream/pipeline/endpoint documents the published JSON Schemas and the validator both derive from, plus the public REST API request/response shapes. Import as `analitiq.contracts`."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Analitiq" }]
+keywords = ["analitiq", "connector", "contract", "pydantic", "validation"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Quality Assurance",
+]
+# External deps. The models are pure Pydantic — no private/runtime code. The
+# connection/stream/pipeline authored models are included: their sole coupling to
+# the runtime (identifier helpers) is a dependency-free helper module, staged
+# alongside the models, so the engine can validate control-plane config offline
+# against the canonical shapes.
+# `tzdata` ships the IANA timezone database: `PipelineInput`'s schedule validator
+# checks `zoneinfo.available_timezones()`, which is empty on hosts without a
+# system tzdb (Windows / minimal containers) — so a valid `timezone: "UTC"` would
+# fail offline. Bundling tzdata makes validation self-contained everywhere.
+dependencies = ["pydantic>=2.12,<3", "tzdata"]
+
+[project.urls]
+Homepage = "https://analitiq.ai"
+Documentation = "https://schemas.analitiq.ai"
+
+# The distribution ships Analitiq's public contract surface: the authored
+# documents (connector, endpoints, type-maps, connection/stream/pipeline inputs,
+# credentials file) plus the public REST API shapes, their shared blocks, and the
+# identity helpers. All are authored directly in the public `analitiq.contracts.*`
+# namespace, so the distribution is the source tree verbatim. Internal
+# persistence/catalog variants and every server-side projection are separate
+# modules and are not included. `analitiq` is a PEP 420 namespace shared with
+# `analitiq-validator`, so it has no top-level `__init__.py`.
+[tool.setuptools]
+packages = ["analitiq.contracts", "analitiq.contracts.pipelines", "analitiq.contracts.shared"]

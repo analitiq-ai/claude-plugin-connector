@@ -1,0 +1,336 @@
+"""Behavioral tests for the published `canonical-types.json` vocabulary schema.
+
+These exercise the regex grammar of `canonical_type` and
+`canonical_type_or_template` end-to-end through an external JSON Schema
+validator — the same path third-party authoring tools and the
+schema-contract-reviewer LLM agent take. They guard against regressions in the
+published `canonical-types.json` by exercising the contract directly rather than
+through the Pydantic-side ARROW_TYPE_PATTERN, which is exercised separately in
+test_endpoint_model.py / test_stream_validation.py.
+
+The `type-map` rule schemas will consume this vocabulary via `$ref` once that
+wiring lands; today the consumers inline-duplicate the canonical regex. This file
+covers the standalone canonical-types schema, published on its own at
+`https://schemas.<domain>/canonical-types.json`, and pins its relaxed vocabulary
+to the runtime canonical check via a differential parity test.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
+from referencing.jsonschema import DRAFT202012
+
+# The authoritative runtime canonical check the published `canonical_type_or_template`
+# vocabulary must agree with — imported directly so the parity test below fails if
+# the schema and the runtime ever drift.
+from analitiq.contracts.type_map import _validate_type_map_canonical
+
+
+# canonical-types.json is hand-authored and flat: it is not a registered
+# renderer resource, so it never produces a {version}/latest/index triple - it
+# rides the bucket's `**/*.json` fileset glob straight to the CDN. That is why it
+# sits loose in the schema tree. This test is its ONLY guard, pinning the served
+# vocabulary to the runtime check it must agree with.
+REPO_ROOT = Path(__file__).resolve().parents[4]
+CANONICAL_TYPES_PATH = REPO_ROOT / "schemas" / "canonical-types.json"
+
+
+@pytest.fixture(scope="module")
+def canonical_doc() -> dict:
+    return json.loads(CANONICAL_TYPES_PATH.read_text())
+
+
+@pytest.fixture(scope="module")
+def registry(canonical_doc):
+    """Registry so canonical-types.json `$ref`s resolve.
+
+    The bare-filename binding (`canonical-types.json`) is required for the
+    inline `$ref` strings used inside this test file. The absolute-URL form
+    (`https://schemas.analitiq.ai/canonical-types.json`) also resolves — but via
+    `referencing`'s automatic lookup by the resource's own `$id`, not a separate
+    binding."""
+    resource = Resource(contents=canonical_doc, specification=DRAFT202012)
+    return Registry().with_resource("canonical-types.json", resource)
+
+
+@pytest.fixture(scope="module")
+def canonical_type_validator(registry):
+    return Draft202012Validator(
+        {"$ref": "canonical-types.json#/$defs/canonical_type"},
+        registry=registry,
+    )
+
+
+@pytest.fixture(scope="module")
+def canonical_type_or_template_validator(registry):
+    return Draft202012Validator(
+        {"$ref": "canonical-types.json#/$defs/canonical_type_or_template"},
+        registry=registry,
+    )
+
+
+@pytest.fixture(scope="module")
+def root_validator(canonical_doc):
+    """Validator for the BARE document URL — the schema advertised at
+    `https://schemas.<domain>/canonical-types.json` with no `#/$defs/...`
+    fragment. A value validated against the bare URL must actually be checked,
+    not accepted unconditionally; the root validates as the strict
+    canonical_type vocabulary."""
+    return Draft202012Validator(canonical_doc)
+
+
+class TestCanonicalType:
+    """The strict vocabulary that `arrow_type` slots and exact type-map rules
+    validate against (to be `$ref`'d once wired; today they inline the same
+    pattern)."""
+
+    @pytest.mark.parametrize("value", [
+        # Scalars (no params)
+        "Null", "Boolean",
+        "Int8", "Int16", "Int32", "Int64",
+        "UInt8", "UInt16", "UInt32", "UInt64",
+        "Float16", "Float32", "Float64",
+        "Utf8", "LargeUtf8",
+        "Binary", "LargeBinary",
+        "Date32", "Date64",
+        # Parameterized scalars
+        "FixedSizeBinary(1)", "FixedSizeBinary(16)", "FixedSizeBinary(256)",
+        "Time32(SECOND)", "Time32(MILLISECOND)",
+        "Time64(MICROSECOND)", "Time64(NANOSECOND)",
+        "Timestamp(SECOND)", "Timestamp(MILLISECOND)",
+        "Timestamp(MICROSECOND)", "Timestamp(NANOSECOND)",
+        "Timestamp(MICROSECOND, UTC)",
+        "Timestamp(MICROSECOND, America/New_York)",
+        "Timestamp(MILLISECOND, +05:30)",
+        "Timestamp(MICROSECOND, -08:00)",
+        "Timestamp(MICROSECOND, Etc/GMT+5)",
+        "Timestamp(NANOSECOND, null)",
+        "Duration(MICROSECOND)", "Duration(NANOSECOND)",
+        "Interval(YEAR_MONTH)", "Interval(DAY_TIME)", "Interval(MONTH_DAY_NANO)",
+        "Decimal128(1, 0)", "Decimal128(38, 9)", "Decimal128(38, -2)",
+        "Decimal256(1, 0)", "Decimal256(76, 0)", "Decimal256(76, -5)",
+        # Nested
+        "List<Int64>", "LargeList<Utf8>",
+        "FixedSizeList<Int64>[1]", "FixedSizeList<Utf8>[8]",
+        "Struct<id:Int64>", "Struct<id:Int64, name:Utf8>",
+        "Map<Utf8, Int64>", "Map<Utf8,Int64>",
+        "SparseUnion<Int64, Utf8>", "DenseUnion<Int64, Utf8>",
+        "Dictionary<Int32, Utf8>",
+        "RunEndEncoded<Int32, Int64>",
+        # Authored-shape JSON container markers — sibling-key rules
+        # (`properties`/`items`) are enforced by validators, not by the
+        # canonical_type string vocabulary itself.
+        "Object", "List", "Json",
+    ])
+    def test_accepts(self, canonical_type_validator, value):
+        errs = list(canonical_type_validator.iter_errors(value))
+        assert not errs, f"{value!r} rejected: {[e.message for e in errs]}"
+
+    @pytest.mark.parametrize("value", [
+        # Bare parameterized — the core issue #424 case
+        "Timestamp", "Decimal128", "Decimal256",
+        "Time32", "Time64", "FixedSizeBinary",
+        "Duration", "Interval",
+        "LargeList", "FixedSizeList",
+        "Struct", "Map", "SparseUnion", "Dictionary", "RunEndEncoded",
+        # Wrong case
+        "utf8", "INT64", "boolean", "decimal128(38, 9)",
+        # Out-of-range / malformed parameters
+        "Decimal128(0, 0)",      # precision < 1
+        "Decimal128(39, 0)",     # precision > 38
+        "Decimal256(77, 0)",     # precision > 76
+        "Decimal128(38)",        # missing scale
+        "Time32(MICROSECOND)",   # wrong unit for Time32
+        "Time32(NANOSECOND)",
+        "Time64(SECOND)",        # wrong unit for Time64
+        "Time64(MILLISECOND)",
+        "FixedSizeBinary(0)",    # n must be >= 1
+        "FixedSizeBinary(-1)",
+        "Timestamp()",           # empty params
+        "Timestamp(BOGUS)",      # unknown unit
+        # Unknown base
+        "Int128", "Int7", "Float128", "Stringy",
+        # Trailing junk
+        "Utf8 ", "Utf8\n", "Utf8;",
+        # `${...}` templates belong to canonical_type_or_template ONLY. The
+        # strict vocabulary must reject them — this is the strict/relaxed
+        # boundary the two `$defs` exist to draw.
+        "Decimal128(${precision}, ${scale})",
+        "Timestamp(${unit})",
+        "FixedSizeBinary(${n})",
+    ])
+    def test_rejects(self, canonical_type_validator, value):
+        errs = list(canonical_type_validator.iter_errors(value))
+        assert errs, f"{value!r} unexpectedly accepted"
+
+
+class TestCanonicalTypeOrTemplate:
+    """The relaxed vocabulary for type-map regex rules — accepts canonical
+    literals AND templated forms with ${name} placeholders in argument
+    positions. Each parameter position accepts a literal *at its valid
+    range/enum* or a placeholder, so it rejects out-of-range literals exactly
+    as the strict vocabulary does (mirroring the runtime canonical check)."""
+
+    @pytest.mark.parametrize("value", [
+        # Literal canonicals must pass via the canonical_type branch
+        # (anyOf, not oneOf, so a literal parameterized canonical may match both).
+        "Utf8", "Int64", "Boolean",
+        "Decimal128(38, 9)", "Decimal256(76, 0)",
+        "Timestamp(MICROSECOND)", "Timestamp(MICROSECOND, UTC)",
+        "Time32(SECOND)", "Time64(NANOSECOND)",
+        "Duration(MICROSECOND)", "Interval(YEAR_MONTH)",
+        "FixedSizeBinary(16)",
+        "List<Int64>", "Struct<id:Int64>", "Map<Utf8, Int64>",
+        # Templated parameterized forms
+        "Decimal128(${precision}, ${scale})",
+        "Decimal256(${precision}, ${scale})",
+        "Decimal128(${precision}, 0)",
+        "Decimal128(38, ${scale})",
+        "Timestamp(${unit})",
+        "Timestamp(${unit}, ${tz})",
+        "Timestamp(MICROSECOND, ${tz})",
+        "Time32(${unit})", "Time64(${unit})",
+        "Duration(${unit})", "Interval(${unit})",
+        "FixedSizeBinary(${n})",
+        # Nested templates: inner type carries placeholders via `<...>`, and
+        # FixedSizeList additionally templates the `[n]` length position.
+        "List<${inner}>",
+        "FixedSizeList<Int64>[${n}]",
+        "FixedSizeList<${T}>[${n}]",
+    ])
+    def test_accepts(self, canonical_type_or_template_validator, value):
+        errs = list(canonical_type_or_template_validator.iter_errors(value))
+        assert not errs, f"{value!r} rejected: {[e.message for e in errs]}"
+
+    @pytest.mark.parametrize("value", [
+        # Free-form strings carrying a placeholder somewhere must still be rejected.
+        "not an arrow type ${precision}",
+        "Decimal128(${precision}) garbage",
+        "Decimal128(${precision})",            # missing second arg
+        "Decimal128(${p}, ${s}, ${extra})",    # extra arg
+        "Decimal128${p}, ${s})",               # missing opening paren
+        "Decimal128(${p}, ${s})extra",
+        # Unknown base
+        "Bogus(${x})", "FooBar<${T}>",
+        # Bare parameterized — same as canonical_type rejections
+        "Timestamp", "Decimal128", "Struct",
+        # Out-of-range / wrong-width LITERALS must be rejected here too — a
+        # literal (no placeholder) is held to the same range/enum as the strict
+        # vocabulary, so the relaxed branch cannot approve what the runtime
+        # rejects on ingest.
+        "Decimal128(999, 0)", "Decimal128(39, 0)", "Decimal256(77, 0)",
+        "Time32(NANOSECOND)", "Time64(SECOND)",
+        # Bad placeholder name shape
+        "Decimal128(${1bad}, 0)",      # placeholder starts with digit
+        "FixedSizeBinary(${ })",       # empty/space placeholder
+        # Trailing-newline case is a known limitation: JSON Schema `pattern`
+        # uses ECMA 262 semantics where `$` matches before a final `\n`. The
+        # Pydantic-side ARROW_TYPE_PATTERN is applied with `fullmatch` for strict
+        # parity, but the JSON Schema published form does not. Authors editing
+        # type-map rule files by hand are not a realistic source of trailing
+        # newlines, so this is documented and not blocked.
+    ])
+    def test_rejects(self, canonical_type_or_template_validator, value):
+        errs = list(canonical_type_or_template_validator.iter_errors(value))
+        assert errs, f"{value!r} unexpectedly accepted"
+
+
+class TestBareDocumentRoot:
+    """A value validated against the published document's own URL (no fragment)
+    must be checked, not accepted unconditionally. The root `$ref`s the strict
+    canonical_type vocabulary, so a consumer that points at the bare
+    `canonical-types.json` gets real validation."""
+
+    @pytest.mark.parametrize("value", [
+        "Int64", "Utf8", "Boolean", "Decimal128(38, 9)",
+        "Timestamp(MICROSECOND, UTC)", "List<Int64>", "FixedSizeBinary(16)",
+    ])
+    def test_root_accepts_strict_canonical(self, root_validator, value):
+        errs = list(root_validator.iter_errors(value))
+        assert not errs, f"{value!r} rejected at root: {[e.message for e in errs]}"
+
+    @pytest.mark.parametrize("value", [
+        # invalid strings
+        "Timestamp", "Decimal128", "not an arrow type",
+        # a template is NOT a strict canonical type — the bare URL is strict
+        "Decimal128(${p}, ${s})",
+        # non-strings must not slip through an unconstrained root
+        123, 1.5, True, None, {}, [],
+    ])
+    def test_root_rejects_non_canonical(self, root_validator, value):
+        assert list(root_validator.iter_errors(value)), (
+            f"{value!r} unexpectedly accepted at the bare document root"
+        )
+
+
+def test_published_schema_document_is_valid_draft202012(canonical_doc):
+    """The published document itself must be a well-formed Draft 2020-12 schema.
+
+    Instance validation (the classes above) builds a validator and checks
+    values, but never runs the meta-schema check — so a keyword typo (e.g.
+    `patern`) in a rarely-exercised branch would ship silently. This is a
+    published artifact third parties load, so assert its well-formedness directly.
+    """
+    Draft202012Validator.check_schema(canonical_doc)
+
+
+# The corpus below spans literals (valid + out-of-range/wrong-width invalid) and
+# templated forms with WELL-FORMED placeholder names. Malformed placeholder NAMES
+# (`${1bad}`, `${ }`) are deliberately excluded: `_validate_type_map_canonical`
+# is shape-only and substitutes any `${...}`, so it accepts them, but the schema
+# — and the runtime's sibling capture-reference validator — reject them. Those
+# name-shape cases are pinned by `TestCanonicalTypeOrTemplate.test_rejects`.
+_PARITY_CORPUS = [
+    # literals — valid
+    "Utf8", "Int64", "Decimal128(38, 9)", "Decimal128(1, 0)", "Decimal256(76, 0)",
+    "Timestamp(MICROSECOND)", "Timestamp(MICROSECOND, UTC)",
+    "Time32(SECOND)", "Time32(MILLISECOND)", "Time64(MICROSECOND)", "Time64(NANOSECOND)",
+    "Duration(MICROSECOND)", "Interval(YEAR_MONTH)", "FixedSizeBinary(16)",
+    "List<Int64>", "FixedSizeList<Int64>[8]", "Struct<id:Int64>", "Map<Utf8, Int64>",
+    # literals — invalid (out of range / wrong unit for width / wrong shape)
+    "Decimal128(999, 0)", "Decimal128(39, 0)", "Decimal256(77, 0)", "Decimal128(0, 0)",
+    "Time32(NANOSECOND)", "Time32(MICROSECOND)", "Time64(SECOND)", "Time64(MILLISECOND)",
+    "FixedSizeBinary(0)", "Timestamp(BOGUS)", "Utf8(1)", "Int128",
+    # templated (well-formed placeholder names) — valid
+    "Decimal128(${p}, ${s})", "Decimal128(${p}, 0)", "Decimal128(38, ${s})",
+    "Decimal256(${p}, ${s})", "Timestamp(${unit})", "Timestamp(${unit}, ${tz})",
+    "Timestamp(MICROSECOND, ${tz})", "Time32(${unit})", "Time64(${unit})",
+    "Duration(${unit})", "Interval(${unit})", "FixedSizeBinary(${n})",
+    "FixedSizeList<Int64>[${n}]", "FixedSizeList<${T}>[${n}]", "List<${inner}>",
+    # templated / junk — invalid
+    "not an arrow type ${x}", "Decimal128(${p}) garbage", "Decimal128(${p})",
+    "Bogus(${x})", "Timestamp",
+]
+
+
+@pytest.mark.parametrize("value", _PARITY_CORPUS)
+def test_relaxed_vocabulary_matches_runtime(value, canonical_type_or_template_validator):
+    """The published `canonical_type_or_template` agrees with the runtime
+    type-map canonical check (`_validate_type_map_canonical`) across the
+    realistic authoring space — literals held to their valid range/enum, and one
+    placeholder per whole parameter position. No document in this space passes
+    the published schema and is then rejected on ingest, or vice versa.
+
+    A static JSON-Schema regex cannot mirror the runtime's dynamic
+    substitute-then-fullmatch EXACTLY, so two exotic classes intentionally sit
+    outside this corpus, with the runtime staying authoritative:
+      * mid-literal placeholders (`Decimal128(3${p}, ${s})`): the runtime
+        substitutes then range-checks the RESULT; the schema constrains each
+        position to a whole literal-or-placeholder and conservatively rejects.
+      * placeholder NAMES nested inside `<...>` (`List<${1bad}>`): the schema
+        validates outer shape only (its documented scope note), leaving the
+        runtime's capture-reference check as the gate there.
+    """
+    schema_ok = not list(canonical_type_or_template_validator.iter_errors(value))
+    try:
+        _validate_type_map_canonical(value)
+        runtime_ok = True
+    except ValueError:
+        runtime_ok = False
+    assert schema_ok == runtime_ok, (
+        f"schema/runtime disagree on {value!r}: schema={schema_ok} runtime={runtime_ok}"
+    )

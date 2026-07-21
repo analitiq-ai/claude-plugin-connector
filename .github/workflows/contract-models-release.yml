@@ -1,0 +1,80 @@
+name: Publish analitiq-contract-models
+
+# Build and publish the `analitiq-contract-models` package to PyPI on a
+# `contract-models-vX.Y.Z` tag, via OIDC Trusted Publishing (no stored token).
+#
+# The package is RENDERED from the private `alq-models` layer's authored
+# contract models into the public `analitiq.contracts.*` namespace by
+# packages/contract-models/scripts/build.py (which also guards: no `alq` codename leak,
+# no private path leak, boto3-free, minimal surface).
+#
+# Runbook:
+#   1. Bump `version` in packages/contract-models/pyproject.toml (e.g. 1.0.0rc1 -> rc2;
+#      1.0.0 for the first immutable release). Merge to dev.
+#   2. Push a tag matching that version: `contract-models-v1.0.0rc2`.
+#   3. This workflow asserts tag == pyproject version, runs the build guards,
+#      builds sdist+wheel from the rendered package, and publishes to PyPI.
+#
+# PyPI versions are immutable: a version is single-use, so use pre-release
+# suffixes (rc1, rc2, .dev1, ...) while iterating and cut the final X.Y.Z once.
+#
+# Required PyPI Trusted Publisher (pypi.org -> project -> Publishing -> Add):
+#   Owner: analitiq-ai   Repository: infrastructure
+#   Workflow name: contract-models-release.yml   Environment: (leave blank)
+on:
+  push:
+    tags:
+      - "contract-models-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contract-models-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # The PyPI Trusted Publisher for this project is registered with
+    # `Environment name: pypi`. PyPI checks the environment on its side, so a job
+    # WITHOUT this key is rejected at the publish step of an otherwise green run.
+    # The environment also restricts which tags may deploy. Do not remove it
+    # without editing the publisher on PyPI to match.
+    environment: pypi
+    permissions:
+      # A job-level permissions block REPLACES the workflow-level one (unspecified
+      # perms become `none`), so `contents: read` must be re-granted here or
+      # actions/checkout can't read this private repo and the publish never builds.
+      contents: read
+      id-token: write # OIDC token for PyPI Trusted Publishing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Derive release version from tag
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#contract-models-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Install build tooling
+        run: pip install --quiet build "pydantic>=2.12,<3"
+
+      - name: Build guards (version match, minimal, no alq/private leak, boto3-free)
+        run: python packages/contract-models/scripts/build.py --check --expect-version "${{ steps.ver.outputs.version }}"
+
+      - name: Stage the rendered public package
+        run: python packages/contract-models/scripts/build.py --dist "${{ runner.temp }}/cm-src"
+
+      - name: Build sdist + wheel
+        run: python -m build --outdir "${{ runner.temp }}/cm-dist" "${{ runner.temp }}/cm-src"
+
+      - name: Publish to PyPI (Trusted Publishing, OIDC)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ${{ runner.temp }}/cm-dist
+          print-hash: true

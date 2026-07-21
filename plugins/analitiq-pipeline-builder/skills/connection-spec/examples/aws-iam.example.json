@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
+  "connection_id": "04040404-0404-4404-8404-040404040404",
+  "connector_id": "athena",
+  "display_name": "Athena \u2014 Data Lake",
+  "parameters": {
+    "region": "us-east-1",
+    "workgroup": "primary",
+    "output_location": "s3://acme-athena-results/"
+  },
+  "secret_refs": {
+    "aws_access_key_id": "env:ANALITIQ_ATHENA_AWS_ACCESS_KEY_ID",
+    "aws_secret_access_key": "env:ANALITIQ_ATHENA_AWS_SECRET_ACCESS_KEY"
+  }
+}

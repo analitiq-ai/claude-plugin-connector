@@ -1,18 +1,35 @@
 name: release-please
 
-# Derives the plugin's semver from Conventional Commit types and maintains a
-# rolling "Release PR". Merging that Release PR bumps the version in
-# src/.claude-plugin/plugin.json (via release-please-config.json extra-files),
-# updates CHANGELOG.md, and tags the release. The plugin is pre-1.0, so
-# breaking changes bump the minor and features bump the patch (configured in
-# release-please-config.json).
+# Monorepo mode: one independently-versioned release train per publishable
+# artifact, configured in release-please-config.json. Each derives its own semver
+# from Conventional Commit types and maintains its OWN rolling Release PR
+# (`separate-pull-requests: true`). Merging one bumps that artifact's version,
+# regenerates its CHANGELOG.md, and tags it `<component>-vX.Y.Z`
+# (`include-component-in-tag: true`) so the trains never collide.
 #
 # Bump signal lives in the commit / squashed PR title:
-#   fix:                          -> patch   (0.1.0 -> 0.1.1)
-#   feat:                         -> minor while pre-1.0 this is patch
-#   feat!: / BREAKING CHANGE:     -> major while pre-1.0 this is minor
-# When squash-merging, enable "Default to PR title for squash merge commits"
-# in the repo settings so the PR title is what release-please parses.
+#   fix:                      -> patch
+#   feat:                     -> minor   (patch while pre-1.0)
+#   feat!: / BREAKING CHANGE: -> major   (minor while pre-1.0)
+# Scope it to the artifact so it lands in the right train:
+#   feat(connector-builder): ...
+# When squash-merging, enable "Default to PR title for squash merge commits" in
+# the repo settings - that title is what release-please parses.
+#
+# PUBLISHING RUNS HERE, in this workflow, gated on the action's outputs - never
+# in a separate `on: push: tags:` workflow. Tags created with GITHUB_TOKEN do not
+# trigger other workflows (GitHub suppresses that to prevent loops), so a
+# separate publish workflow would silently never fire. Keeping it in-run also
+# scopes `id-token: write` to just the job that needs it.
+#
+# The Python packages are not in the tree yet. When packages/contract-models and
+# packages/validator land, add a package entry to release-please-config.json and
+# a publish job here, gated like:
+#     if: ${{ contains(fromJSON(steps.release.outputs.paths_released), 'packages/contract-models') }}
+#     permissions: { contents: read, id-token: write }
+#     environment: pypi
+# authenticating by PyPI Trusted Publishing (no token). See CLAUDE.md
+# "Credentials".
 
 on:
   push:
@@ -28,6 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Defaults read release-please-config.json and

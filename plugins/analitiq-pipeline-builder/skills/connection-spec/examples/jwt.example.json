@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
+  "connection_id": "06060606-0606-4606-8606-060606060606",
+  "connector_id": "bigquery",
+  "display_name": "BigQuery \u2014 Analytics",
+  "parameters": {
+    "client_email": "loader@proj.iam.gserviceaccount.com",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "project_id": "acme-analytics"
+  },
+  "secret_refs": {
+    "private_key": "env:ANALITIQ_BIGQUERY_PRIVATE_KEY"
+  }
+}

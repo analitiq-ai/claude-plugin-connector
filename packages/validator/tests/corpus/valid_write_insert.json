@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schemas.analitiq.ai/api-endpoint/latest.json",
+  "endpoint_id": "v1__x",
+  "operations": {
+    "write": {
+      "insert": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/x",
+          "headers": { "Content-Type": "application/json" },
+          "body": { "r": { "from_input": "record" } }
+        },
+        "params": {},
+        "input": { "schema": { "type": "object", "properties": { "email": { "type": "string" } } } }
+      }
+    }
+  }
+}

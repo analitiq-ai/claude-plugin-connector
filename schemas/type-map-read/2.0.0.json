@@ -1,0 +1,85 @@
+{
+  "$defs": {
+    "TypeMapReadExactRule": {
+      "additionalProperties": false,
+      "description": "Read exact rule: literal `native` matches, literal Arrow `canonical` renders.",
+      "properties": {
+        "canonical": {
+          "minLength": 1,
+          "pattern": "^(?:Null|Boolean|Int8|Int16|Int32|Int64|UInt8|UInt16|UInt32|UInt64|Float16|Float32|Float64|Utf8|LargeUtf8|Binary|LargeBinary|Date32|Date64|FixedSizeBinary\\([1-9][0-9]*\\)|Time32\\((?:SECOND|MILLISECOND)\\)|Time64\\((?:MICROSECOND|NANOSECOND)\\)|Timestamp\\((?:SECOND|MILLISECOND|MICROSECOND|NANOSECOND)(?:\\s*,\\s*(?:null|[A-Za-z_][A-Za-z0-9_/\\-]*|Etc/GMT[+\\-][0-9]{1,2}|[+\\-](?:0[0-9]|1[0-4]):[0-5][0-9]))?\\)|Duration\\((?:SECOND|MILLISECOND|MICROSECOND|NANOSECOND)\\)|Interval\\((?:YEAR_MONTH|DAY_TIME|MONTH_DAY_NANO)\\)|Decimal128\\((?:[1-9]|[12][0-9]|3[0-8])\\s*,\\s*-?[0-9]+\\)|Decimal256\\((?:[1-9]|[1-6][0-9]|7[0-6])\\s*,\\s*-?[0-9]+\\)|List<.+>|LargeList<.+>|FixedSizeList<.+>\\[[1-9][0-9]*\\]|Struct<.+>|Map<.+,\\s*.+>|SparseUnion<.+>|DenseUnion<.+>|Dictionary<.+,\\s*.+>|RunEndEncoded<.+,\\s*.+>|Object|List|Json)$",
+          "title": "Canonical",
+          "type": "string"
+        },
+        "match": {
+          "const": "exact",
+          "title": "Match",
+          "type": "string"
+        },
+        "native": {
+          "minLength": 1,
+          "title": "Native",
+          "type": "string"
+        }
+      },
+      "required": [
+        "native",
+        "canonical",
+        "match"
+      ],
+      "title": "TypeMapReadExactRule",
+      "type": "object"
+    },
+    "TypeMapReadRegexRule": {
+      "additionalProperties": false,
+      "description": "Read regex rule: ECMA-262 `native` matches, Arrow `canonical` render template\n(its `${name}` placeholders draw from the native's named captures).",
+      "properties": {
+        "canonical": {
+          "minLength": 1,
+          "title": "Canonical",
+          "type": "string"
+        },
+        "match": {
+          "const": "regex",
+          "title": "Match",
+          "type": "string"
+        },
+        "native": {
+          "minLength": 1,
+          "title": "Native",
+          "type": "string"
+        }
+      },
+      "required": [
+        "native",
+        "canonical",
+        "match"
+      ],
+      "title": "TypeMapReadRegexRule",
+      "type": "object"
+    }
+  },
+  "$id": "https://schemas.analitiq.ai/type-map-read/2.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Public JSON Schema contract for a connector's `type-map-read.json` \u2014 the read direction (native \u2192 canonical) of its type-map pair, a top-level array of `{match, native, canonical}` rules, order significant (first match wins). The full per-rule contract (ECMA-262 regex, `${name}` capture correspondence, canonical vocabulary, schemaless-container handling) lives in the model and is enforced by the connector validator; this published schema is the structural projection. Source of truth: analitiq.contracts.type_map.TypeMapReadDoc (Pydantic).",
+  "items": {
+    "discriminator": {
+      "mapping": {
+        "exact": "#/$defs/TypeMapReadExactRule",
+        "regex": "#/$defs/TypeMapReadRegexRule"
+      },
+      "propertyName": "match"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/TypeMapReadExactRule"
+      },
+      {
+        "$ref": "#/$defs/TypeMapReadRegexRule"
+      }
+    ]
+  },
+  "minItems": 1,
+  "title": "Analitiq Type Map (read)",
+  "type": "array",
+  "version": "2.0.0"
+}

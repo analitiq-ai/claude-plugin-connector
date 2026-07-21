@@ -1,0 +1,893 @@
+{
+  "$defs": {
+    "ApiKeyAuthState": {
+      "additionalProperties": false,
+      "properties": {
+        "account_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Displayable provider account identifier \u2014 must NOT be a secret",
+          "title": "Account Label"
+        },
+        "last_validated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Last successful test/validation timestamp",
+          "title": "Last Validated At"
+        },
+        "status": {
+          "default": "active",
+          "description": "Connection auth status",
+          "enum": [
+            "active",
+            "draft",
+            "expired",
+            "needs_refresh",
+            "invalid"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "api_key",
+          "default": "api_key",
+          "description": "Auth type discriminator",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ApiKeyAuthState",
+      "type": "object"
+    },
+    "AwsIamAuthState": {
+      "additionalProperties": false,
+      "properties": {
+        "account_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Displayable provider account identifier \u2014 must NOT be a secret",
+          "title": "Account Label"
+        },
+        "last_validated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Last successful test/validation timestamp",
+          "title": "Last Validated At"
+        },
+        "status": {
+          "default": "active",
+          "description": "Connection auth status",
+          "enum": [
+            "active",
+            "draft",
+            "expired",
+            "needs_refresh",
+            "invalid"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "aws_iam",
+          "default": "aws_iam",
+          "description": "Auth type discriminator",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "AwsIamAuthState",
+      "type": "object"
+    },
+    "BasicAuthState": {
+      "additionalProperties": false,
+      "properties": {
+        "account_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Displayable provider account identifier \u2014 must NOT be a secret",
+          "title": "Account Label"
+        },
+        "last_validated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Last successful test/validation timestamp",
+          "title": "Last Validated At"
+        },
+        "status": {
+          "default": "active",
+          "description": "Connection auth status",
+          "enum": [
+            "active",
+            "draft",
+            "expired",
+            "needs_refresh",
+            "invalid"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "basic_auth",
+          "default": "basic_auth",
+          "description": "Auth type discriminator",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "BasicAuthState",
+      "type": "object"
+    },
+    "CredentialsAuthState": {
+      "additionalProperties": false,
+      "properties": {
+        "account_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Displayable provider account identifier \u2014 must NOT be a secret",
+          "title": "Account Label"
+        },
+        "last_validated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Last successful test/validation timestamp",
+          "title": "Last Validated At"
+        },
+        "status": {
+          "default": "active",
+          "description": "Connection auth status",
+          "enum": [
+            "active",
+            "draft",
+            "expired",
+            "needs_refresh",
+            "invalid"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "credentials",
+          "default": "credentials",
+          "description": "Auth type discriminator",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "CredentialsAuthState",
+      "type": "object"
+    },
+    "DbAuthState": {
+      "additionalProperties": false,
+      "properties": {
+        "account_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Displayable provider account identifier \u2014 must NOT be a secret",
+          "title": "Account Label"
+        },
+        "last_validated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Last successful test/validation timestamp",
+          "title": "Last Validated At"
+        },
+        "status": {
+          "default": "active",
+          "description": "Connection auth status",
+          "enum": [
+            "active",
+            "draft",
+            "expired",
+            "needs_refresh",
+            "invalid"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "db",
+          "default": "db",
+          "description": "Auth type discriminator",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "DbAuthState",
+      "type": "object"
+    },
+    "JwtAuthState": {
+      "additionalProperties": false,
+      "properties": {
+        "account_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Displayable provider account identifier \u2014 must NOT be a secret",
+          "title": "Account Label"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Current signed-token expiry (UTC)",
+          "title": "Expires At"
+        },
+        "key_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JWT header `kid` claim \u2014 non-secret signing key id",
+          "title": "Key Id"
+        },
+        "last_validated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Last successful test/validation timestamp",
+          "title": "Last Validated At"
+        },
+        "status": {
+          "default": "active",
+          "description": "Connection auth status",
+          "enum": [
+            "active",
+            "draft",
+            "expired",
+            "needs_refresh",
+            "invalid"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "jwt",
+          "default": "jwt",
+          "description": "Auth type discriminator",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "JwtAuthState",
+      "type": "object"
+    },
+    "NoneAuthState": {
+      "additionalProperties": false,
+      "properties": {
+        "account_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Displayable provider account identifier \u2014 must NOT be a secret",
+          "title": "Account Label"
+        },
+        "last_validated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Last successful test/validation timestamp",
+          "title": "Last Validated At"
+        },
+        "status": {
+          "default": "active",
+          "description": "Connection auth status",
+          "enum": [
+            "active",
+            "draft",
+            "expired",
+            "needs_refresh",
+            "invalid"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "none",
+          "default": "none",
+          "description": "Auth type discriminator",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "NoneAuthState",
+      "type": "object"
+    },
+    "OAuth2AuthCodeAuthState": {
+      "additionalProperties": false,
+      "description": "Lifecycle/status payload for an OAuth2 authorization-code connection.",
+      "properties": {
+        "account_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Displayable provider account identifier \u2014 must NOT be a secret",
+          "title": "Account Label"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Access token expiry (UTC)",
+          "title": "Expires At"
+        },
+        "granted_scopes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Scopes granted by the authorization server",
+          "title": "Granted Scopes"
+        },
+        "last_refresh_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Most recent token refresh attempt timestamp",
+          "title": "Last Refresh At"
+        },
+        "last_refresh_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "ok",
+                "failed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Outcome of the last refresh attempt",
+          "title": "Last Refresh Status"
+        },
+        "last_validated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Last successful test/validation timestamp",
+          "title": "Last Validated At"
+        },
+        "status": {
+          "default": "active",
+          "description": "Connection auth status",
+          "enum": [
+            "active",
+            "draft",
+            "expired",
+            "needs_refresh",
+            "invalid"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "oauth2_authorization_code",
+          "default": "oauth2_authorization_code",
+          "description": "Auth type discriminator",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "OAuth2AuthCodeAuthState",
+      "type": "object"
+    },
+    "OAuth2ClientCredsAuthState": {
+      "additionalProperties": false,
+      "properties": {
+        "account_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Displayable provider account identifier \u2014 must NOT be a secret",
+          "title": "Account Label"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Access token expiry (UTC)",
+          "title": "Expires At"
+        },
+        "last_refresh_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Most recent token refresh attempt timestamp",
+          "title": "Last Refresh At"
+        },
+        "last_refresh_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "ok",
+                "failed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Outcome of the last refresh attempt",
+          "title": "Last Refresh Status"
+        },
+        "last_validated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Last successful test/validation timestamp",
+          "title": "Last Validated At"
+        },
+        "status": {
+          "default": "active",
+          "description": "Connection auth status",
+          "enum": [
+            "active",
+            "draft",
+            "expired",
+            "needs_refresh",
+            "invalid"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "oauth2_client_credentials",
+          "default": "oauth2_client_credentials",
+          "description": "Auth type discriminator",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "OAuth2ClientCredsAuthState",
+      "type": "object"
+    }
+  },
+  "$id": "https://schemas.analitiq.ai/connection/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Public JSON Schema contract for Analitiq connection documents \u2014 the persisted-record shape returned by the connection service. Authored fields plus required server-managed fields. Source of truth: k2m.models.connection.ConnectionDocument (Pydantic).",
+  "patternProperties": {
+    "^x-[a-z0-9]+(-[a-z0-9]+)*$": {}
+  },
+  "properties": {
+    "$schema": {
+      "anyOf": [
+        {
+          "const": "https://schemas.analitiq.ai/connection/latest.json",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Connection schema URL (optional in API payloads, required for standalone files).",
+      "title": "$Schema"
+    },
+    "alias": {
+      "description": "Stable connection slug; matches '^[a-z0-9][a-z0-9_-]*$'. Immutable and unique within the owning organization.",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "title": "Alias",
+      "type": "string"
+    },
+    "auth_state": {
+      "anyOf": [
+        {
+          "discriminator": {
+            "mapping": {
+              "api_key": "#/$defs/ApiKeyAuthState",
+              "aws_iam": "#/$defs/AwsIamAuthState",
+              "basic_auth": "#/$defs/BasicAuthState",
+              "credentials": "#/$defs/CredentialsAuthState",
+              "db": "#/$defs/DbAuthState",
+              "jwt": "#/$defs/JwtAuthState",
+              "none": "#/$defs/NoneAuthState",
+              "oauth2_authorization_code": "#/$defs/OAuth2AuthCodeAuthState",
+              "oauth2_client_credentials": "#/$defs/OAuth2ClientCredsAuthState"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ApiKeyAuthState"
+            },
+            {
+              "$ref": "#/$defs/BasicAuthState"
+            },
+            {
+              "$ref": "#/$defs/OAuth2AuthCodeAuthState"
+            },
+            {
+              "$ref": "#/$defs/OAuth2ClientCredsAuthState"
+            },
+            {
+              "$ref": "#/$defs/JwtAuthState"
+            },
+            {
+              "$ref": "#/$defs/DbAuthState"
+            },
+            {
+              "$ref": "#/$defs/CredentialsAuthState"
+            },
+            {
+              "$ref": "#/$defs/AwsIamAuthState"
+            },
+            {
+              "$ref": "#/$defs/NoneAuthState"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-auth-type non-secret lifecycle/status payload (server-managed).",
+      "title": "Auth State"
+    },
+    "connection_id": {
+      "description": "Stable base connection UUID (server-managed); RFC-4122 form per \u00a7Identifier Forms.",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Connection Id",
+      "type": "string"
+    },
+    "connection_schema_version": {
+      "description": "Public connection schema contract version (server-managed).",
+      "minimum": 1,
+      "title": "Connection Schema Version",
+      "type": "integer"
+    },
+    "connector_alias": {
+      "description": "Stable alias of the connector this connection configures.",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "title": "Connector Alias",
+      "type": "string"
+    },
+    "connector_id": {
+      "description": "Stable connector UUID (server-managed); RFC-4122 form.",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Connector Id",
+      "type": "string"
+    },
+    "connector_version": {
+      "description": "Connector release semantic version recorded at save time. Drift detection rides on this field's semver against the current connector release (server-managed).",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$",
+      "title": "Connector Version",
+      "type": "string"
+    },
+    "created_at": {
+      "description": "Creation timestamp (server-managed).",
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "User-facing summary.",
+      "title": "Description"
+    },
+    "discovered": {
+      "additionalProperties": true,
+      "description": "Durable provider-discovered non-secret values keyed by post-auth output key. Spec: \u00a7Post-Auth Outputs.",
+      "title": "Discovered",
+      "type": "object"
+    },
+    "display_name": {
+      "anyOf": [
+        {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "User-facing connection label (1-120 chars, no leading/trailing whitespace).",
+      "title": "Display Name"
+    },
+    "documentation_url": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional connection documentation URL (\u22642048 chars).",
+      "title": "Documentation Url"
+    },
+    "org_id": {
+      "description": "Tenant identifier (server-managed); RFC-4122 form.",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Org Id",
+      "type": "string"
+    },
+    "parameters": {
+      "additionalProperties": true,
+      "description": "Non-secret submitted values keyed by connection-contract input key. Optional `ssl_mode` must be one of `disable, allow, prefer, require, verify-ca, verify-full` per the database-endpoint TLS contract.",
+      "title": "Parameters",
+      "type": "object"
+    },
+    "secret_refs": {
+      "additionalProperties": {
+        "pattern": "^(?:(?:connections|secrets)/[A-Za-z0-9_./\\-]+|ssm:/[A-Za-z0-9_./\\-]+|arn:aws:secretsmanager:[A-Za-z0-9\\-]+:\\d+:secret:[A-Za-z0-9/_\\-+=.@]+|arn:aws:ssm:[A-Za-z0-9\\-]+:\\d+:parameter/[A-Za-z0-9_./\\-]+|s3://[A-Za-z0-9._\\-]+/[A-Za-z0-9_./\\-]+)$",
+        "type": "string"
+      },
+      "description": "Opaque secret-store pointers keyed by connection-contract input or post-auth output key. Values must match a known reference scheme: `connections/<path>`, `secrets/<path>`, `ssm:/<path>`, `arn:aws:secretsmanager:<region>:<acct>:secret:<id>`, `arn:aws:ssm:<region>:<acct>:parameter/<id>`, or `s3://<bucket>/<key>`. Spec: \u00a7Secret Storage Materialization.",
+      "title": "Secret Refs",
+      "type": "object"
+    },
+    "selections": {
+      "additionalProperties": true,
+      "description": "Durable user-selected post-auth values keyed by post-auth output key. Spec: \u00a7Post-Auth Outputs.",
+      "title": "Selections",
+      "type": "object"
+    },
+    "tags": {
+      "anyOf": [
+        {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 50,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Grouping/search labels (max 50, each 1-64 chars, unique, trimmed).",
+      "title": "Tags"
+    },
+    "updated_at": {
+      "description": "Last update timestamp (server-managed).",
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "version": {
+      "description": "Connection configuration version (server-managed).",
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "alias",
+    "connector_alias",
+    "connection_id",
+    "version",
+    "connection_schema_version",
+    "org_id",
+    "connector_id",
+    "connector_version",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "Analitiq Connection",
+  "type": "object",
+  "version": "1.0.0"
+}

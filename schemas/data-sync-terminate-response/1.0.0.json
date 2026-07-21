@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "PipelineTerminateData": {
+      "additionalProperties": false,
+      "description": "`data` payload of a terminate request.\n\nEmitted only when the terminate resolved the pipeline it acted on, so\n`pipeline_id` is always present; `job_id` is present only when a running\njob was actually stopped. \"Nothing to terminate\" outcomes (no run\nrecorded, run already terminal) carry no `data` at all \u2014 the envelope\nomits it \u2014 and are distinguished by `message`.",
+      "properties": {
+        "job_id": {
+          "description": "AWS Batch job ID, when a running job was actually terminated.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "pipeline_id": {
+          "description": "Pipeline the terminate acted on.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Pipeline Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pipeline_id"
+      ],
+      "title": "PipelineTerminateData",
+      "type": "object"
+    }
+  },
+  "$id": "https://schemas.analitiq.ai/data-sync-terminate-response/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "PUBLIC JSON Schema contract for the SUCCESS response body of the Data Sync API POST /pipelines/{pipeline_id}/terminate \u2014 the canonical `{success, message?, data?}` envelope. Terminate is idempotent: `data` (resolved pipeline_id, plus job_id when a running job was stopped) is present when a pipeline was acted on and omitted on no-op outcomes, which are distinguished by `message`. Error responses use the canonical error envelope and are documented in the Data Sync OpenAPI rather than here. Absent optional fields are omitted from the wire, never null. Served at schemas.<domain> for external API-key consumers. Source of truth: k2m.models.pipelines.data_sync_api.PipelineTerminateResponse.",
+  "if": {
+    "not": {
+      "required": [
+        "data"
+      ]
+    }
+  },
+  "properties": {
+    "data": {
+      "$ref": "#/$defs/PipelineTerminateData",
+      "description": "The resolved terminate \u2014 present when a pipeline was acted on; omitted on idempotent no-op outcomes."
+    },
+    "message": {
+      "description": "Human-readable outcome.",
+      "title": "Message",
+      "type": "string"
+    },
+    "success": {
+      "const": true,
+      "description": "Always true on this 2xx body. Error responses use the canonical `{success: false, message, ...}` error envelope.",
+      "title": "Success",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "success"
+  ],
+  "then": {
+    "required": [
+      "message"
+    ]
+  },
+  "title": "Analitiq Data Sync API \u2014 Pipeline Terminate Response",
+  "type": "object",
+  "version": "1.0.0"
+}

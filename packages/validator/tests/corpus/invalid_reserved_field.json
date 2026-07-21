@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schemas.analitiq.ai/api-endpoint/latest.json",
+  "endpoint_id": "v1__records",
+  "created_at": "2020-01-01T00:00:00Z",
+  "operations": {
+    "read": {
+      "request": { "method": "GET", "path": "/v1/records" },
+      "params": {},
+      "response": {
+        "records": { "ref": "response.body" },
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      }
+    }
+  }
+}

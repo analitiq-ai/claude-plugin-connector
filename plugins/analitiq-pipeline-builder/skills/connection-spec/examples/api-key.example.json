@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
+  "connection_id": "02020202-0202-4202-8202-020202020202",
+  "connector_id": "stripe",
+  "display_name": "Stripe \u2014 Acme",
+  "parameters": {
+    "api_version": "2023-10-16"
+  },
+  "secret_refs": {
+    "api_key": "env:ANALITIQ_STRIPE_API_KEY"
+  }
+}

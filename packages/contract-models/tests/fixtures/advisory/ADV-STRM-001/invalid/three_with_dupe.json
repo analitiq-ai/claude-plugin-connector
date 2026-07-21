@@ -1,0 +1,42 @@
+{
+  "pipeline_id": "p1",
+  "source": {
+    "endpoint_ref": {
+      "scope": "connector",
+      "connection_id": "c1",
+      "endpoint_id": "e1"
+    }
+  },
+  "destinations": [
+    {
+      "endpoint_ref": {
+        "scope": "connector",
+        "connection_id": "c1",
+        "endpoint_id": "e1"
+      },
+      "write": {
+        "mode": "append"
+      }
+    },
+    {
+      "endpoint_ref": {
+        "scope": "connector",
+        "connection_id": "c1",
+        "endpoint_id": "e2"
+      },
+      "write": {
+        "mode": "append"
+      }
+    },
+    {
+      "endpoint_ref": {
+        "scope": "connector",
+        "connection_id": "c1",
+        "endpoint_id": "e1"
+      },
+      "write": {
+        "mode": "append"
+      }
+    }
+  ]
+}

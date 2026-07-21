@@ -1,0 +1,17 @@
+{
+  "$id": "https://schemas.analitiq.ai/data-sync-run-request/latest.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "PUBLIC JSON Schema contract for the request body of the Data Sync API POST /pipelines/{pipeline_id}/run (rest.<domain>/v1, API-key auth). The pipeline is taken from the path and the org from the API key, so the only client-supplied field is the optional `terminate_existing_sync` flag; an empty body is valid and unknown keys are rejected. Served at schemas.<domain> for external API-key consumers.",
+  "properties": {
+    "terminate_existing_sync": {
+      "default": false,
+      "description": "Terminate an already-running job for this pipeline before submitting the new run. When false (default) and a run is already in flight, the request is rejected with 409 Conflict.",
+      "title": "Terminate Existing Sync",
+      "type": "boolean"
+    }
+  },
+  "title": "Analitiq Data Sync API \u2014 Pipeline Run Request",
+  "type": "object",
+  "version": "1.0.1"
+}

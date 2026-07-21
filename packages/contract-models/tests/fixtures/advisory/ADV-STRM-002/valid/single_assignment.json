@@ -1,0 +1,16 @@
+{
+  "assignments": [
+    {
+      "target": {
+        "path": "a",
+        "arrow_type": "Utf8"
+      },
+      "value": {
+        "expression": {
+          "op": "get",
+          "path": "x"
+        }
+      }
+    }
+  ]
+}

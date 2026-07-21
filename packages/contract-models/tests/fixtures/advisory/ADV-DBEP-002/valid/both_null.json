@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
+  "endpoint_id": "e1",
+  "database_object": {
+    "name": "t"
+  },
+  "columns": [
+    {
+      "name": "a",
+      "native_type": "v",
+      "arrow_type": "Utf8"
+    },
+    {
+      "name": "b",
+      "native_type": "v",
+      "arrow_type": "Utf8"
+    }
+  ]
+}

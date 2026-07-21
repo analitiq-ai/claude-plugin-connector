@@ -1,0 +1,9 @@
+{
+  "path": "/x",
+  "headers": {
+    "A": "1"
+  },
+  "headers_remove": [
+    "A"
+  ]
+}

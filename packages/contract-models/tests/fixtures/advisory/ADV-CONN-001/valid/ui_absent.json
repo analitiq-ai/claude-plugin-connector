@@ -1,0 +1,11 @@
+{
+  "source": "user",
+  "phase": "pre_auth",
+  "storage": "connection.parameters",
+  "type": "string",
+  "required": false,
+  "enum": [
+    "a",
+    "b"
+  ]
+}

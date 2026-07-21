@@ -1,6 +1,6 @@
 {
-  "name": "analitiq-connector-creator",
-  "description": "Analitiq Claude plugin for creating data integration connectors that conform to the published Analitiq schema contract (schemas.analitiq.ai)",
+  "name": "analitiq-claude-code-plugins",
+  "description": "Analitiq Claude Code plugins for building data integration components against the published Analitiq schema contract (schemas.analitiq.ai)",
   "owner": {
     "name": "Analitiq"
   },
@@ -11,7 +11,16 @@
       "author": {
         "name": "Analitiq"
       },
-      "source": "./src",
+      "source": "./plugins/analitiq-connector-builder",
+      "category": "development"
+    },
+    {
+      "name": "analitiq-pipeline-builder",
+      "description": "Authors pipeline, stream, connection, and database-endpoint documents, wiring connectors from the DIP registry into complete pipelines",
+      "author": {
+        "name": "Analitiq"
+      },
+      "source": "./plugins/analitiq-pipeline-builder",
       "category": "development"
     }
   ]
