@@ -73,7 +73,7 @@ connectors themselves.
 
 | | Repository | Role |
 |---|---|---|
-| **This plugin** | [claude-plugin-pipeline](https://github.com/analitiq-ai/claude-plugin-pipeline) | Authors pipelines, streams, connections, and endpoints. |
+| **This plugin** | [claude-code-plugins](https://github.com/analitiq-ai/claude-code-plugins) | Authors pipelines, streams, connections, and endpoints. |
 | Connectors | [analitiq-dip-registry](https://github.com/orgs/analitiq-dip-registry/repositories) | One repository per connector; downloaded read-only. |
 | Connector-creator | [claude-code-plugins](https://github.com/analitiq-ai/claude-code-plugins) | Authors the connectors this plugin consumes. |
 | Schemas | [schemas.analitiq.ai](https://schemas.analitiq.ai) | The published JSON Schema contract everything validates against. |

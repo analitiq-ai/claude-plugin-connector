@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Render contract-owned facts from the published package into the prose docs.
 
-The agent-facing prose under this plugin is the only prose Analitiq still keeps —
+The agent-facing prose under this plugin is normative (as is the sibling
+connector plugin's) —
 the schema contract itself is defined by the published ``analitiq-validator`` +
 ``analitiq-contract-models`` packages. Anything an agent needs that those
 packages already state (enum members, regexes, required-field lists, bounds,

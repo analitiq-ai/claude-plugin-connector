@@ -2,13 +2,14 @@
 """Render and publish versioned JSON Schema documents for Analitiq contracts.
 
 Source of truth: Pydantic models in `analitiq.contracts.*`. The version is NEVER picked
-by hand and there is no `schema-bump:*` PR label. `write` classifies the
+by hand. `write` classifies the
 structural diff against the committed `latest.json` and advances the version
 itself (`--bump` raises it, upward only); CI's `bump-check` re-derives the same
 floor and rejects any committed bump below it.
 
 Output trees:
-    PUBLIC  (terraform/schemas.tf + cloudfront_schemas.tf → schemas.<domain>):
+    Rendered into the committed tree, published to schemas.<domain> by the
+    infra repo's Terraform (the bucket and CDN are not defined here):
         schemas/<resource>/{X.Y.Z}.json   (immutable per version)
         schemas/<resource>/latest.json     (mutable; mirrors current X.Y.Z)
         schemas/<resource>/index.json       (manifest: latest + versions)
@@ -51,22 +52,25 @@ CONTRACTS_SRC = REPO_ROOT / "packages" / "contract-models" / "src"
 sys.path.insert(0, str(CONTRACTS_SRC))
 
 SCHEMA_DRAFT = "https://json-schema.org/draft/2020-12/schema"
-# Stamped into every schema's `$id`. `DOMAIN` is the same env var Terraform
-# stamps into Lambdas (see `base_env_vars` in `terraform/lambdas.tf`); the
-# runtime reads it identically. CI runs the renderer with the env
-# files sourced, so committed `latest.json` files match the canonical
-# `analitiq.ai` URLs. Devs rendering against a non-prod domain (e.g. via
-# `set -a && source terraform/.env.dev && set +a`) produce different `$id`s;
-# CI's `check` re-renders against `analitiq.ai` and rejects the diff —
-# intended self-defense.
+# `DOMAIN` selects the host stamped into every `$id`. Set it BEFORE the contract
+# imports below: `analitiq.contracts.shared.common` reads `os.environ["DOMAIN"]`
+# at module load and raises KeyError without it.
 #
-# Setdefault BEFORE the contract imports below: `analitiq.contracts.shared.common`
-# calls `os.environ["DOMAIN"]` at module load and crashes if it isn't set.
-os.environ.setdefault("DOMAIN", "analitiq.ai")
-CANONICAL_DOMAIN = os.environ["DOMAIN"]
-CANONICAL_BASE = f"https://schemas.{CANONICAL_DOMAIN}"
+# A non-default DOMAIN renders different `$id`s than the committed tree, so
+# `check` would report every resource stale without saying why. Refuse instead.
+_DEFAULT_DOMAIN = "analitiq.ai"
+os.environ.setdefault("DOMAIN", _DEFAULT_DOMAIN)
+if os.environ["DOMAIN"] != _DEFAULT_DOMAIN:
+    raise SystemExit(
+        f"DOMAIN={os.environ['DOMAIN']!r} is set in the environment, but the "
+        f"committed schemas are rendered for {_DEFAULT_DOMAIN}. Unset it (or run "
+        "in a clean shell) — otherwise every resource reports stale.")
 
 from pydantic import BaseModel, TypeAdapter  # noqa: E402
+from analitiq.contracts.shared.common import SCHEMA_BASE_URL  # noqa: E402
+
+#: The `$id` host, owned by the contract package.
+CANONICAL_BASE = SCHEMA_BASE_URL
 
 from analitiq.contracts.connection import ConnectionInput  # noqa: E402
 from analitiq.contracts.credentials_file import CredentialsFile  # noqa: E402
@@ -84,7 +88,6 @@ from analitiq.contracts.pipelines.data_sync import (  # noqa: E402
     PipelineRunStatusResponse,
     PipelineTerminateResponse,
 )
-from analitiq.contracts.shared.common import schema_url_pattern  # noqa: E402
 from analitiq.contracts.stream import StreamInput  # noqa: E402
 SCHEMAS_ROOT = REPO_ROOT / "schemas"
 
@@ -387,7 +390,7 @@ def _encode_conditional_rules(schema: dict[str, Any]) -> None:
 
 
 # The AUTHORED public contract models — their own source package, published to
-# PyPI as `analitiq-contract-models` and copied into a Lambda layer at build.
+# PyPI as `analitiq-contract-models`. That tree IS the published package.
 _CONTRACTS_PREFIX = "packages/contract-models/src/analitiq/contracts"
 
 def _connector_post_process(schema: dict[str, Any]) -> None:
@@ -396,7 +399,7 @@ def _connector_post_process(schema: dict[str, Any]) -> None:
     _annotate_transport_inheritance(schema)
 
 
-# Issue #424: enforce canonical arrow_type inside API response.schema / input.schema.
+# Enforce canonical arrow_type inside API response.schema / input.schema.
 # Pydantic models these as opaque `dict[str, Any]`, so the rendered schema treats
 # them as `additionalProperties: true` blobs with no rules on `arrow_type`. Inject
 # a recursive `$def` so external validators reject bare parameterized forms
@@ -414,7 +417,7 @@ _JSON_SCHEMA_PROPERTY_NODE_DEF: dict[str, Any] = {
         "`dependentSchemas` (maps); `prefixItems`, `allOf`, `anyOf`, `oneOf` "
         "(lists); `items`, `contains`, `additionalProperties`, "
         "`propertyNames`, `unevaluatedItems`, `unevaluatedProperties`, `not`, "
-        "`if`, `then`, `else` (single). Issue #424 — canonical `arrow_type` "
+        "`if`, `then`, `else` (single). Canonical `arrow_type` "
         "must carry parameters when the type requires them; `native_type` and "
         "`arrow_type` are paired."
     ),
@@ -533,7 +536,7 @@ def _api_endpoint_post_process(schema: dict[str, Any]) -> None:
 
 
 def _encode_write_mode_conflict_keys_rule(defs: dict[str, Any]) -> None:
-    """Publish the per-mode `conflict_keys` rule (#853) in the JSON Schema.
+    """Publish the per-mode `conflict_keys` rule in the JSON Schema.
 
     The Pydantic `Operations._conflict_keys_by_mode` validator requires
     `conflict_keys` on the `upsert` write mode and forbids it on every other
@@ -756,132 +759,24 @@ def _normalize_database_object_namespaces(schema: dict[str, Any]) -> None:
             prop.pop("default", None)
 
 
-def _dedupe_pipeline_run_status_enum(schema: dict[str, Any]) -> None:
-    """Dedupe the `PipelineRunStatus` enum in the published schema.
-
-    The Pydantic enum keeps legacy member *names* (SCHEDULED/SUCCESS/ERROR) as
-    member-name aliases of existing values (SUBMITTED/SUCCEEDED/FAILED) so call
-    sites can reference e.g. `PipelineRunStatus.SUBMITTED`; they do not make the
-    raw legacy strings resolvable. Pydantic emits every member, so the rendered
-    enum carries duplicate values. The published contract should advertise each
-    allowed value once. Hard-fails if the `$def` or its `enum` is missing — a
-    rename must update this guard rather than silently shipping the raw enum.
-
-    Shared by every contract that embeds `PipelineRunStatus`
-    (pipeline-status-message, pipeline-run-history).
-    """
-    status = schema.get("$defs", {}).get("PipelineRunStatus")
-    if not isinstance(status, dict) or "enum" not in status:
-        raise RuntimeError(
-            "_dedupe_pipeline_run_status_enum: expected a PipelineRunStatus "
-            "$def with an `enum`. The status model was renamed/reshaped; update "
-            "this post-processor."
-        )
-    seen: set[str] = set()
-    status["enum"] = [v for v in status["enum"] if not (v in seen or seen.add(v))]
 
 
-def _pipeline_run_history_post_process(schema: dict[str, Any]) -> None:
-    # `success: Literal[True]` has a default, so Pydantic leaves it out of
-    # `required[]`; the const-to-required pass restores it.
-    _enforce_discriminator_required(schema)
-    _dedupe_pipeline_run_status_enum(schema)
-    _collapse_nullable_anyof(schema)
 
 
-def _endpoint_schema_post_process(schema: dict[str, Any]) -> None:
-    """Relax the embedded `DatabaseEndpointDoc.$schema` const to an any-host
-    pattern and collapse nullable anyOf branches.
-
-    The runtime stamps the *environment's* schema host into `$schema`
-    (`schemas.analitiq.work` / `.dev` / `.ai`) while this contract renders
-    against the canonical prod domain — a `const` would make every non-prod
-    response fail consumer validation. Same rationale as
-    `analitiq.contracts.shared.common.schema_url_pattern` for engine-side validation.
-    Hard-fails if the `$def` lost its `const` — a model reshape must update
-    this post-processor rather than silently shipping a host-pinned contract.
-    """
-    defn = schema.get("$defs", {}).get("DatabaseEndpointDoc")
-    prop = defn.get("properties", {}).get("$schema") if isinstance(defn, dict) else None
-    if not isinstance(prop, dict) or "const" not in prop:
-        raise RuntimeError(
-            "_endpoint_schema_post_process: expected $defs.DatabaseEndpointDoc"
-            ".properties.$schema with a `const`. The endpoint model was "
-            "renamed/reshaped; update this post-processor."
-        )
-    del prop["const"]
-    prop["pattern"] = schema_url_pattern("database-endpoint")
-    _collapse_nullable_anyof(schema)
 
 
-def _collapse_nullable_anyof_except(
-    schema: dict[str, Any], keep_defs: frozenset[str]
-) -> None:
-    """`_collapse_nullable_anyof` for the whole document EXCEPT `keep_defs`.
-
-    The read contracts dump everything with `exclude_none=True` (absent,
-    never null) EXCEPT the pipeline corrupted-row placeholder, whose legacy
-    null-stuffed shape (`display_name: null`, `connections.source: null`)
-    predates the contracts and is preserved verbatim — so the null branches
-    inside its `$defs` must survive. Hard-fails if a kept def is missing —
-    a model rename must update the caller rather than silently
-    re-collapsing intended nulls.
-    """
-    defs = schema.get("$defs", {})
-    missing = sorted(keep_defs - defs.keys())
-    if missing:
-        raise RuntimeError(
-            f"_collapse_nullable_anyof_except: $defs {missing!r} not found. "
-            "The corrupted-placeholder models were renamed/reshaped; update "
-            "the post-processor."
-        )
-    kept = {name: defs.pop(name) for name in keep_defs}
-    _collapse_nullable_anyof(schema)
-    defs.update(kept)
 
 
-def _pipeline_read_post_process(schema: dict[str, Any]) -> None:
-    # No `$schema` const relaxation needed: the read models declare the
-    # any-host `schema_url_pattern` natively (unlike the env-pinned WRITE
-    # models), so the rendered contract and the runtime validator agree.
-    _enforce_discriminator_required(schema)
-    _dedupe_pipeline_run_status_enum(schema)
-    _collapse_nullable_anyof_except(
-        schema,
-        frozenset({"CorruptedPipelinePlaceholder", "_CorruptedPipelineConnections"}),
-    )
 
 
-def _stream_read_post_process(schema: dict[str, Any]) -> None:
-    # The stream placeholder follows absent-never-null like every healthy
-    # record (only the pipeline placeholder ships legacy nulls), so the
-    # plain whole-document collapse applies.
-    _enforce_discriminator_required(schema)
-    _collapse_nullable_anyof(schema)
 
 
-def _connection_read_post_process(schema: dict[str, Any]) -> None:
-    _enforce_discriminator_required(schema)
-    _collapse_nullable_anyof(schema)
 
 
-def _connection_list_item_post_process(schema: dict[str, Any]) -> None:
-    _enforce_discriminator_required(schema)
-    _collapse_nullable_anyof(schema)
 
 
-def _execution_logs_post_process(schema: dict[str, Any]) -> None:
-    # `run_log` embeds `PipelineRun`, so the same status-enum dedupe as the
-    # run-history contract applies; the payload dumps with `exclude_none=True`
-    # (absent, never null), so nullable anyOf branches collapse.
-    _dedupe_pipeline_run_status_enum(schema)
-    _collapse_nullable_anyof(schema)
 
 
-def _pipeline_run_action_post_process(schema: dict[str, Any]) -> None:
-    # The terminate-data branch dumps with `exclude_none=True` (absent, never
-    # null), so its `NonEmptyStr | None` fields collapse to plain strings.
-    _collapse_nullable_anyof(schema)
 
 
 def _data_sync_response_post_process(schema: dict[str, Any]) -> None:
@@ -906,33 +801,8 @@ def _data_sync_terminate_post_process(schema: dict[str, Any]) -> None:
     schema["then"] = {"required": ["message"]}
 
 
-def _drop_null_defaults(node: Any) -> None:
-    """Drop `default: null` annotations while KEEPING nullable anyOf branches.
-
-    For tolerant-reader contracts over third-party objects (the billing
-    contracts wrap Stripe payloads): the wire legitimately carries explicit
-    nulls — the producer ships the validated original object, there is no
-    `exclude_none` dump — so `_collapse_nullable_anyof` would mis-describe
-    it. But a `default: null` annotation would still make the generated
-    consumer validator materialize null for absent fields; absent must stay
-    absent.
-    """
-    if isinstance(node, dict):
-        if "default" in node and node["default"] is None:
-            del node["default"]
-        for value in node.values():
-            _drop_null_defaults(value)
-    elif isinstance(node, list):
-        for item in node:
-            _drop_null_defaults(item)
 
 
-def _connector_catalog_item_post_process(schema: dict[str, Any]) -> None:
-    # The catalog item follows absent-never-null like the other read
-    # contracts (its placeholder included), so the plain whole-document
-    # collapse applies.
-    _enforce_discriminator_required(schema)
-    _collapse_nullable_anyof(schema)
 
 
 RESOURCES: tuple[Resource, ...] = (
@@ -1088,9 +958,8 @@ RESOURCES: tuple[Resource, ...] = (
     # ---- Public Data Sync API (rest.<domain>/v1, API-key) ------------------
     # PUBLIC, customer-facing request/response contracts for the API-key Data
     # Sync API. Unlike the internal `pipeline-run-accepted` / `pipeline-run-action`
-    # (private, npm, `data` payload only), these model the FULL response body so
-    # external consumers validate the whole `{success, message?, data?}` envelope
-    # without the npm `apiResponse()` factory. They reuse the same run-accepted /
+    # these model the FULL response body so a public consumer can validate
+    # an entire HTTP payload directly.
     # terminate data shapes as the private contracts — one source of truth, no
     # drift.
     Resource(
@@ -1174,45 +1043,8 @@ RESOURCES: tuple[Resource, ...] = (
         adapter=TypeAdapter(PipelineRunStatusResponse),
         mode="serialization",
         post_process=_data_sync_response_post_process,
-        source_paths=(
-            f"{_CONTRACTS_PREFIX}/pipelines/data_sync.py",
-            f"{_CONTRACTS_PREFIX}/pipelines/data_sync.py",
-        ),
+        source_paths=(f"{_CONTRACTS_PREFIX}/pipelines/data_sync.py",),
     ),
-    # Billing contracts use the default "validation" mode: producers ship
-    # the validated ORIGINAL Stripe object (no model dump), so the wire
-    # shape is exactly what the gate accepts — optional fields may be
-    # absent OR explicitly null (Stripe emits nulls), hence
-    # `_drop_null_defaults` instead of `_collapse_nullable_anyof`.
-    # org-read embeds the billing `subscription-summary` block, so it shares
-    # billing's null discipline: the persisted `stripe.subscription` ships
-    # verbatim (explicit Stripe nulls are real wire values) and the top-level
-    # org fields are absent-never-null — `_drop_null_defaults` keeps nullable
-    # branches while stripping default-null materialization, matching the
-    # embedded subscription contract exactly.
-    # Auth & OAuth contracts (#684 P2). Closed shapes the handlers assemble
-    # and ship via `model_dump` (no third-party passthrough), so the default
-    # "validation" mode with no post-process is correct: `expires_in` is
-    # required-nullable (no default), rendering `anyOf:[int,null]` with no
-    # `default:null` to drop.
-    # User-management contracts (#684 P2). `user` is a RESPONSE record the
-    # list_users handler assembles closed (StrictModel) and ships via
-    # `model_dump` — `role` is required-nullable (no default), so the default
-    # "validation" mode with no post-process is correct (no `default:null` to
-    # drop; the null branch is the reader's). The three *-payload contracts are
-    # REQUEST bodies (FE is the producer); the generator's request projection
-    # keeps `additionalProperties:false` (.strict()) and drops defaults.
-    # Settings / Platform & Dashboard / Metrics contracts (#684 P3). The two
-    # toggles (toggle_publicrestapi_api_key, toggle_sso) return the bare
-    # {success, message?} command envelope (toggle_publicrestapi additionally
-    # echoes the minted api_key), documented inline in the OpenAPI spec rather
-    # than as a payload contract; only their REQUEST bodies are pinned here.
-    # `oauth-token` and `metrics-row` are RESPONSE items the producer projects
-    # via `model_dump(exclude_none=True)` (absent fields omitted, never null),
-    # so they use serialization mode + `_collapse_nullable_anyof` like the
-    # other read-item contracts. The *-payload contracts are REQUEST bodies
-    # (FE is the producer); the generator's request projection keeps
-    # `additionalProperties:false` (.strict()) and drops defaults.
 )
 
 RESOURCES_BY_NAME: dict[str, Resource] = {r.name: r for r in RESOURCES}
@@ -1361,7 +1193,7 @@ def _is_additive(old: Any, new: Any, path: tuple = ()) -> bool:
     - Adding entries to multiset-style lists (extra `enum` values, extra
       union members) — note this is the permissive direction for *input*
       enums and may be wrong for *output* enums; developers must escalate
-      via the `schema-bump:<resource>:major` PR label when that distinction matters.
+      via `--bump` when that distinction matters.
 
     Anything not matched above falls through to False, so the caller errs
     on the side of MAJOR.
@@ -1395,7 +1227,7 @@ def classify(old: dict | None, new: dict) -> str:
     """Return 'none', 'patch', 'minor', or 'major' for severity vs. previous schema.
 
     Heuristic — errs on the side of MAJOR for ambiguous changes. Developers can
-    always override upward via the PR `schema-bump:<resource>:*` label; CI rejects
+    always override upward via `--bump`; `bump-check` rejects
     under-bumps.
 
     A `None` or empty-dict `old` both mean "no usable prior schema" — the
@@ -1601,9 +1433,23 @@ def _check_resource(resource: Resource) -> tuple[bool, str]:
             f"{version}.json; re-run {write_hint}",
         )
 
+    # index.json is published to the CDN exactly like the other two, so it needs
+    # the same gate. Without this, hand-editing it (or `write` changing the
+    # manifest shape) drifts silently while `check` still reports OK.
+    index_path = resource.dir() / "index.json"
+    committed_index = json.loads(index_path.read_text()) if index_path.exists() else None
+    if committed_index is None:
+        return (False, f"{resource.name}: index.json is missing; run {write_hint}")
+    if committed_index != build_index(resource):
+        return (
+            False,
+            f"{resource.name}: index.json is stale or hand-edited; re-run {write_hint}",
+        )
+
     return (
         True,
-        f"{resource.name}: OK — latest.json + {version}.json match rendered output",
+        f"{resource.name}: OK — latest.json + {version}.json + index.json match "
+        "rendered output",
     )
 
 
@@ -1666,7 +1512,7 @@ def cmd_classify(args: argparse.Namespace) -> int:
 def cmd_bump_check(args: argparse.Namespace) -> int:
     """Enforce that the committed version bump meets the structural severity floor.
 
-    Replaces the former `schema-bump:<resource>:<sev>` PR-label mechanism. The
+    Replaces the infra repo's `schema-bump:<resource>:<sev>` PR-label mechanism. The
     head version is read from the checked-in `latest.json` (which `write`
     auto-computed); the base version from the PR base branch's `--previous`
     copy. Requires the base→head delta to be >= the structurally-detected floor
@@ -1751,14 +1597,14 @@ def cmd_list(args: argparse.Namespace) -> int:
                 seen.add(p)
             seen.add(f"{resource.dir().relative_to(REPO_ROOT).as_posix()}/**")
         seen.add("scripts/render_schemas.py")
-        seen.add(".github/workflows/schema-bump-check.yml")
+        seen.add(".github/workflows/tests.yml")
         for p in sorted(seen):
             print(p)
         return 0
     if args.latest:
-        # `<resource>\t<repo-relative latest.json path>` per resource — lets the
-        # CI workflow resolve each resource's output path (public vs private
-        # tree) from the registry instead of hard-coding it.
+        # `<resource>\t<repo-relative latest.json path>` per resource — lets a
+        # caller resolve each resource's output path from the registry instead
+        # of hard-coding it.
         for resource in RESOURCES:
             rel = (resource.dir() / "latest.json").relative_to(REPO_ROOT).as_posix()
             print(f"{resource.name}\t{rel}")

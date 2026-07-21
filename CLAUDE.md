@@ -42,9 +42,12 @@ requirements-dev.txt              # runtime deps of the packages + pytest
 **`schemas/` is generated, not authored.** It is rendered from
 `packages/contract-models` by `scripts/render_schemas.py`; `render_schemas.py check`
 re-renders and fails on any diff, and CI runs it. Never hand-edit a file under
-`schemas/` — the one exception is `canonical-types.json`, which is hand-authored
-and flat (no registered resource, no version triple) and is guarded instead by
-`packages/contract-models/tests/unit/test_canonical_types_schema.py`.
+`schemas/`. Three files are exceptions, hand-authored and outside the registry
+because they have no version triple: `canonical-types.json` (guarded by
+`packages/contract-models/tests/unit/test_canonical_types_schema.py`),
+`data-sync-api/openapi.json`, and `data-sync-run-response/1.0.0.json`. They are
+served only because the publishing bucket globs `**/*.json`, and
+`render_schemas.py check` never inspects them.
 
 Only the 13 public resources render here. The ~40 internal-audience schemas stay
 in the infra repo with the private half of the renderer;
@@ -163,7 +166,9 @@ never pass without actually running.
 
 Each publishable artifact carries **its own version and its own tag prefix**
 (`analitiq-connector-builder-v*`, `analitiq-pipeline-builder-v*`,
-`contract-models-v*`, `validator-v*`). Versions are
+`contract-models-v*`, `validator-v*`), but they are released two different ways.
+
+**The two plugins** are managed by release-please. Their versions are
 derived by **release-please in monorepo mode** from Conventional Commit types —
 never bump a `plugin.json` version by hand.
 
@@ -182,22 +187,29 @@ never bump a `plugin.json` version by hand.
 - release-please maintains a rolling Release PR per artifact; merging it bumps
   the version, regenerates that artifact's `CHANGELOG.md`, and tags it.
 - When squash-merging, the PR title is what release-please parses — it must be a
-  valid Conventional Commit. Scope it to the artifact (`feat(connector-builder): …`).
+  valid Conventional Commit. A commit lands in a train by the **path** it
+  touches, not by its scope; the scope is for the changelog, so use the
+  component id (`feat(analitiq-connector-builder): …`).
 
-The two packages are the exception to "own version": they are held equal by the
-`linked-versions` plugin, because `packages/validator` pins contract-models with
-an exact `==` and `test_contract_models_pin.py` fails the build on any skew.
-Three values move together — both `[project].version`s and that pin, which the
-python release-type would miss (it only updates `[project].version`), so the pin
-line carries an `x-release-please-version` annotation.
+**The two packages are released by hand**, by pushing a `contract-models-v*` or
+`validator-v*` tag. They are deliberately NOT in release-please: it speaks
+SemVer, and their versions are PEP 440 pre-releases (`1.0.0rc12`). A dry run
+resolved `1.0.0rc12` as plain `1.0.0` and proposed `1.1.0` — silently dropping
+the rc suffix and jumping the train to a final release.
+
+Manual tagging also matches their discipline: `packages/validator` pins
+contract-models with an exact `==`, `test_contract_models_pin.py` fails on any
+skew, so three values must move together (both `[project].version`s and the pin);
+and a minor bump is a coordinated engine rollout, not something a commit type
+should infer.
 
 Config: `release-please-config.json` + `.release-please-manifest.json`.
 Workflow: `.github/workflows/release-please.yml`.
 
-**Publishing runs in the same workflow as release-please**, gated on its
-outputs — not in a separate `on: push: tags:` workflow. Tags created with
-`GITHUB_TOKEN` do not trigger other workflows, so a separate publish workflow
-would silently never fire.
+A **human-pushed** tag triggers the publish workflows normally. A tag created by
+the release-please action would not — GitHub suppresses triggers from
+`GITHUB_TOKEN` to prevent loops — which is why no publish job can be wired to
+release-please output, and another reason the packages stay on manual tags.
 
 ## Credentials
 
@@ -219,8 +231,13 @@ PyPI Trusted Publishers are registered for both `analitiq-contract-models` and
 
 **Every publish job must therefore declare `environment: pypi`.** PyPI checks the
 environment on both sides; a job without it is rejected, and the failure surfaces
-at the last step of an otherwise green release run. The release workflows copied
-in from the infra repo do **not** carry it — add it.
+at the last step of an otherwise green release run. Both release workflows carry
+it.
+
+The environment's deployment rules must also permit the ref the job runs on.
+release-please invokes the publish workflows via `workflow_call`, so that ref is
+`main` — not the release tag. `main`, `contract-models-v*` and `validator-v*`
+are all allowed; removing `main` silently blocks every release-driven publish.
 
 The environment restricts deployments to the tags `contract-models-v*` and
 `validator-v*`. It deliberately has **no required reviewers**: release-please's

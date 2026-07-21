@@ -1,6 +1,4 @@
 {
   "plugins/analitiq-connector-builder": "0.1.4",
-  "plugins/analitiq-pipeline-builder": "0.1.0",
-  "packages/contract-models": "1.0.0rc12",
-  "packages/validator": "1.0.0rc12"
+  "plugins/analitiq-pipeline-builder": "0.1.0"
 }

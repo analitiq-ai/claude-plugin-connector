@@ -179,7 +179,7 @@ pipeline-builder plugin, and how to develop against a local checkout.
 
 ## Links
 
-- [Analitiq DIP Registry](https://github.com/analitiq-ai/analitiq-dip-registry) — community connector submissions.
+- [Analitiq DIP Registry](https://github.com/orgs/analitiq-dip-registry/repositories) — community connector submissions.
 - [Published schemas](https://schemas.analitiq.ai) — the authoritative JSON Schemas the validator runs against.
 
 ## License

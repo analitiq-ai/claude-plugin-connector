@@ -6,14 +6,14 @@ name: Publish analitiq-validator
 # The validator is RENDERED from validator/src into the public
 # `analitiq.validator` package by packages/validator/scripts/build.py and
 # depends on `analitiq-contract-models` by version from PyPI. This replaces the
-# old channel that synced the built files into analitiq-ai/claude-plugin-connector;
+# old channel that synced the built files into the plugin repo (now this repo);
 # consumers (the connector-builder plugin, the registry CI) now `pip install
 # analitiq-validator` and run the `analitiq-validate` console
 # script.
 #
 # Runbook:
 #   1. Bump `version` in packages/validator/pyproject.toml (rc while iterating; final
-#      X.Y.Z once). Merge to dev.
+#      X.Y.Z once). Merge to main.
 #   2. Push a tag matching that version: `validator-v1.0.0rc2`.
 #   3. This workflow asserts tag == pyproject version, runs the validator's own
 #      test suite, builds sdist+wheel from the rendered package, and publishes.
@@ -22,8 +22,8 @@ name: Publish analitiq-validator
 # (rc1, rc2, ...) and cut the final X.Y.Z once.
 #
 # Required PyPI Trusted Publisher (pypi.org -> project -> Publishing -> Add):
-#   Owner: analitiq-ai   Repository: infrastructure
-#   Workflow name: validator-release.yml   Environment: (leave blank)
+#   Owner: analitiq-ai   Repository: claude-code-plugins
+#   Workflow name: validator-release.yml   Environment: pypi
 # Two entry points, one body:
 #   workflow_call - how release-please publishes. Its Release PR merge creates the
 #     tag with GITHUB_TOKEN, and GitHub SUPPRESSES workflow triggers from that
@@ -62,7 +62,7 @@ jobs:
     permissions:
       # A job-level permissions block REPLACES the workflow-level one (unspecified
       # perms become `none`), so `contents: read` must be re-granted here or
-      # actions/checkout can't read this private repo and the publish never builds.
+      # actions/checkout can't read the repo and the publish never builds.
       contents: read
       id-token: write # OIDC token for PyPI Trusted Publishing
     steps:
@@ -88,7 +88,7 @@ jobs:
         # `jsonschema` is a declared validator dependency (it meta-validates the
         # JSON-Schema documents embedded in api-endpoints as Draft 2020-12); the
         # test suite exercises that path, so it must be present here just as in
-        # validator-ci.yml. Kept in lockstep with that workflow's install line.
+        # tests.yml's PR-time gate. Kept in lockstep with its install step.
         run: pip install --quiet build "pydantic>=2.12,<3" "jsonschema>=4.18,<5" pytest
 
       - name: Build guards (version match, public-safe imports)

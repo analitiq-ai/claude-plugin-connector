@@ -10,7 +10,7 @@ name: Publish analitiq-contract-models
 #
 # Runbook:
 #   1. Bump `version` in packages/contract-models/pyproject.toml (e.g. 1.0.0rc1 -> rc2;
-#      1.0.0 for the first immutable release). Merge to dev.
+#      1.0.0 for the first immutable release). Merge to main.
 #   2. Push a tag matching that version: `contract-models-v1.0.0rc2`.
 #   3. This workflow asserts tag == pyproject version, runs the build guards,
 #      builds sdist+wheel from the rendered package, and publishes to PyPI.
@@ -19,8 +19,8 @@ name: Publish analitiq-contract-models
 # suffixes (rc1, rc2, .dev1, ...) while iterating and cut the final X.Y.Z once.
 #
 # Required PyPI Trusted Publisher (pypi.org -> project -> Publishing -> Add):
-#   Owner: analitiq-ai   Repository: infrastructure
-#   Workflow name: contract-models-release.yml   Environment: (leave blank)
+#   Owner: analitiq-ai   Repository: claude-code-plugins
+#   Workflow name: contract-models-release.yml   Environment: pypi
 # Two entry points, one body:
 #   workflow_call - how release-please publishes. Its Release PR merge creates the
 #     tag with GITHUB_TOKEN, and GitHub SUPPRESSES workflow triggers from that
@@ -59,7 +59,7 @@ jobs:
     permissions:
       # A job-level permissions block REPLACES the workflow-level one (unspecified
       # perms become `none`), so `contents: read` must be re-granted here or
-      # actions/checkout can't read this private repo and the publish never builds.
+      # actions/checkout can't read the repo and the publish never builds.
       contents: read
       id-token: write # OIDC token for PyPI Trusted Publishing
     steps:

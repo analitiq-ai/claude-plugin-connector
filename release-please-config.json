@@ -4,16 +4,6 @@
   "bump-patch-for-minor-pre-major": true,
   "separate-pull-requests": true,
   "include-component-in-tag": true,
-  "plugins": [
-    {
-      "type": "linked-versions",
-      "groupName": "analitiq-contracts",
-      "components": [
-        "contract-models",
-        "validator"
-      ]
-    }
-  ],
   "packages": {
     "plugins/analitiq-connector-builder": {
       "release-type": "simple",
@@ -37,21 +27,6 @@
           "path": ".claude-plugin/plugin.json",
           "jsonpath": "$.version"
         }
-      ]
-    },
-    "packages/contract-models": {
-      "release-type": "python",
-      "component": "contract-models",
-      "prerelease": true,
-      "changelog-path": "CHANGELOG.md"
-    },
-    "packages/validator": {
-      "release-type": "python",
-      "component": "validator",
-      "prerelease": true,
-      "changelog-path": "CHANGELOG.md",
-      "extra-files": [
-        "pyproject.toml"
       ]
     }
   }

@@ -30,7 +30,7 @@ classifiers = [
 # contract-models/pyproject.toml `version`; `test_contract_models_pin.py` fails
 # the build if either diverges. Bump all three together on every release.
 dependencies = [
-    "analitiq-contract-models==1.0.0rc12", # x-release-please-version
+    "analitiq-contract-models==1.0.0rc12",
     # Meta-validates the JSON-Schema documents embedded in api-endpoints
     # (input/response `schema`) as Draft 2020-12 — a check the dependency-light
     # contract-models package cannot host.

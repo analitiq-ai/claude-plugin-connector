@@ -1,8 +1,15 @@
-"""Repo-root conftest: make the in-repo packages win over any installed copy.
+"""Repo-root conftest: put the in-repo package source on sys.path.
 
 This repo is the SOURCE of `analitiq-contract-models` and `analitiq-validator`.
 Tests must therefore exercise `packages/*/src`, never a wheel that happens to be
 installed in the environment.
+
+Note what this CANNOT do: `analitiq/contracts/` has no `__init__.py` in source
+(it is generated at build time), so it is a namespace *portion*, while an
+installed wheel ships the generated file and is a *regular* package — which wins
+regardless of sys.path. So this works only when nothing is installed, which is
+why requirements-dev.txt forbids it and `_pins.assert_pinned_versions()` checks
+provenance rather than trusting the path order.
 
 A root conftest is the only place this works. `packages/validator/tests/conftest.py`
 puts both source roots on `sys.path`, but pytest collects

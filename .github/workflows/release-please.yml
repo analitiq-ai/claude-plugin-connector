@@ -11,21 +11,24 @@ name: release-please
 #   fix:                      -> patch
 #   feat:                     -> minor   (patch while pre-1.0)
 #   feat!: / BREAKING CHANGE: -> major   (minor while pre-1.0)
-# Scope it to the artifact so it lands in the right train:
-#   feat(connector-builder): ...
+# A commit lands in a train by the PATH it touches, not by its scope - a scope is
+# for humans reading the changelog. Use the component id:
+#   feat(analitiq-connector-builder): ...
 # When squash-merging, enable "Default to PR title for squash merge commits" in
 # the repo settings - that title is what release-please parses.
 #
-# PUBLISHING RUNS HERE, in this workflow, gated on the action's outputs - never
-# in a separate `on: push: tags:` workflow. Tags created with GITHUB_TOKEN do not
-# trigger other workflows (GitHub suppresses that to prevent loops), so a
-# separate publish workflow would silently never fire. Keeping it in-run also
-# scopes `id-token: write` to just the job that needs it.
+# This manages the two PLUGINS only. The PyPI packages are deliberately NOT here:
+# release-please speaks SemVer and their versions are PEP 440 pre-releases
+# (1.0.0rc12). A dry run against this config resolved 1.0.0rc12 as plain 1.0.0
+# and proposed 1.1.0 - silently dropping the rc suffix and jumping the train to a
+# final release. They are released by pushing `contract-models-v*` /
+# `validator-v*` by hand, which also matches their documented discipline: a minor
+# bump is a coordinated engine rollout, not something a commit type should infer.
 #
-# The two PyPI packages publish through the reusable workflows below, invoked
-# from THIS run rather than by their own tag trigger, for the reason above.
-# They authenticate by PyPI Trusted Publishing (no token) behind the `pypi`
-# environment. See CLAUDE.md "Credentials".
+# Consequence worth remembering: a HUMAN-pushed tag triggers those workflows
+# normally. Tags created by THIS action with GITHUB_TOKEN would not - GitHub
+# suppresses triggers from that token to prevent loops - which is why no publish
+# job can be wired to release-please output.
 
 on:
   push:
@@ -39,35 +42,10 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
-    outputs:
-      # Per-path outputs are keyed `<path>--<field>`; empty when that package had
-      # no release in this run, which is what the publish jobs gate on.
-      contract_models_version: ${{ steps.release.outputs['packages/contract-models--version'] }}
-      validator_version: ${{ steps.release.outputs['packages/validator--version'] }}
     steps:
       - uses: googleapis/release-please-action@v4
-        id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Defaults read release-please-config.json and
           # .release-please-manifest.json from the repo root.
 
-  publish-contract-models:
-    needs: release-please
-    if: needs.release-please.outputs.contract_models_version != ''
-    uses: ./.github/workflows/contract-models-release.yml
-    with:
-      version: ${{ needs.release-please.outputs.contract_models_version }}
-    permissions:
-      contents: read
-      id-token: write # OIDC token for PyPI Trusted Publishing
-
-  publish-validator:
-    needs: release-please
-    if: needs.release-please.outputs.validator_version != ''
-    uses: ./.github/workflows/validator-release.yml
-    with:
-      version: ${{ needs.release-please.outputs.validator_version }}
-    permissions:
-      contents: read
-      id-token: write
