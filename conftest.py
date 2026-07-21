@@ -27,8 +27,15 @@ os.environ.setdefault("DOMAIN", "analitiq.ai")
 
 for _src in (REPO_ROOT / "packages" / "contract-models" / "src",
              REPO_ROOT / "packages" / "validator" / "src"):
+    # Fail loudly. Skipping a missing root would leave the suite importing
+    # whatever happens to be installed while every downstream `importorskip`
+    # turned green — a merge gate passing having validated nothing.
+    if not _src.is_dir():
+        raise RuntimeError(
+            f"{_src} is missing. The suite must exercise in-repo source, not an "
+            "installed wheel; run pytest from a complete checkout.")
     _p = str(_src)
-    if _src.is_dir() and _p not in sys.path:
+    if _p not in sys.path:
         sys.path.insert(0, _p)
 
 # The pipeline plugin's helpers bootstrap the PUBLISHED validator into a managed

@@ -1,7 +1,8 @@
 name: tests
 
-# One suite for the whole monorepo. `pytest.ini` sets `testpaths = tests`, so a
-# bare `pytest` runs every plugin's suite (tests/<plugin>/).
+# One suite for the whole monorepo. `pytest.ini` sets `testpaths = tests packages`,
+# so a bare `pytest` runs every plugin's suite (tests/<plugin>/) AND each
+# package's own suite (packages/<pkg>/tests/).
 #
 # What the suites gate:
 #   connector_builder/ - the plugin restates a few schema-owned enum vocabularies
@@ -48,6 +49,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install pinned contract packages
+        id: install
         # The pin lives in requirements-dev.txt only - see CLAUDE.md
         # "The contract pin". Never inline a version here; that would be a
         # second copy of a fact one file already owns.
@@ -61,18 +63,22 @@ jobs:
           DRIFT_REQUIRE_CONTRACT_MODELS: '1'
         run: pytest -v -rs
       - name: Check generated prose blocks match the pinned contract
-        # The condition is load-bearing. test_generated_blocks_in_sync computes
-        # the same predicate as --check, so on a stale block pytest fails first;
-        # under the default `if: success()` this step would be skipped in exactly
-        # the runs it exists to explain. Running it anyway prints the offending
-        # diff, so a contributor sees what to regenerate without reproducing
-        # locally.
+        # Gated on the INSTALL, not on `success()`. test_generated_blocks_in_sync
+        # computes the same predicate, so on a stale block pytest fails first and
+        # a plain `if: success()` would skip this step in exactly the runs it
+        # exists to explain. `success()` is also false when any EARLIER gate
+        # failed, which would silently skip the two gates below. Keying on the
+        # install step keeps each gate independent while preserving the one
+        # carve-out that matters: if the install failed, this script would
+        # re-enter its dependency bootstrap and bury the real error.
         #
-        # Gated on the tests step specifically, NOT `always()` or `success() ||
-        # failure()`: both of those also fire when the install step failed, and
-        # this script re-enters the dependency bootstrap, which would reinstall
-        # the pin and bury the real error under a second, noisier failure.
-        if: success() || steps.tests.conclusion == 'failure'
+        # The env vars stop that bootstrap. Without them the generator installs
+        # the PUBLISHED wheel into a venv and re-execs, grading the docs against
+        # the last release rather than this PR's source.
+        if: steps.install.conclusion == 'success'
+        env:
+          ANALITIQ_VALIDATOR_FROM_SOURCE: '1'
+          PYTHONPATH: packages/contract-models/src:packages/validator/src
         run: python3 plugins/analitiq-pipeline-builder/scripts/gen_contract_docs.py --check
       - name: Package build guards
         # These are what keep the private runtime out of the public wheels:
@@ -81,7 +87,7 @@ jobs:
         # generated __init__ / PEP 420 layout. The release workflows run them
         # too, but only at tag time - by then a leak is already merged. This is
         # the PR-time gate (it was validator-ci.yml in the infra repo).
-        if: success() || steps.tests.conclusion == 'failure'
+        if: steps.install.conclusion == 'success'
         run: |
           python3 packages/contract-models/scripts/build.py --check
           python3 packages/validator/scripts/build.py --check
@@ -90,5 +96,5 @@ jobs:
         # gate the two drift silently: a model change that never reaches the
         # published JSON is invisible until something downstream breaks.
         # Same reasoning as the step above, hence the same condition.
-        if: success() || steps.tests.conclusion == 'failure'
+        if: steps.install.conclusion == 'success'
         run: python3 scripts/render_schemas.py check

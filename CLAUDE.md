@@ -80,18 +80,24 @@ Separately, the plugins **self-install a published release at runtime** — end
 users have no checkout, so this must be a real PyPI version:
 
 The pin is currently **`analitiq-validator==1.0.0rc12`** (which resolves
-`analitiq-contract-models==1.0.0rc12`). Three places state it and must move
+`analitiq-contract-models==1.0.0rc12`). Five places state it and must move
 together:
 
 - `VALIDATOR_PIN` in `plugins/analitiq-pipeline-builder/scripts/_analitiq.py`
 - the self-install line in
   `plugins/analitiq-connector-builder/agents/connector-schema-validator.md`
+  (three occurrences: the comment, the version probe, and the install command)
+- `tests/connector_builder/test_schema_drift.py`'s docstring and skip message
 - this section
 
-`test_validator_pin_matches_the_package_this_repo_ships` requires that pin to
-equal the version in `packages/validator/pyproject.toml`. So bumping a package
-version means bumping the runtime pin too — **but only once that version is
-actually published**, or agents will try to install something PyPI doesn't have.
+`test_validator_pin_matches_the_package_this_repo_ships` requires the pin to be
+**at or behind** `packages/validator/pyproject.toml`. Not equal: release-please
+bumps that file inside the Release PR, and the pin cannot follow in the same
+commit because it names a version that must already be on PyPI — which only
+happens after that PR merges and publishes. Requiring equality would leave the
+Release PR permanently red. The test catches the dangerous direction instead: a
+pin *ahead* of what this repo ships points at something users cannot install.
+Bump the pin in a follow-up once the release is out.
 
 Running a plugin helper from a checkout would otherwise trigger the bootstrap
 (build a venv, install the published wheel, `os.execv` into it). The root

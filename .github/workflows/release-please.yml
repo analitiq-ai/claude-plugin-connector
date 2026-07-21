@@ -22,14 +22,10 @@ name: release-please
 # separate publish workflow would silently never fire. Keeping it in-run also
 # scopes `id-token: write` to just the job that needs it.
 #
-# The Python packages are not in the tree yet. When packages/contract-models and
-# packages/validator land, add a package entry to release-please-config.json and
-# a publish job here, gated like:
-#     if: ${{ contains(fromJSON(steps.release.outputs.paths_released), 'packages/contract-models') }}
-#     permissions: { contents: read, id-token: write }
-#     environment: pypi
-# authenticating by PyPI Trusted Publishing (no token). See CLAUDE.md
-# "Credentials".
+# The two PyPI packages publish through the reusable workflows below, invoked
+# from THIS run rather than by their own tag trigger, for the reason above.
+# They authenticate by PyPI Trusted Publishing (no token) behind the `pypi`
+# environment. See CLAUDE.md "Credentials".
 
 on:
   push:
@@ -43,6 +39,11 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      # Per-path outputs are keyed `<path>--<field>`; empty when that package had
+      # no release in this run, which is what the publish jobs gate on.
+      contract_models_version: ${{ steps.release.outputs['packages/contract-models--version'] }}
+      validator_version: ${{ steps.release.outputs['packages/validator--version'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -50,3 +51,23 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Defaults read release-please-config.json and
           # .release-please-manifest.json from the repo root.
+
+  publish-contract-models:
+    needs: release-please
+    if: needs.release-please.outputs.contract_models_version != ''
+    uses: ./.github/workflows/contract-models-release.yml
+    with:
+      version: ${{ needs.release-please.outputs.contract_models_version }}
+    permissions:
+      contents: read
+      id-token: write # OIDC token for PyPI Trusted Publishing
+
+  publish-validator:
+    needs: release-please
+    if: needs.release-please.outputs.validator_version != ''
+    uses: ./.github/workflows/validator-release.yml
+    with:
+      version: ${{ needs.release-please.outputs.validator_version }}
+    permissions:
+      contents: read
+      id-token: write

@@ -21,7 +21,21 @@ name: Publish analitiq-contract-models
 # Required PyPI Trusted Publisher (pypi.org -> project -> Publishing -> Add):
 #   Owner: analitiq-ai   Repository: infrastructure
 #   Workflow name: contract-models-release.yml   Environment: (leave blank)
+# Two entry points, one body:
+#   workflow_call - how release-please publishes. Its Release PR merge creates the
+#     tag with GITHUB_TOKEN, and GitHub SUPPRESSES workflow triggers from that
+#     token to prevent loops. A tag-triggered publish would therefore never fire
+#     for the normal release path, so release-please.yml calls this directly.
+#   push: tags    - a HUMAN-pushed tag still triggers normally. Kept as the
+#     manual/recovery path (e.g. re-publishing a version release-please already
+#     tagged).
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to publish, without the contract-models-v prefix."
+        required: true
+        type: string
   push:
     tags:
       - "contract-models-v*"
@@ -57,9 +71,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Derive release version from tag
+      - name: Resolve release version
         id: ver
-        run: echo "version=${GITHUB_REF_NAME#contract-models-v}" >> "$GITHUB_OUTPUT"
+        # From the caller when invoked by release-please; from the tag otherwise.
+        # build.py --expect-version cross-checks it against pyproject.toml, so a
+        # wrong value here fails before anything is published.
+        run: |
+          version="${{ inputs.version }}"
+          if [ -z "$version" ]; then version="${GITHUB_REF_NAME#contract-models-v}"; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Install build tooling
         run: pip install --quiet build "pydantic>=2.12,<3"

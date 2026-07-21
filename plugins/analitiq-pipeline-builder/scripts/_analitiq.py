@@ -14,8 +14,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Single source of the validator pin — bump this one string to move to a newer
-# published contract. Keep it in lockstep with requirements-dev.txt.
+# Single source of the validator pin — the PUBLISHED release the plugin
+# self-installs at runtime. requirements-dev.txt deliberately does NOT carry it
+# (installing the wheel would shadow the in-repo source); the invariant is
+# instead `pin == packages/validator/pyproject.toml version`, enforced by
+# tests/pipeline_builder/test_contract_enforcement.py.
 VALIDATOR_PIN = "analitiq-validator==1.0.0rc12"
 
 _REEXEC_SENTINEL = "ANALITIQ_PIPELINE_VALIDATOR_BOOTSTRAPPED"
@@ -70,11 +73,31 @@ def ensure_deps_or_reexec(script_path: str) -> None:
     is still missing after the re-exec."""
     if os.environ.get(_FROM_SOURCE):
         import importlib.util
-        if importlib.util.find_spec("analitiq.validator") is not None:
-            return
-        raise RuntimeError(
-            f"{_FROM_SOURCE} is set but `analitiq.validator` is not importable; "
-            "the in-repo source is not on sys.path (see the repo-root conftest.py)")
+        try:
+            spec = importlib.util.find_spec("analitiq.validator")
+        except ModuleNotFoundError:
+            # `find_spec` RAISES rather than returning None when the parent
+            # `analitiq` namespace is itself absent - which is the most likely
+            # breakage this branch exists to diagnose, so it must not escape as
+            # a bare traceback.
+            spec = None
+        # `find_spec` alone is satisfied by a BARE DIRECTORY: a leftover or
+        # half-deleted `analitiq/validator/` resolves as a namespace package with
+        # `origin` None, so this would report success and the real failure would
+        # surface much later as an opaque ImportError inside validate.py.
+        if spec is None or spec.origin in (None, "namespace"):
+            raise RuntimeError(
+                f"{_FROM_SOURCE} is set but `analitiq.validator` has no importable "
+                f"source (spec={spec!r}). Expected the in-repo tree on sys.path — "
+                f"see the repo-root conftest.py — or unset {_FROM_SOURCE} to install "
+                f"the pinned {VALIDATOR_PIN}.")
+        # Say so. This branch disables the version-exactness guarantee, and a
+        # variable inherited from a parent process would otherwise do that
+        # invisibly — an arbitrary installed build would satisfy it and every
+        # validation would still report "passed".
+        print(f"[analitiq] {_FROM_SOURCE}=1 — using {spec.origin}, "
+              f"NOT the pinned {VALIDATOR_PIN}", file=sys.stderr)
+        return
     version = _pinned_version()
     if _importable(version):
         return

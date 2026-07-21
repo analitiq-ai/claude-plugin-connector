@@ -716,14 +716,32 @@ def render_text(text: str, source: str) -> str:
 # fenced example rather than carrying a real block. It sits inside the plugin
 # root (it used to sit above it, outside this scan), so it has to be excluded
 # explicitly or --check would try to "fill in" the illustration.
-NOT_GENERATED = {"CLAUDE.md"}
+# Exact paths, not basenames: `rglob` is recursive, so excluding by name would
+# also exempt any nested CLAUDE.md (skills/*/CLAUDE.md, agents/CLAUDE.md) that
+# legitimately carried a block.
+NOT_GENERATED = frozenset({DOCS_ROOT / "CLAUDE.md"})
+
+
+def _strip_fenced_blocks(text: str) -> str:
+    """Drop ``` fenced regions so markers shown as examples don't count."""
+    return re.sub(r"^```.*?^```", "", text, flags=re.S | re.M)
 
 
 def generated_docs() -> list[Path]:
     """Every markdown file under the plugin root carrying a generated block."""
+    for excluded in NOT_GENERATED:
+        # The exemption is only valid while the file's markers are illustrative
+        # (shown inside a fenced example). If someone turns one into a real
+        # block, it would stop being generated AND stop being checked, with no
+        # diff and no warning - so verify the premise instead of trusting it.
+        if excluded.exists() and _BLOCK_RE.search(_strip_fenced_blocks(excluded.read_text())):
+            raise SystemExit(
+                f"{excluded} carries a generated block outside a fenced example "
+                "but is exempt via NOT_GENERATED; remove the exemption or move "
+                "the block to a document the generator owns.")
     return sorted(
         p for p in DOCS_ROOT.rglob("*.md")
-        if p.name not in NOT_GENERATED and "<!-- BEGIN GENERATED:" in p.read_text()
+        if p not in NOT_GENERATED and "<!-- BEGIN GENERATED:" in p.read_text()
     )
 
 

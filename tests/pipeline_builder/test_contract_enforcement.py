@@ -184,6 +184,23 @@ def test_active_pipeline_requires_a_stream(tmp_path):
                for f in diagnostics["findings"])
 
 
+
+def _le(a: str, b: str) -> bool:
+    """`a <= b` over PEP 440-ish versions, without adding a dependency.
+
+    Compares numeric release segments first, then treats a missing pre-release
+    suffix as newer (1.0.0 > 1.0.0rc1).
+    """
+    def key(v: str):
+        m = re.match(r"^(\d+(?:\.\d+)*)(?:(a|b|rc)(\d+))?$", v)
+        assert m, f"unparseable version {v!r}"
+        release = tuple(int(n) for n in m.group(1).split("."))
+        # No suffix sorts last among equal releases.
+        pre = (1, "", 0) if m.group(2) is None else (0, m.group(2), int(m.group(3)))
+        return (release, pre)
+    return key(a) <= key(b)
+
+
 # --- the pin itself --------------------------------------------------------
 
 def test_validator_pin_matches_the_package_this_repo_ships():
@@ -201,12 +218,25 @@ def test_validator_pin_matches_the_package_this_repo_ships():
     from _analitiq import VALIDATOR_PIN
 
     pyproject = (REPO_ROOT / "packages" / "validator" / "pyproject.toml").read_text()
-    shipped = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.M)
-    assert shipped, "packages/validator/pyproject.toml has no top-level version"
-    assert VALIDATOR_PIN == f"analitiq-validator=={shipped.group(1)}", (
-        f"_analitiq.VALIDATOR_PIN is {VALIDATOR_PIN!r} but this repo ships "
-        f"analitiq-validator {shipped.group(1)}; bump the pin when the package "
-        "version moves, once that version is actually published to PyPI")
+    # Anchor to [project]; a bare `^version =` would take whichever table came
+    # first if one were ever added above it.
+    project = pyproject.split("[project]", 1)[-1].split("\n[", 1)[0]
+    shipped = re.search(r'^version\s*=\s*"([^"]+)"', project, re.M)
+    assert shipped, "packages/validator/pyproject.toml has no [project] version"
+
+    pin_version = VALIDATOR_PIN.split("==", 1)[1]
+    assert VALIDATOR_PIN.startswith("analitiq-validator=="), VALIDATOR_PIN
+
+    # NOT equality. release-please bumps pyproject.toml inside the Release PR,
+    # and the pin cannot follow in the same commit: it names a version that must
+    # already be ON PyPI, which only happens after that PR merges and publishes.
+    # Requiring equality would make the Release PR permanently red and
+    # unmergeable. The dangerous direction is the other one - a pin AHEAD of
+    # what this repo has shipped points at something users cannot install.
+    assert _le(pin_version, shipped.group(1)), (
+        f"_analitiq.VALIDATOR_PIN is {VALIDATOR_PIN!r}, ahead of the "
+        f"{shipped.group(1)} this repo ships. Agents would try to install a "
+        "version that is not published.")
 
     # CLAUDE.md names the pin too, and sits outside the generator's plugin-root
     # scope, so nothing else would notice it going stale. Assert its presence
@@ -241,8 +271,15 @@ def test_suite_exercises_in_repo_source_not_an_installed_wheel():
 
     src = REPO_ROOT / "packages"
     for mod in (contracts, validator):
-        resolved = Path(mod.__file__ or mod.__path__[0]).resolve()
-        assert resolved.is_relative_to(src), (
-            f"{mod.__name__} resolved to {resolved}, outside {src}. An installed "
+        # EVERY portion, not just __path__[0]. A namespace package can span
+        # several roots; an editable install or a .pth entry appends a second
+        # one under site-packages while index 0 still points at source, so
+        # checking only the first would pass while submodules resolved from the
+        # wheel.
+        origins = ([Path(mod.__file__).resolve()] if mod.__file__
+                   else [Path(p).resolve() for p in mod.__path__])
+        stray = [o for o in origins if not o.is_relative_to(src)]
+        assert not stray, (
+            f"{mod.__name__} resolves partly outside {src}: {stray}. An installed "
             "analitiq-contract-models / analitiq-validator is shadowing the "
             "in-repo source — uninstall it (see requirements-dev.txt).")

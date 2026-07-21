@@ -128,6 +128,17 @@ _PUBLIC_MODEL_PKG = "analitiq.contracts"
 _MODEL_PKG_ALLOWLIST = (_PUBLIC_MODEL_PKG, "pydantic")
 
 
+def _module_allowed(module: str) -> bool:
+    """Exact match or a dotted child — never a bare prefix.
+
+    `startswith(("analitiq.contracts", "pydantic"))` would also admit
+    `analitiq.contracts_internal` and `pydantic_extra_types.*`, neither of which
+    this project owns.
+    """
+    return any(module == pkg or module.startswith(pkg + ".")
+               for pkg in _MODEL_PKG_ALLOWLIST)
+
+
 def _model_tree(root: Any) -> set[type[BaseModel]]:
     """Every Pydantic model reachable from a schema's root type.
 
@@ -145,6 +156,12 @@ def _model_tree(root: Any) -> set[type[BaseModel]]:
             seen.add(node)
             for field in node.model_fields.values():
                 walk(field.annotation)
+            # Computed fields live outside `model_fields` but DO render under
+            # mode="serialization" — which is exactly the surface the Data Sync
+            # leak came through. Walking only `model_fields` would let a
+            # computed_field returning a private model reach `$defs` unseen.
+            for computed in node.model_computed_fields.values():
+                walk(getattr(computed, "return_type", None))
             return
         for arg in typing.get_args(node):
             walk(arg)
@@ -205,10 +222,22 @@ class Resource:
         So making a schema public is not a keyword: it is moving its models into
         the public package, which is a reviewable, structural act.
         """
+        tree = _model_tree(self.adapter._type)
+        if not tree:
+            # An empty tree is indistinguishable from a clean one, so the check
+            # below would pass without inspecting anything. `_model_tree`'s own
+            # docstring names this hazard for `list[X]` roots; make the whole
+            # class of it loud instead of patching instances. No registered
+            # resource legitimately renders from zero models.
+            raise ValueError(
+                f"resource {self.name!r} has an empty model tree, so the "
+                f"audience check cannot run (root: {self.adapter._type!r}). "
+                "A registered resource must render from at least one model."
+            )
         leaked = sorted(
             f"{m.__module__}.{m.__qualname__}"
-            for m in _model_tree(self.adapter._type)
-            if not m.__module__.startswith(_MODEL_PKG_ALLOWLIST)
+            for m in tree
+            if not _module_allowed(m.__module__)
         )
         if leaked:
             raise ValueError(
