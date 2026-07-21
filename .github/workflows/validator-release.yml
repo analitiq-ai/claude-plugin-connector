@@ -24,21 +24,16 @@ name: Publish analitiq-validator
 # Required PyPI Trusted Publisher (pypi.org -> project -> Publishing -> Add):
 #   Owner: analitiq-ai   Repository: claude-code-plugins
 #   Workflow name: validator-release.yml   Environment: pypi
-# Two entry points, one body:
-#   workflow_call - how release-please publishes. Its Release PR merge creates the
-#     tag with GITHUB_TOKEN, and GitHub SUPPRESSES workflow triggers from that
-#     token to prevent loops. A tag-triggered publish would therefore never fire
-#     for the normal release path, so release-please.yml calls this directly.
-#   push: tags    - a HUMAN-pushed tag still triggers normally. Kept as the
-#     manual/recovery path (e.g. re-publishing a version release-please already
-#     tagged).
+# Tag-triggered only. These packages are deliberately NOT managed by
+# release-please: it speaks SemVer and their versions are PEP 440 pre-releases
+# (1.0.0rc12), which it resolves as plain 1.0.0 and then bumps - dropping the rc
+# suffix and jumping the train to a final release. Push the tag by hand.
+#
+# A human-pushed tag triggers this normally. A tag created by the release-please
+# action would NOT: GitHub suppresses workflow triggers from GITHUB_TOKEN to
+# prevent loops. That is why no publish job can be wired to release-please
+# output, and the second reason these stay manual.
 on:
-  workflow_call:
-    inputs:
-      version:
-        description: "Version to publish, without the validator-v prefix."
-        required: true
-        type: string
   push:
     tags:
       - "validator-v*"
@@ -74,15 +69,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Resolve release version
+      - name: Derive release version from tag
         id: ver
-        # From the caller when invoked by release-please; from the tag otherwise.
-        # build.py --expect-version cross-checks it against pyproject.toml, so a
-        # wrong value here fails before anything is published.
-        run: |
-          version="${{ inputs.version }}"
-          if [ -z "$version" ]; then version="${GITHUB_REF_NAME#validator-v}"; fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+        # build.py --expect-version cross-checks this against pyproject.toml, so
+        # a mistyped tag fails before anything is published.
+        run: echo "version=${{GITHUB_REF_NAME#validator-v}}" >> "$GITHUB_OUTPUT"
 
       - name: Install build + test tooling
         # `jsonschema` is a declared validator dependency (it meta-validates the

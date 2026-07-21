@@ -234,17 +234,20 @@ environment on both sides; a job without it is rejected, and the failure surface
 at the last step of an otherwise green release run. Both release workflows carry
 it.
 
-The environment's deployment rules must also permit the ref the job runs on.
-release-please invokes the publish workflows via `workflow_call`, so that ref is
-`main` — not the release tag. `main`, `contract-models-v*` and `validator-v*`
-are all allowed; removing `main` silently blocks every release-driven publish.
+The environment's deployment rules permit **only** `contract-models-v*` and
+`validator-v*`. Publishing is always tag-triggered, so the job's ref is always
+the release tag; `main` is deliberately excluded. Adding a branch here would
+widen what can reach PyPI for no gain.
 
-The environment restricts deployments to the tags `contract-models-v*` and
-`validator-v*`. It deliberately has **no required reviewers**: release-please's
-Release PR is already a human-reviewed, human-merged gate, and the tag only
-exists because someone merged it. A second approval would re-approve the same
-decision. Add reviewers only if publish rights should be held by a narrower group
-than merge rights.
+The environment currently has **no required reviewers**. That was justified while
+release-please drove these releases — its Release PR was already a reviewed,
+human-merged gate, so a second approval re-approved the same decision. **That
+justification no longer holds**: the packages moved to hand-pushed tags, so
+anyone with push access can publish to PyPI with no review in between.
+
+The remaining controls are the tag restriction above and who holds push access.
+If those are not enough, required reviewers on this environment is the lever —
+it costs one click per release and is the only human gate left.
 
 The repo is **public**. Its workflow files are world-readable and that is fine:
 the gate is authorization, not secrecy. Two rules follow from it — never use

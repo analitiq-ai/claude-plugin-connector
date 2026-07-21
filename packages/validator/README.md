@@ -104,9 +104,12 @@ if any(f["severity"] == "error" for f in findings):
 
 ## Source of truth
 
-The canonical source is the **`analitiq-ai/infrastructure`** repo, under
-`validator/` (with the contract models under `contract-models/` and the model
-layer). That repo owns the models, generates the JSON Schemas from them, and
-**renders** the source package into the public `analitiq.validator` package on
-release. The published package is generated — edit the source in the
-infrastructure repo, not the installed copy.
+The canonical source is
+[**`analitiq-ai/claude-code-plugins`**](https://github.com/analitiq-ai/claude-code-plugins),
+under `packages/validator/` — with the contract models beside it at
+`packages/contract-models/`, and the public JSON Schemas rendered from those same
+models by `scripts/render_schemas.py`.
+
+The package is authored directly in the public `analitiq.validator` namespace;
+it is staged verbatim at build time, not rendered from a private tree. Edit the
+source there, not the installed copy.
