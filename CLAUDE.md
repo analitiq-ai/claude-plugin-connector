@@ -239,15 +239,22 @@ The environment's deployment rules permit **only** `contract-models-v*` and
 the release tag; `main` is deliberately excluded. Adding a branch here would
 widen what can reach PyPI for no gain.
 
-The environment currently has **no required reviewers**. That was justified while
-release-please drove these releases — its Release PR was already a reviewed,
-human-merged gate, so a second approval re-approved the same decision. **That
-justification no longer holds**: the packages moved to hand-pushed tags, so
-anyone with push access can publish to PyPI with no review in between.
+The environment's **sole required reviewer is `Analitiq-Bot`**. Every publish
+pauses at the `environment: pypi` job until it is approved, and no other account
+can approve it — so while anyone with push access can *push* a release tag, only
+Analitiq-Bot can let the publish through. That is the "only Analitiq-Bot
+publishes" boundary, and it is the human gate that the release-please Release PR
+used to provide before the packages moved to hand-pushed tags.
 
-The remaining controls are the tag restriction above and who holds push access.
-If those are not enough, required reviewers on this environment is the lever —
-it costs one click per release and is the only human gate left.
+`prevent_self_review` is deliberately **off**: with Analitiq-Bot as the only
+reviewer, blocking self-review would deadlock any release Analitiq-Bot itself
+pushes. The trade-off is that this is single-account control, not four-eyes — to
+require a second approver, add them to the environment and turn self-review
+prevention back on.
+
+These are live GitHub environment settings, not repo files, so they are not
+covered by any test here; changing the reviewer or the tag rules is a settings
+edit in the repo's Environments page.
 
 The repo is **public**. Its workflow files are world-readable and that is fine:
 the gate is authorization, not secrecy. Two rules follow from it — never use
