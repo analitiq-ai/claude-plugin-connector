@@ -49,7 +49,7 @@ pipeline-builder (skill, orchestrator)
 | `pipeline-provider-researcher` | Collects `PipelineFacts` from the user. No WebSearch. |
 | `registry-browser` | Downloads source + destination connectors, read-only; reuses connectors already on disk. |
 | `connection-creator` | A `connection.json` per side plus its `.secrets/credentials.json` template. |
-| `private-endpoint-creator` | Database connections only: introspects the live database and authors `database-endpoint` documents per selected table. |
+| `private-endpoint-creator` | Database connections only: introspects the live database and authors `database-endpoint` documents per selected table, plus connection-scoped type-map gap files (`connections/<slug>/definition/type-map-{read,write}.json`) when the connector's base maps don't cover a discovered native. |
 | `pipeline-creator` | The `pipeline.json` shell referencing connections by UUID. |
 | `stream-creator` | One `stream.json` per selected endpoint. |
 | `pipeline-schema-validator` | Runs `scripts/validate.py` and returns a `Diagnostics` object. |
@@ -88,4 +88,4 @@ needs it. **This file deliberately does not restate any of it.**
 | Pipeline shape, identity model, schedule, engine runtime, file output | `skills/pipeline-spec/` |
 | Stream source/destination, endpoint refs, mapping, filter operators, validation rules | `skills/stream-spec/` |
 | Connection envelope, `secret_refs` schemes, credentials template | `skills/connection-spec/` |
-| Database endpoint authoring | `skills/endpoint-spec/` |
+| Database endpoint authoring, connection-scoped type-map gaps | `skills/endpoint-spec/` |

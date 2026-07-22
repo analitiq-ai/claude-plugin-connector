@@ -229,6 +229,23 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    when endpoint files from a prior pipeline are already on disk for
    the same tables.
 
+   **Connection-scoped type maps.** The `create-endpoints` return carries a
+   `type_maps` object alongside `outputs` — connection-scoped gap rules for
+   discovered natives the connector's maps don't cover (authored per
+   `endpoint-spec/spec-type-map-gaps.md`):
+   - If `type_maps.ambiguities` is non-empty, ask the user one question per
+     entry — which of the candidate natives this connection should render the
+     canonical to — then re-invoke `create-endpoints` for the same tables with
+     `write_render_choices` (`{canonical: native}`). The re-run must return no
+     ambiguities.
+   - Write a non-null `type_maps.read` / `type_maps.write` to
+     `connections/<connection-slug>/definition/type-map-read.json` /
+     `type-map-write.json` and validate each (entity `type_map_read` /
+     `type_map_write`) in the same ≤ 5 fix-pass loop as other artifacts.
+     `null` means write nothing — never create an empty map file, and never
+     delete an existing one. Record authored or extended maps in the final
+     summary.
+
 6. **Pipeline shell** — invoke `pipeline-creator`. Receives the minted
    `pipeline_id` UUID, the `connections.source` / `connections.destinations[]`
    UUIDs, schedule classification, and engine/runtime defaults. Writes
@@ -251,8 +268,11 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
 
 9. **Validate** — invoke `pipeline-schema-validator` against every
     authored artifact, once per entity (`pipeline`, `stream`,
-    `connection`, `database_endpoint`); for the stitched pipeline pass
-    `bundle_root: .` so the cross-document referential checks run.
+    `connection`, `database_endpoint`, and `type_map_read` /
+    `type_map_write` for any authored connection-scoped map); for the
+    stitched pipeline pass `bundle_root: .` so the cross-document
+    referential checks run (these also re-validate every connection's
+    on-disk type maps and reject the dead `type-map.json` filename).
 
     Attempt at most **5 fix passes per artifact** — re-dispatch the
     matching creator with the validator's findings, re-validate, repeat.
@@ -310,9 +330,11 @@ and leaves everything else — including `.secrets/` — untouched.
 4. **Re-validate.** Run `pipeline-schema-validator` on every touched document,
    with the same ≤ 5 fix-pass loop. When a pipeline or stream changed, also
    validate its **referenced closure** — every connection the pipeline references
-   (public and private) and every connection-scoped private endpoint those
-   connections own — each against its own contract (entities `connection` /
-   `database_endpoint`), which catches a stale or broken referenced artifact; plus
+   (public and private), every connection-scoped private endpoint those
+   connections own, and any connection-scoped type maps beside them — each
+   against its own contract (entities `connection` / `database_endpoint` /
+   `type_map_read` / `type_map_write`), which catches a stale or broken
+   referenced artifact; plus
    the whole bundle with `bundle_root: .`, which additionally catches a mis-named
    endpoint file whose name no longer matches its `endpoint_id` (the engine locates
    it by filename stem) and any `connector-endpoint-ref` warning (a `scope:

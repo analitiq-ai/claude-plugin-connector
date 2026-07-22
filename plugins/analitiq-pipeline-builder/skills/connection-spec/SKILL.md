@@ -38,7 +38,9 @@ pointers with the matching `.secrets/credentials.json` template.
 Only what the field table below declares is authorable here. The server-managed
 parts of that list (`discovered`, auth lifecycle metadata) belong to the
 service, and the endpoint / discovery / type-map artifacts are separate
-documents that merely hang off this connection.
+documents that merely hang off this connection — endpoints and
+connection-scoped type maps are authored by `private-endpoint-creator`
+(see `endpoint-spec`, incl. `spec-type-map-gaps.md`), never here.
 
 <!-- BEGIN GENERATED: fields-connection -->
 `analitiq.contracts.connection.ConnectionInput` — closed (`additionalProperties: false`); required: `connector_id`

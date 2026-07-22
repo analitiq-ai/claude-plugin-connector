@@ -1,6 +1,6 @@
 ---
 name: endpoint-spec
-description: Database endpoint authoring vocabulary — database_object identity, columns with native_type and Arrow type, primary_keys. Loaded by private-endpoint-creator only. Not invoked directly by users.
+description: Database endpoint authoring vocabulary — database_object identity, columns with native_type and Arrow type, primary_keys, and connection-scoped type-map gap authoring. Loaded by private-endpoint-creator only. Not invoked directly by users.
 disable-model-invocation: true
 ---
 
@@ -16,6 +16,9 @@ contract (`analitiq.contracts.endpoints.DatabaseEndpointDoc`).
   identifier normalization.
 - `spec-columns.md` — the column shape, provider `native_type` labels and
   the fully-qualified Apache Arrow `arrow_type` vocabulary.
+- `spec-type-map-gaps.md` — connection-scoped type maps for discovered
+  natives the connector's base maps don't cover: gap detection, both
+  directions, and the authoring rules.
 - At least one of `examples/*.example.json` for the database dialect
   you're authoring.
 
@@ -34,6 +37,10 @@ Database endpoints use `scope: connection` and live under
   introspection — no case-folding, quoting, or normalization.
 - The column shape per table/view/collection.
 - Primary keys: optional declared list, must reference existing columns.
+- Connection-scoped type maps
+  (`connections/<connection-slug>/definition/type-map-{read,write}.json`),
+  authored only when discovery surfaces natives the connector's maps don't
+  cover — see `spec-type-map-gaps.md`.
 
 ## Top-level shape
 

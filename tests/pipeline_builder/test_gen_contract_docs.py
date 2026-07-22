@@ -112,7 +112,8 @@ def test_every_schema_url_in_prose_is_published():
     published = {
         schema_url_for(resource)
         for resource in ("pipeline", "stream", "connection", "database-endpoint",
-                         "api-endpoint", "connector", "credentials")
+                         "api-endpoint", "connector", "credentials",
+                         "type-map-read", "type-map-write")
     }
     url_re = re.compile(r"https://schemas\.analitiq\.ai/[A-Za-z0-9._/-]+")
     offenders = {}
