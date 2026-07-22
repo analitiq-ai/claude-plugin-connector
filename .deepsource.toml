@@ -27,9 +27,10 @@ exclude_patterns = [
 name = "python"
 
   [analyzers.meta]
-  # Both packages declare `requires-python = ">=3.10"`; CI runs 3.12 and 3.13.
-  # Pin the analyzer to a supported version in that range.
-  runtime_version = "3.12.x"
+  # DeepSource accepts only the major-wildcard form here ("3.x.x") — a specific
+  # minor like "3.12.x" is rejected, which silently drops the whole python
+  # analyzer block from the parsed config.
+  runtime_version = "3.x.x"
 
 # Flags hardcoded credentials before they land. Needs no CI wiring — relevant
 # here because a token has slipped into a local, gitignored `.envrc` before.
