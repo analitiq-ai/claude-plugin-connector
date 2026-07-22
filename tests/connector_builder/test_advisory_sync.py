@@ -8,7 +8,11 @@ change lands as a red build instead of silently-wrong authoring guidance.
 
 It also guards the *citations*: prose cites rules by id (`ADV-ENDP-009`) instead
 of restating them, so a retired or renumbered id must not be allowed to leave
-dangling references behind a green build.
+dangling references behind a green build. That gate spans EVERY plugin under
+`plugins/`, not just this suite's — the advisory registry is one shared source,
+so one scan pins every citation site the prose currently has, all plugins plus
+the repo-root docs (issue #65); a per-plugin copy of the scanner would itself be
+a drift surface.
 
 Same environment contract as `test_schema_drift.py`: skipped when the pinned
 package is absent (offline dev), hard-failed in CI via
@@ -140,6 +144,14 @@ def test_prose_rule_citations_resolve() -> None:
     Prose cites rules by id instead of restating them — which only works while
     the ids resolve. A retired or renumbered rule would otherwise leave dangling
     citations behind a green build.
+
+    Scope is every `*.md` under `plugins/` (all plugins — the registry they cite
+    is shared) plus the repo-root docs. The pre-monorepo globs scanned
+    `REPO_ROOT/src`, which #51 moved to `plugins/` without repointing the scan,
+    so the gate ran vacuously green over zero citations — the gap issue #65
+    surfaced as unpinned pipeline citations. Hence the found-citations assert
+    below, which turns a fully-vacuous plugins scope into a red build instead of
+    a silent exemption.
     """
     from analitiq.contracts.shared.advisory import all_rules
 
@@ -147,16 +159,24 @@ def test_prose_rule_citations_resolve() -> None:
     generated = _load_renderer().OUTPUT_PATH
 
     dangling: dict[str, set[str]] = {}
-    searched = 0
-    for path in [*REPO_ROOT.glob("*.md"), *(REPO_ROOT / "src").rglob("*.md")]:
+    plugins_root = REPO_ROOT / "plugins"
+    plugin_cited = 0
+    for path in [*REPO_ROOT.glob("*.md"), *plugins_root.rglob("*.md")]:
         if path == generated:
             continue  # generated from the registry; covered by the sync test
-        searched += 1
-        missing = _cited_ids(path.read_text(encoding="utf-8")) - known
-        if missing:
-            dangling[str(path.relative_to(REPO_ROOT))] = missing
+        ids = _cited_ids(path.read_text(encoding="utf-8"))
+        if plugins_root in path.parents:
+            plugin_cited += len(ids)
+        if ids - known:
+            dangling[str(path.relative_to(REPO_ROOT))] = ids - known
 
-    assert searched, "no prose files discovered — the search globs are wrong"
+    # Count the plugins' contribution specifically: a repo-root doc citing a
+    # single id must not keep this green while the plugins glob rots the way
+    # the src/ one did.
+    assert plugin_cited, (
+        "no ADV-* citations found under plugins/ — plugin prose cites dozens, "
+        "so the search glob no longer points at it (the issue #65 failure mode)."
+    )
     assert not dangling, (
         f"prose cites rule ids that no longer exist: {dangling}. Update the "
         "citation to the current rule, or restate the constraint if the rule "
