@@ -363,8 +363,11 @@ and leaves everything else — including `.secrets/` — untouched.
      matching creator to author **only the new artifact**, then wire it in (e.g.
      append the new `stream_id` to `pipeline.streams`). Existing files are
      untouched. A destination endpoint for a table that does not exist yet
-     follows the Phase 5 new-table branch (run `discover-schemas` first for
-     the namespace check).
+     follows the Phase 5 new-table branch — run `discover-schemas` and
+     `discover-tables` first: the former for the namespace check, the latter
+     to confirm the table really is unlisted (an existing table must go
+     through introspection, not derivation, or its endpoint may not match
+     the physical columns).
    - Removal → drop the reference, and only if the user confirms, the file
      itself.
 3. **Never** change an identity field (`pipeline_id` / `stream_id` /
