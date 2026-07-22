@@ -50,7 +50,9 @@ def _stage(example_dir: Path, dest_root: Path) -> Path:
     definition = dest_root / "definition"
     definition.mkdir(parents=True)
 
-    body = next(example_dir.glob("*.example.json"))
+    body = next(example_dir.glob("*.example.json"), None)
+    if body is None:  # _example_dirs() filters for this, but fail usefully if staged directly
+        raise FileNotFoundError(f"{example_dir} has no *.example.json to stage")
     shutil.copy(body, definition / "connector.json")
     for name in ("type-map-read.json", "type-map-write.json"):
         src = example_dir / name

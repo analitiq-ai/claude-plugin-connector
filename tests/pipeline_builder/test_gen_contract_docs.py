@@ -107,8 +107,6 @@ def test_every_schema_url_in_prose_is_published():
     pins them: every schemas.analitiq.ai URL appearing anywhere under the plugin root must be
     one the pinned package actually emits.
     """
-    import re
-
     from analitiq.contracts.shared.common import schema_url_for
 
     published = {

@@ -722,13 +722,13 @@ _WRITE_MAP_ADAPTER = TypeAdapter(TypeMapWriteDoc)
 # Per-kind validators + registration
 # ---------------------------------------------------------------------------
 
-def _validate_connector(doc: Any, doc_path: Path | None, schema_url: str | None = None) -> list[dict]:
+def _validate_connector(doc: Any, doc_path: Path | None, schema_url: str | None = None) -> list[dict]:  # skipcq: PYL-W0613 — uniform registered-validator signature
     findings = _model_findings(doc, _CONNECTOR_ADAPTER)
     findings += check_coverage(doc, doc_path)
     return findings
 
 
-def _validate_api_endpoint(doc: Any, doc_path: Path | None, schema_url: str | None = None) -> list[dict]:
+def _validate_api_endpoint(doc: Any, doc_path: Path | None, schema_url: str | None = None) -> list[dict]:  # skipcq: PYL-W0613 — uniform registered-validator signature
     findings = _model_findings(doc, _API_ENDPOINT_ADAPTER)
     findings += _endpoint_locator_findings(doc)
     if isinstance(doc, dict):
@@ -738,7 +738,7 @@ def _validate_api_endpoint(doc: Any, doc_path: Path | None, schema_url: str | No
     return findings
 
 
-def _validate_database_endpoint(doc: Any, doc_path: Path | None, schema_url: str | None = None) -> list[dict]:
+def _validate_database_endpoint(doc: Any, doc_path: Path | None, schema_url: str | None = None) -> list[dict]:  # skipcq: PYL-W0613 — uniform registered-validator signature
     # The filename↔id gate applies only to the authored connection-scoped file the
     # engine locates by stem (`.../definition/endpoints/{endpoint_id}.json`), not to
     # the hash-addressed materialized snapshot (`.../endpoints/{endpoint_id}/schemas/
@@ -775,7 +775,7 @@ def _validate_type_map(doc: Any, doc_path: Path | None, schema_url: str | None =
     return findings
 
 
-def _validate_kindless_connector(doc: Any, doc_path: Path | None, schema_url: str | None = None) -> list[dict]:
+def _validate_kindless_connector(doc: Any, doc_path: Path | None, schema_url: str | None = None) -> list[dict]:  # skipcq: PYL-W0613 — uniform registered-validator signature
     # A dict carrying connector sentinels but no `kind` is a connector missing
     # its discriminator — hand it to the model so the missing `kind` is reported
     # (rather than silently passing as "unrecognized").

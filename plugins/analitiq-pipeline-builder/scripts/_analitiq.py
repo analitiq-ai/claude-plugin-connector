@@ -62,7 +62,7 @@ def _venv_has_pin(py: Path, version: str) -> bool:
         "import sys; from importlib.metadata import version as v;"
         f"sys.exit(0 if v('analitiq-validator') == {version!r} else 1)"
     )
-    return subprocess.run([str(py), "-c", probe],
+    return subprocess.run([str(py), "-c", probe], check=False,
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
@@ -119,4 +119,6 @@ def ensure_deps_or_reexec(script_path: str) -> None:
             "analitiq-validator is not importable after bootstrap; install it "
             f"manually with: pip install --pre {VALIDATOR_PIN}")
     os.environ[_REEXEC_SENTINEL] = "1"
+    # skipcq: BAN-B606 — the re-exec IS the mechanism: replace this process with
+    # the managed venv's interpreter running the same script (argv preserved).
     os.execv(str(py), [str(py), os.path.abspath(script_path), *sys.argv[1:]])

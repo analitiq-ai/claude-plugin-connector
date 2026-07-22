@@ -37,7 +37,7 @@ def _domain_after_import(ambient: str | None) -> str:
         env["DOMAIN"] = ambient
     r = subprocess.run(
         [sys.executable, "-c", _PROBE],
-        capture_output=True, text=True, env=env,
+        capture_output=True, text=True, env=env, check=False,
     )
     assert r.returncode == 0, f"import failed: {r.stderr}"
     return r.stdout.strip()

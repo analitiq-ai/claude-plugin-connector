@@ -433,9 +433,9 @@ class Param(_EndpointModel):
                 "params with `controlled_by` must not declare `operators` "
                 "(spec: §Parameter Validation and Operators)"
             )
-        if self.location == "query" and self.type in ("array", "object"):
-            if self.style is None or self.explode is None:
-                raise ValueError(
+        if (self.location == "query" and self.type in ("array", "object")
+                and (self.style is None or self.explode is None)):
+            raise ValueError(
                     f"query params with type={self.type!r} must declare `style` and `explode` "
                     "(spec: §Parameter Validation and Operators)"
                 )
@@ -722,18 +722,18 @@ def _union_tags(annotated_union: Any) -> frozenset[str]:
 # using discriminator`) into a clear ImportError when the structures
 # diverge — including the case where a maintainer adds a branch to one
 # list but not the other.
-assert _PREDICATE_TAGS == _union_tags(Predicate), (
-    f"Predicate Union members {sorted(_union_tags(Predicate))!r} do not match "
-    f"_PRED_BRANCHES {sorted(_PREDICATE_TAGS)!r}"
-)
-assert _union_tags(Expression) == frozenset(_EXPRESSION_KEYS), (
-    f"Expression Union members {sorted(_union_tags(Expression))!r} do not match "
-    f"_EXPRESSION_KEYS {sorted(_EXPRESSION_KEYS)!r}"
-)
-assert _union_tags(Pagination) == frozenset({"offset", "page", "cursor", "link", "keyset"}), (
-    f"Pagination Union members {sorted(_union_tags(Pagination))!r} do not match "
-    "the expected pagination strategy set"
-)
+if _PREDICATE_TAGS != _union_tags(Predicate):
+    raise AssertionError(
+        f"Predicate Union members {sorted(_union_tags(Predicate))!r} do not match "
+        f"_PRED_BRANCHES {sorted(_PREDICATE_TAGS)!r}")
+if _union_tags(Expression) != frozenset(_EXPRESSION_KEYS):
+    raise AssertionError(
+        f"Expression Union members {sorted(_union_tags(Expression))!r} do not match "
+        f"_EXPRESSION_KEYS {sorted(_EXPRESSION_KEYS)!r}")
+if _union_tags(Pagination) != frozenset({"offset", "page", "cursor", "link", "keyset"}):
+    raise AssertionError(
+        f"Pagination Union members {sorted(_union_tags(Pagination))!r} do not match "
+        "the expected pagination strategy set")
 
 
 # Resolve forward refs: pagination → Predicate, plus Predicate's recursive

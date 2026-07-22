@@ -99,9 +99,8 @@ PUBLIC_ERROR_MESSAGES: dict[PublicErrorCode, str] = {
 }
 
 # Fail loud at import if a code is added without a message.
-assert set(PUBLIC_ERROR_MESSAGES) == set(PublicErrorCode), (
-    "PUBLIC_ERROR_MESSAGES must cover every PublicErrorCode member"
-)
+if set(PUBLIC_ERROR_MESSAGES) != set(PublicErrorCode):
+    raise AssertionError("PUBLIC_ERROR_MESSAGES must cover every PublicErrorCode member")
 
 
 class PublicRunError(StrictModel):

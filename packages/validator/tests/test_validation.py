@@ -640,7 +640,7 @@ def _run_cli(tmp_path, doc, filename="doc.json"):
     p.write_text(json.dumps(doc))
     env = {**os.environ, "PYTHONPATH": _CLI_PYTHONPATH, "DOMAIN": "analitiq.ai"}
     return subprocess.run([sys.executable, "-c", _CLI_CODE, "--document", str(p)],
-                          capture_output=True, text=True, env=env)
+                          capture_output=True, text=True, env=env, check=False)
 
 
 def test_cli_valid_doc_exit0(tmp_path):
@@ -662,12 +662,12 @@ def test_cli_unreadable_document_exit1(tmp_path):
     env = {**os.environ, "PYTHONPATH": _CLI_PYTHONPATH, "DOMAIN": "analitiq.ai"}
     # A directory path: read raises IsADirectoryError → must still emit JSON + exit 1.
     r = subprocess.run([sys.executable, "-c", _CLI_CODE, "--document", str(tmp_path)],
-                       capture_output=True, text=True, env=env)
+                       capture_output=True, text=True, env=env, check=False)
     assert r.returncode == 1
     assert json.loads(r.stdout)["passed"] is False
 
 
 def test_cli_missing_arg_exit2(tmp_path):
     env = {**os.environ, "PYTHONPATH": _CLI_PYTHONPATH, "DOMAIN": "analitiq.ai"}
-    r = subprocess.run([sys.executable, "-c", _CLI_CODE], capture_output=True, text=True, env=env)
+    r = subprocess.run([sys.executable, "-c", _CLI_CODE], capture_output=True, text=True, env=env, check=False)
     assert r.returncode == 2

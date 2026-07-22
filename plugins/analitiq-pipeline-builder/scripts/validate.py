@@ -55,7 +55,7 @@ import argparse
 import json
 from pathlib import Path
 
-from _analitiq import VALIDATOR_PIN, ensure_deps_or_reexec
+from _analitiq import ensure_deps_or_reexec
 
 ENTITIES = ("pipeline", "stream", "connection", "database_endpoint")
 

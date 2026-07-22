@@ -31,6 +31,7 @@ This module imports no contract models: rules bind to their target classes by
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cache
 from typing import Any, Callable
 
 from pydantic import model_validator
@@ -278,9 +279,6 @@ def check_rule(rule: AdvisoryRule, model: Any) -> None:
 
 _RULES_BY_TARGET: dict[str, list[AdvisoryRule]] = {}
 _ALL_RULES: list[AdvisoryRule] = []
-_LOADED = False
-
-
 def register(rules: list[AdvisoryRule]) -> None:
     """Index a batch of rules by every target class they bind to."""
     for rule in rules:
@@ -289,16 +287,15 @@ def register(rules: list[AdvisoryRule]) -> None:
             _RULES_BY_TARGET.setdefault(target, []).append(rule)
 
 
+@cache
 def _ensure_loaded() -> None:
     """Import the rule data on first use (decoupled from import order).
 
     ``advisory_rules`` references targets by name only, so importing it never
     constructs a contract model and cannot deadlock model definition.
+    ``functools.cache`` makes this a run-once without a module-global flag.
     """
-    global _LOADED
-    if not _LOADED:
-        _LOADED = True
-        from . import advisory_rules  # noqa: F401  (import for side-effect: register)
+    from . import advisory_rules  # noqa: F401  (import for side-effect: register)
 
 
 def rules_for(cls: type) -> list[AdvisoryRule]:

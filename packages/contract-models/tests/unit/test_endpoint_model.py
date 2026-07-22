@@ -1676,7 +1676,6 @@ class TestExtensionOnNestedDictsClosed:
             PredicateEq.model_validate({"eq": [{"ref": "response.body.has_more"}, False], "x-vendor": "wise"})
 
     def test_x_extension_on_expression_rejected(self):
-        from analitiq.contracts.endpoints import RefExpression
         with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
             RefExpression.model_validate({"ref": "response.body.next", "x-debug": True})
 
@@ -2284,7 +2283,6 @@ class TestLinkPaginationNoParams:
 
 class TestPublishedJsonSchema:
     def test_endpoint_doc_closed_at_root_and_defs(self):
-        from pydantic import TypeAdapter
         api_schema = TypeAdapter(ApiEndpointDoc).json_schema(ref_template="#/$defs/{model}")
         # Closed contract: `additionalProperties: false` everywhere, no `x-*`
         # patternProperties. Check root + a representative nested def.

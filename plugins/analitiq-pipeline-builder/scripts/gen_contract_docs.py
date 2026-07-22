@@ -593,7 +593,7 @@ def published_vocabularies() -> dict[str, dict]:
     # to this set, but an API destination's mode is whatever key the endpoint
     # declares under operations.write, which no contract enum can enumerate.
     add("write.mode", "`stream.destinations[].write.mode` (database)",
-        sorted(stream._DB_WRITE_MODES),
+        sorted(stream._DB_WRITE_MODES),  # skipcq: PYL-W0212 — contract-internal vocabulary rendered into prose; the generator is the one sanctioned reader
         "`ADV-STRM-013` (API modes are endpoint-declared, so the field itself is `str`)")
 
     return vocabularies

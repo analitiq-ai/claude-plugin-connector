@@ -191,7 +191,8 @@ def import_guard(dist_dir: Path) -> None:
     )
     env = {k: v for k, v in os.environ.items() if k != "DOMAIN"}
     result = subprocess.run(
-        [sys.executable, "-c", probe], capture_output=True, text=True, env=env
+        [sys.executable, "-c", probe], capture_output=True, text=True, env=env,
+        check=False,  # the guard inspects returncode itself to raise a clearer error
     )
     if result.returncode != 0:
         raise SystemExit(

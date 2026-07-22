@@ -216,7 +216,9 @@ FilterOperator = Literal[
 # Single-source guard: the field Literal must be exactly the union of the two
 # scope vocabularies the StreamSource validator narrows to. Adding an operator to
 # one place but not the other then fails loudly at import, not silently at runtime.
-assert set(get_args(FilterOperator)) == _DB_FILTER_OPERATORS | _API_FILTER_OPERATORS
+if set(get_args(FilterOperator)) != _DB_FILTER_OPERATORS | _API_FILTER_OPERATORS:
+    raise AssertionError(
+        "FilterOperator Literal must equal the union of the DB and API operator vocabularies")
 
 
 _FILTER_CONDITIONAL_RULES: dict[str, Any] = {

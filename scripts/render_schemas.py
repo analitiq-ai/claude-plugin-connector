@@ -225,6 +225,8 @@ class Resource:
         So making a schema public is not a keyword: it is moving its models into
         the public package, which is a reviewable, structural act.
         """
+        # skipcq: PYL-W0212 — pydantic has no public accessor for a TypeAdapter's
+        # root type; tests/schemas/test_render_schemas.py pins this usage.
         tree = _model_tree(self.adapter._type)
         if not tree:
             # An empty tree is indistinguishable from a clean one, so the check
@@ -234,7 +236,7 @@ class Resource:
             # resource legitimately renders from zero models.
             raise ValueError(
                 f"resource {self.name!r} has an empty model tree, so the "
-                f"audience check cannot run (root: {self.adapter._type!r}). "
+                f"audience check cannot run (root: {self.adapter._type!r}). "  # skipcq: PYL-W0212
                 "A registered resource must render from at least one model."
             )
         leaked = sorted(
@@ -1204,9 +1206,9 @@ def _is_additive(old: Any, new: Any, path: tuple = ()) -> bool:
         for k in set(new) - set(old):
             if k in _TIGHTENING_NEW_KEYWORDS:
                 return False
-        if "additionalProperties" in new and new["additionalProperties"] is False:
-            if old.get("additionalProperties", True) is not False:
-                return False
+        if (new.get("additionalProperties", True) is False
+                and old.get("additionalProperties", True) is not False):
+            return False
         for k, v in old.items():
             if k not in new:
                 return False

@@ -196,7 +196,7 @@ def _run_cli(tmp_path, doc, filename="doc.json"):
     }
     return subprocess.run(
         [sys.executable, "-c", code, "--document", str(p)],
-        capture_output=True, text=True, env=env,
+        capture_output=True, text=True, env=env, check=False,
     )
 
 
