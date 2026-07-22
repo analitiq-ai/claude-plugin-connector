@@ -1,0 +1,112 @@
+name: Publish schemas to schemas.analitiq.ai
+
+# Upload the rendered schemas/ tree to the serving bucket behind
+# schemas.<DOMAIN>. The bucket, CDN, and IAM role live in the infra repo's
+# Terraform (terraform/schemas.tf — "this Terraform owns only the SERVING
+# infrastructure"); this workflow is the external uploader that Terraform
+# hands the objects to (infrastructure#1018).
+#
+# Auth is OIDC only — this repo is public and stores no static credentials
+# (CLAUDE.md → Credentials). The `schemas` GitHub Environment supplies:
+#   AWS_ROLE_ARN     assumable role, trust pinned to repo:analitiq-ai/
+#                    claude-code-plugins:environment:schemas (variable)
+#   AWS_REGION       the bucket's region                     (variable)
+#   SCHEMAS_BUCKET   e.g. analitiq-schemas-prod              (variable)
+# None are secrets. The environment's required reviewer is Analitiq-Bot and
+# its deployment branches permit only `main`, mirroring the `pypi` gate.
+#
+# Publish semantics, matching the convention documented in the infra repo's
+# terraform/schemas.tf:
+#   * additive — no deletes, ever. Retiring an object is an infra-side call.
+#   * pinned versions (X.Y.Z.json) are immutable: uploaded once, never
+#     overwritten (first write wins; a re-run skips them).
+#   * everything else (latest.json, index.json, and the versionless
+#     hand-authored files) is mutable with a 5-minute TTL. There is no
+#     CloudFront invalidation; the short TTL is the only refresh path.
+#
+# The committed tree is rendered for DOMAIN=analitiq.ai (render_schemas.py
+# refuses any other), so this workflow publishes the PROD host's content.
+# Publishing to a dev bucket needs the per-environment `$id` host rewrite the
+# retired infra uploader performed — out of scope until infrastructure#1018
+# settles it.
+
+on:
+  push:
+    branches: [main]
+    paths: ["schemas/**"]
+  # For the initial backfill and re-publishing after environment changes.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: schemas-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: schemas
+    permissions:
+      contents: read
+      id-token: write # OIDC token for the assumed AWS role
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install contract-model deps
+        run: pip install --quiet "pydantic>=2.12,<3" tzdata
+
+      - name: Verify schemas/ matches the contract models
+        # tests.yml already gates merges with this; running it again here means
+        # a hand-edited tree can never publish even if that gate is bypassed.
+        run: python3 scripts/render_schemas.py check
+
+      - name: Assume the publisher role (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload (additive; pinned versions first-write-wins)
+        env:
+          BUCKET: ${{ vars.SCHEMAS_BUCKET }}
+        run: |
+          set -euo pipefail
+          uploaded=0 skipped=0
+          cd schemas
+          while IFS= read -r -d '' f; do
+            key="${f#./}"
+            if [[ "$(basename "$f")" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.json$ ]]; then
+              # Immutable pinned version: never overwrite an existing object —
+              # but a skip must not hide divergence. These are small single-part
+              # uploads, so the S3 ETag is the object's MD5; if the committed
+              # file no longer matches what was published, someone edited a
+              # pinned version in place. That takes a new version, not a
+              # republish, so fail loudly instead of skipping past it.
+              if etag=$(aws s3api head-object --bucket "$BUCKET" --key "$key" \
+                          --query ETag --output text 2>/dev/null); then
+                if [ "${etag//\"/}" != "$(md5sum "$f" | cut -d' ' -f1)" ]; then
+                  echo "::error file=schemas/$key::pinned version differs from the published object — cut a new version instead of editing $key in place" >&2
+                  exit 1
+                fi
+                skipped=$((skipped + 1))
+                continue
+              fi
+              cache="public, max-age=31536000, immutable"
+            else
+              cache="public, max-age=300, must-revalidate"
+            fi
+            aws s3 cp "$f" "s3://$BUCKET/$key" \
+              --content-type application/json \
+              --cache-control "$cache" \
+              --no-progress
+            uploaded=$((uploaded + 1))
+          done < <(find . -name '*.json' -type f -print0 | sort -z)
+          echo "uploaded=$uploaded skipped-existing-pinned=$skipped"

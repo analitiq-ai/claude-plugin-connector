@@ -46,8 +46,16 @@ re-renders and fails on any diff, and CI runs it. Never hand-edit a file under
 because they have no version triple: `canonical-types.json` (guarded by
 `packages/contract-models/tests/unit/test_canonical_types_schema.py`),
 `data-sync-api/openapi.json`, and `data-sync-run-response/1.0.0.json`. They are
-served only because the publishing bucket globs `**/*.json`, and
+served only because the publish workflow globs `**/*.json`, and
 `render_schemas.py check` never inspects them.
+
+`.github/workflows/schemas-publish.yml` uploads the tree to the serving bucket
+(defined in the infra repo's Terraform) on pushes to main touching `schemas/`.
+The publish is additive — pinned `X.Y.Z.json` objects are first-write-wins and
+never overwritten, nothing is ever deleted — and mutable pointers
+(`latest.json`, `index.json`, the versionless hand-authored files) rely on a
+5-minute TTL, not CloudFront invalidation. Auth is OIDC via the `schemas`
+environment — see "Credentials".
 
 Only the 13 public resources render here. The ~40 internal-audience schemas stay
 in the infra repo with the private half of the renderer;
@@ -257,6 +265,18 @@ prevention back on.
 These are live GitHub environment settings, not repo files, so they are not
 covered by any test here; changing the reviewer or the tag rules is a settings
 edit in the repo's Environments page.
+
+### The `schemas` environment
+
+`schemas-publish.yml` publishes `schemas/` to the serving bucket through the
+`schemas` environment, built to mirror `pypi`: **sole required reviewer
+Analitiq-Bot** (same single-account trade-off as above), deployment branches
+restricted to `main`, `prevent_self_review` off. It holds three environment
+**variables**, none of them secrets: `AWS_ROLE_ARN`, `AWS_REGION`,
+`SCHEMAS_BUCKET`. The role is defined in the infra repo's Terraform
+(infrastructure#1018) with its OIDC trust pinned to this repo's `schemas`
+environment and permissions limited to `s3:PutObject`/`s3:ListBucket` on the
+bucket — no delete, matching the workflow's additive publish semantics.
 
 The repo is **public**. Its workflow files are world-readable and that is fine:
 the gate is authorization, not secrecy. Two rules follow from it — never use
