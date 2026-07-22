@@ -1,6 +1,6 @@
 ---
 name: endpoint-spec
-description: Database endpoint authoring vocabulary — database_object identity, columns with native_type and Arrow type, primary_keys, and connection-scoped type-map gap authoring. Loaded by private-endpoint-creator only. Not invoked directly by users.
+description: Database endpoint authoring vocabulary — database_object identity, columns with native_type and Arrow type, primary_keys, connection-scoped type-map gap authoring, and new-table (pending-creation) derivation. Loaded by private-endpoint-creator only. Not invoked directly by users.
 disable-model-invocation: true
 ---
 
@@ -19,6 +19,8 @@ contract (`analitiq.contracts.endpoints.DatabaseEndpointDoc`).
 - `spec-type-map-gaps.md` — connection-scoped type maps for discovered
   natives the connector's base maps don't cover: gap detection, both
   directions, and the authoring rules.
+- `spec-new-table.md` — deriving a destination endpoint for a table that
+  does not exist yet (no introspection; the engine creates it on first run).
 - At least one of `examples/*.example.json` for the database dialect
   you're authoring.
 
@@ -41,6 +43,8 @@ Database endpoints use `scope: connection` and live under
   (`connections/<connection-slug>/definition/type-map-{read,write}.json`),
   authored only when discovery surfaces natives the connector's maps don't
   cover — see `spec-type-map-gaps.md`.
+- Endpoints for destination tables that do not exist yet, derived from the
+  source endpoint instead of introspection — see `spec-new-table.md`.
 
 ## Top-level shape
 

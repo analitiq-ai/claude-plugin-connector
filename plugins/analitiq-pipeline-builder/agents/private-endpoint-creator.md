@@ -1,6 +1,6 @@
 ---
 name: private-endpoint-creator
-description: Discover schemas / tables from a live database connection and author one database-endpoint JSON document per selected table, conforming to https://schemas.analitiq.ai/database-endpoint/latest.json, plus connection-scoped type-map gap files when the connector's base maps don't cover a discovered native. Three sub-modes — discover-schemas, discover-tables, create-endpoints — driven sequentially by the orchestrator with user-interview steps in between. Database connections only. Loads endpoint-spec for the authoring vocabulary.
+description: Discover schemas / tables from a live database connection and author one database-endpoint JSON document per selected table, conforming to https://schemas.analitiq.ai/database-endpoint/latest.json, plus connection-scoped type-map gap files when the connector's base maps don't cover a discovered native. Four sub-modes — discover-schemas, discover-tables, create-endpoints (driven sequentially by the orchestrator with user-interview steps in between), and author-new-table (derives an endpoint for a destination table that does not exist yet, without connecting). Database connections only. Loads endpoint-spec for the authoring vocabulary.
 tools: Bash, Read
 ---
 
@@ -19,7 +19,7 @@ connection, return a structured refusal.
 
 ## Sub-modes (set by the orchestrator)
 
-The agent has three modes; one invocation runs exactly one mode.
+The agent has four modes; one invocation runs exactly one mode.
 
 ### Mode 1: `discover-schemas`
 
@@ -155,26 +155,69 @@ The agent has three modes; one invocation runs exactly one mode.
    writes to `connections/<connection-slug>/definition/type-map-{read,write}.json`
    — `null` means write nothing (never emit an empty array).
 
+### Mode 4: `author-new-table`
+
+Author one `database-endpoint` document for a **destination table that does
+not exist yet**. No database connection, no introspection, no DDL — the
+engine creates the physical table on the first pipeline run from the
+document's columns. Derivation rules: `skills/endpoint-spec/spec-new-table.md`.
+
+1. Receive: the target identity (`schema`, `name`, optional `catalog` —
+   user-supplied spelling, orchestrator-confirmed against `discover-schemas`
+   output), the path of the source endpoint document whose fields define the
+   columns (a `database-endpoint` document, or the connector's api-endpoint
+   document for an API source), the user-confirmed `primary_keys`, and — on a
+   re-invocation after a write-gap interview — `write_render_choices`
+   (`{canonical: native}`).
+2. Read the source document and derive the column list per
+   `spec-new-table.md`.
+3. Resolve every distinct `arrow_type` through the write maps with
+   `type_map_gaps.py --direction write` (connection map first if present,
+   then the connector's): a rendered native becomes the column's
+   `native_type`; an uncovered canonical follows `spec-new-table.md` —
+   dialect override → `"unknown"` plus a `notes[]` entry; otherwise a
+   `write_gaps` entry, or the `write_render_choices` value plus its
+   connection-scoped write rule.
+4. Derive `endpoint_id` / `database_object` with `endpoint_id.py` exactly as
+   in `create-endpoints`, passing the orchestrator's identifiers verbatim
+   (`--object-type table`).
+5. Return the `create-endpoints` shape (one `CreatorOutput`, the same
+   `type_maps` object) with one addition:
+
+   ```jsonc
+   "type_maps": { /* read / write / ambiguities / notes */, "write_gaps": ["<canonical>"] }
+   ```
+
+   `write_gaps` lists canonicals no write map covers and no dialect override
+   renders — each needs the user's native spelling, supplied back via
+   `write_render_choices`. A re-invocation must return no `write_gaps`.
+
 ## Required reading
 
 Load on demand:
 
 - `skills/endpoint-spec/SKILL.md` + `spec-database-object.md` + `spec-columns.md`.
-- `skills/endpoint-spec/spec-type-map-gaps.md` — in `create-endpoints` mode,
-  for the type-map resolution and gap-authoring rules of steps 6–7.
+- `skills/endpoint-spec/spec-type-map-gaps.md` — in `create-endpoints` and
+  `author-new-table` modes, for the type-map resolution and gap-authoring
+  rules.
+- `skills/endpoint-spec/spec-new-table.md` — in `author-new-table` mode, for
+  the column-derivation and `native_type` rules.
 - A matching `skills/endpoint-spec/examples/*.example.json` for the database
   dialect (`postgres`, `mysql`, `bigquery`, `mongodb`).
 
 ## Hard rules
 
 - Identifier strings (`schema`, `name`, `catalog`, column `name`, `native_type`)
-  are preserved **verbatim** from introspection — no case-folding, quoting, or
+  are preserved **verbatim** from introspection — in `author-new-table`, from
+  the orchestrator's user-supplied target — no case-folding, quoting, or
   normalization. Pass them verbatim to `endpoint_id.py` too; the derived hash is
   computed over the raw values, so pre-slugging them yields the wrong handle.
 - `endpoint_id` is the **derived** handle from `endpoint_id.py` — never a
   hand-built `<schema>_<name>` slug. Any other value fails the validator's
   `endpoint-id-locator` gate.
 - Never run DDL. Discovery is read-only. No `CREATE`, `ALTER`, `DROP`.
+  `author-new-table` connects to nothing at all — the missing table is the
+  engine's to create, at first run, from the authored document.
 - Never embed credentials. Resolve secrets via the connection's `secret_refs`
   pointers (env var, or `.secrets/credentials.json`), never inline.
 - Skip system schemas in `discover-schemas`. Hard-coded exclusion list per dialect.

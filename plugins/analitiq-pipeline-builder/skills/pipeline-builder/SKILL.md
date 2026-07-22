@@ -229,6 +229,37 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    when endpoint files from a prior pipeline are already on disk for
    the same tables.
 
+   **New destination table.** When this connection is the pipeline's
+   *destination* and the user wants to stream into a table that
+   `discover-tables` did not list, branch to the `author-new-table`
+   sub-mode for that table instead of `create-endpoints`. The engine
+   creates the physical table on the first pipeline run; the plugin
+   only authors the endpoint document and runs no DDL.
+   - Collect the target `{schema}.{table}`. The schema must be one
+     `discover-schemas` returned — the engine never creates schemas,
+     so halt and ask for an existing schema (or a different target)
+     rather than authoring a first run that cannot succeed.
+   - Collect the new table's `primary_keys`, suggesting the source
+     endpoint's own primary keys as the default. An `upsert` write
+     mode needs them as the stream's `conflict_keys`.
+   - Compute the endpoint filename with `scripts/endpoint_id.py` (as
+     above); an existing file for it is an existing endpoint — reuse
+     per the rules above instead of re-authoring.
+   - Invoke `author-new-table` with the target, the primary keys, and
+     the path of the source endpoint document that will feed the
+     stream (the source's database-endpoint file, or the connector's
+     api-endpoint file for an API source). This branch reads the
+     source side's artifacts, so run it only after they exist — the
+     source connection's discovery for a database source, phase 2's
+     connector download for an API source.
+   - If the return carries `type_maps.write_gaps`, ask the user one
+     question per canonical — what native type this destination
+     should render it to — then re-invoke with `write_render_choices`.
+     The re-run must return no `write_gaps`.
+   - Everything else — `type_maps` handling, validation, file writes —
+     is identical to `create-endpoints`. Record in the final summary
+     that the table is pending creation by the engine's first run.
+
    **Connection-scoped type maps.** The `create-endpoints` return carries a
    `type_maps` object alongside `outputs` — connection-scoped gap rules for
    discovered natives the connector's maps don't cover (authored per
