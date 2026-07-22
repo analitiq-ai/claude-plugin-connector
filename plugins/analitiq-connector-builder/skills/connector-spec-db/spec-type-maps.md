@@ -290,8 +290,12 @@ parens for parameterized scalars (`Decimal128(p, s)`,
 `FixedSizeBinary(16)`), and angle brackets for nested types
 (`List<Int64>`, `Struct<id:Int64, name:Utf8>`, `Map<Utf8, Int64>`).
 
-The full vocabulary lives in
-`docs/schema-contracts/shared/canonical-types.json`.
+The full vocabulary is `schemas/canonical-types.json`, published at
+[`https://schemas.analitiq.ai/canonical-types.json`](https://schemas.analitiq.ai/canonical-types.json)
+— the readable reference when you need a family's exact spelling. Note the flat
+path: unlike the connector and endpoint schemas there is no `/latest.json`
+variant. Validation never fetches it; the enforced form is `ARROW_TYPE_PATTERN`
+in `analitiq.contracts.endpoints`, matched offline.
 
 For parameterized canonicals whose database native carries an implicit
 default, encode the default explicitly:
