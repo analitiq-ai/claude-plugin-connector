@@ -406,3 +406,38 @@ def test_allow_list_has_no_stale_entries():
         "  (a) the hand-typed copy was removed or wired into a block — delete the entry;\n"
         "  (b) the doc LOST or RENAMED a member, so the full set no longer matches "
         "— that is drift. Check the doc before touching this list.")
+
+
+def test_shared_patterns_are_not_hand_typed_outside_generated_blocks():
+    """The pattern-flavored twin of the vocabulary gate (issue #50).
+
+    #24 gated closed vocabularies and deliberately left patterns alone; the slug
+    regex was then found hand-typed at six prose sites, every one describing a
+    directory name — plugin convention, not a contract field. The fix stated the
+    convention once (identity-and-versioning.md §Identifier shapes, pinned BY
+    REFERENCE to the published pattern) and replaced the copies with citations.
+
+    This keeps it that way, for every published shared pattern: a pattern
+    literal outside a generated block is a new hand-maintained copy, which
+    either drifts from the contract or silently freezes the convention. Literal
+    substring match — so, unlike the vocabulary heuristic, fenced examples and
+    jsonc comments are covered too.
+    """
+    patterns = G.shared_patterns()
+    assert patterns, "no published shared patterns — vacuous pass"
+    offenders = []
+    for path in sorted(G.DOCS_ROOT.rglob("*.md")):
+        outside = G._BLOCK_RE.sub(lambda m: "\n" * m.group(0).count("\n"),
+                                  path.read_text())
+        rel = path.relative_to(G.DOCS_ROOT).as_posix()
+        for lineno, line in enumerate(outside.splitlines(), 1):
+            offenders += [f"  {rel}:{lineno}  [{constant}]"
+                          for constant, pattern in patterns.items()
+                          if pattern in line]
+    assert not offenders, (
+        "published shared patterns hand-typed outside any generated block:\n"
+        + "\n".join(offenders)
+        + "\n\nCite the owner instead — for directory slugs, the directory-slug "
+          "convention in identity-and-versioning.md; for contract fields, the "
+          "generated block that emits the pattern."
+    )

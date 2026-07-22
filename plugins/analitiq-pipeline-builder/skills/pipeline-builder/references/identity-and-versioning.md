@@ -24,6 +24,14 @@ slugs and are independent of the UUID identity stored inside the documents.
 | tag length | `1..64` |
 <!-- END GENERATED: shared-vocabulary -->
 
+**Directory-slug convention.** The contract's `SLUG_PATTERN` governs document
+fields only; it does not constrain on-disk names. This plugin reuses the same
+shape for every directory and file slug (see §"Directory layout vs. document
+identity") **by convention**, so a directory name is always a legal identifier.
+The convention is pinned by reference: if the published pattern changes, the
+directory-slug rule follows it. Prose elsewhere cites this convention instead
+of restating the pattern.
+
 All three identity fields are **optional** in the contract — omit one and the
 service assigns it on ingest. The plugin authors them anyway so that sibling
 documents written in the same run can cross-reference each other; the

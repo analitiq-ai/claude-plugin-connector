@@ -26,8 +26,9 @@ Pick the mode from the user's intent:
 
 - `source_connector_id` (required) — the DIP-registry slug of the source connector.
 - `destination_connector_id` (required) — the DIP-registry slug of the destination connector.
-- `pipeline_slug` (required) — directory name matching `^[a-z0-9][a-z0-9_-]*$`;
-  immutable; the on-disk pipeline directory (not the document's UUID identity).
+- `pipeline_slug` (required) — directory name per the directory-slug convention
+  in `references/identity-and-versioning.md`; immutable; the on-disk pipeline
+  directory (not the document's UUID identity).
 - `replication_method` (optional, default per source capability) — a member of
   the replication vocabulary in §Closed vocabularies. `cursor_field` is required
   when the method is `incremental`.

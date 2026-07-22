@@ -11,7 +11,7 @@ own required sub-shape.
 
 ```jsonc
 {
-  "pipeline_slug": "wise_to_postgresql",        // matches ^[a-z0-9][a-z0-9_-]*$; directory name only
+  "pipeline_slug": "wise_to_postgresql",        // directory name only; shape per the directory-slug convention (identity-and-versioning.md)
   "display_name": "Wise to PostgreSQL",
   "description": "…",
   "source": {

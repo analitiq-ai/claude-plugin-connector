@@ -30,7 +30,8 @@ Also read:
 The orchestrator passes:
 
 - `connection_id` (required) — RFC-4122 UUID minted by the orchestrator.
-- `connection_slug` (required) — directory name matching `^[a-z0-9][a-z0-9_-]*$`.
+- `connection_slug` (required) — directory name; shape per the directory-slug
+  convention in `skills/pipeline-builder/references/identity-and-versioning.md`.
   Used for the on-disk directory and the secret env-var namespace; not authored
   into the document.
 - `connector_id` (required) — connector slug; must match a downloaded connector.
