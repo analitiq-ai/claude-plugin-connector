@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.1](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-pipeline-builder-v0.1.0...analitiq-pipeline-builder-v0.1.1) (2026-07-22)
+
+
+### Features
+
+* **analitiq-pipeline-builder:** add new-destination-table flow (author-new-table sub-mode) ([#64](https://github.com/analitiq-ai/claude-code-plugins/issues/64)) ([cd449ae](https://github.com/analitiq-ai/claude-code-plugins/commit/cd449aea4f0dcc2b173288c0711e55e3dce6931f))
+* **analitiq-pipeline-builder:** author connection-scoped type maps for discovered private-endpoint natives ([#62](https://github.com/analitiq-ai/claude-code-plugins/issues/62)) ([2ca9379](https://github.com/analitiq-ai/claude-code-plugins/commit/2ca9379e00da422076aacd7507a8cb17434c10a3))
+* restructure as a multi-plugin monorepo owning the contract surface ([#51](https://github.com/analitiq-ai/claude-code-plugins/issues/51)) ([8c75001](https://github.com/analitiq-ai/claude-code-plugins/commit/8c750017a414eee2f2f423fe27a3befd0fb9d128))
+
+
+### Bug Fixes
+
+* **analitiq-pipeline-builder:** state the directory-slug convention once, gate hand-typed patterns ([#57](https://github.com/analitiq-ai/claude-code-plugins/issues/57)) ([937e8f7](https://github.com/analitiq-ai/claude-code-plugins/commit/937e8f7b8a0fbc7304deb5fd9f25774f8aceea6f))
+* bump the runtime validator pin to 1.0.0rc13 ([#68](https://github.com/analitiq-ai/claude-code-plugins/issues/68)) ([eb88e23](https://github.com/analitiq-ai/claude-code-plugins/commit/eb88e23f7224879caf8ee34abc82397ee27dad13))
+* resolve the DeepSource python baseline ([#56](https://github.com/analitiq-ai/claude-code-plugins/issues/56)) ([359e7fb](https://github.com/analitiq-ai/claude-code-plugins/commit/359e7fbb0e6059549f4e03d25472ed93fd52221d))
+
 ## [unreleased]
 
 ### Changed
