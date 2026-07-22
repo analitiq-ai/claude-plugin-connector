@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.5](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-connector-builder-v0.1.4...analitiq-connector-builder-v0.1.5) (2026-07-22)
+
+
+### Features
+
+* **analitiq-connector-builder:** add first-request-only limit to LinkPagination ([#52](https://github.com/analitiq-ai/claude-code-plugins/issues/52)) ([#63](https://github.com/analitiq-ai/claude-code-plugins/issues/63)) ([33499e3](https://github.com/analitiq-ai/claude-code-plugins/commit/33499e33c7e6bc2b6161e96f4bfd8360bc229b8d))
+* **analitiq-pipeline-builder:** author connection-scoped type maps for discovered private-endpoint natives ([#62](https://github.com/analitiq-ai/claude-code-plugins/issues/62)) ([2ca9379](https://github.com/analitiq-ai/claude-code-plugins/commit/2ca9379e00da422076aacd7507a8cb17434c10a3))
+* restructure as a multi-plugin monorepo owning the contract surface ([#51](https://github.com/analitiq-ai/claude-code-plugins/issues/51)) ([8c75001](https://github.com/analitiq-ai/claude-code-plugins/commit/8c750017a414eee2f2f423fe27a3befd0fb9d128))
+
+
+### Bug Fixes
+
+* **analitiq-connector-builder:** consolidate slug-pattern copies and pin them to SLUG_PATTERN ([#59](https://github.com/analitiq-ai/claude-code-plugins/issues/59)) ([8a116a3](https://github.com/analitiq-ai/claude-code-plugins/commit/8a116a33a73f3e4acbfc6db987d5344b973249ef))
+* bump the runtime validator pin to 1.0.0rc13 ([#68](https://github.com/analitiq-ai/claude-code-plugins/issues/68)) ([eb88e23](https://github.com/analitiq-ai/claude-code-plugins/commit/eb88e23f7224879caf8ee34abc82397ee27dad13))
+
 ## [0.1.4](https://github.com/analitiq-ai/claude-plugin-connector/compare/v0.1.3...v0.1.4) (2026-07-02)
 
 
