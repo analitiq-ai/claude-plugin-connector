@@ -1,0 +1,58 @@
+{
+  "$defs": {
+    "PipelineRunAcceptedData": {
+      "additionalProperties": false,
+      "description": "`data` payload of an accepted run (202).\n\nThe public counterpart of `run_accepted.PipelineRunAcceptedData`, which is\nthe frontend's contract. Same shape today; owned separately so either\naudience can evolve without breaking the other.",
+      "properties": {
+        "invocation_id": {
+          "description": "Identifier for this run. Poll the run-status endpoint with it to follow the run to completion.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Invocation Id",
+          "type": "string"
+        },
+        "pipeline_id": {
+          "description": "Pipeline the run was accepted for.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Pipeline Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "invocation_id",
+        "pipeline_id"
+      ],
+      "title": "PipelineRunAcceptedData",
+      "type": "object"
+    }
+  },
+  "$id": "https://schemas.analitiq.ai/data-sync-run-accepted/latest.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "PUBLIC JSON Schema contract for the SUCCESS (202 Accepted) response body of the Data Sync API POST /pipelines/{pipeline_id}/run \u2014 the canonical `{success, message?, data}` envelope where `data` carries the run-accepted tracking identifiers (invocation_id, pipeline_id), always present on a successful accept. The run is dispatched asynchronously (the Batch job is submitted in the background), so there is no job_id yet; poll run history by invocation_id for the final outcome. Error responses use the canonical error envelope and are documented in the Data Sync OpenAPI rather than here. Absent optional fields are omitted from the wire, never null. Served at schemas.<domain> for external API-key consumers.",
+  "properties": {
+    "data": {
+      "$ref": "#/$defs/PipelineRunAcceptedData",
+      "description": "The accepted run \u2014 tracking identifiers only; always present on a successful accept. Poll run history by `invocation_id`."
+    },
+    "message": {
+      "description": "Human-readable outcome.",
+      "title": "Message",
+      "type": "string"
+    },
+    "success": {
+      "const": true,
+      "description": "Always true on this 2xx body. Error responses use the canonical `{success: false, message, ...}` error envelope.",
+      "title": "Success",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "success",
+    "data"
+  ],
+  "title": "Analitiq Data Sync API \u2014 Pipeline Run Accepted",
+  "type": "object",
+  "version": "1.0.1"
+}

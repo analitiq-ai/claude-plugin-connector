@@ -1,0 +1,40 @@
+{
+  "assignments": [
+    {
+      "target": {
+        "path": "a",
+        "arrow_type": "Utf8"
+      },
+      "value": {
+        "expression": {
+          "op": "get",
+          "path": "x"
+        }
+      }
+    },
+    {
+      "target": {
+        "path": "b",
+        "arrow_type": "Utf8"
+      },
+      "value": {
+        "expression": {
+          "op": "get",
+          "path": "x"
+        }
+      }
+    },
+    {
+      "target": {
+        "path": "a",
+        "arrow_type": "Utf8"
+      },
+      "value": {
+        "expression": {
+          "op": "get",
+          "path": "x"
+        }
+      }
+    }
+  ]
+}

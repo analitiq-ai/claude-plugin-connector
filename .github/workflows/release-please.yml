@@ -1,18 +1,34 @@
 name: release-please
 
-# Derives the plugin's semver from Conventional Commit types and maintains a
-# rolling "Release PR". Merging that Release PR bumps the version in
-# src/.claude-plugin/plugin.json (via release-please-config.json extra-files),
-# updates CHANGELOG.md, and tags the release. The plugin is pre-1.0, so
-# breaking changes bump the minor and features bump the patch (configured in
-# release-please-config.json).
+# Monorepo mode: one independently-versioned release train per publishable
+# artifact, configured in release-please-config.json. Each derives its own semver
+# from Conventional Commit types and maintains its OWN rolling Release PR
+# (`separate-pull-requests: true`). Merging one bumps that artifact's version,
+# regenerates its CHANGELOG.md, and tags it `<component>-vX.Y.Z`
+# (`include-component-in-tag: true`) so the trains never collide.
 #
 # Bump signal lives in the commit / squashed PR title:
-#   fix:                          -> patch   (0.1.0 -> 0.1.1)
-#   feat:                         -> minor while pre-1.0 this is patch
-#   feat!: / BREAKING CHANGE:     -> major while pre-1.0 this is minor
-# When squash-merging, enable "Default to PR title for squash merge commits"
-# in the repo settings so the PR title is what release-please parses.
+#   fix:                      -> patch
+#   feat:                     -> minor   (patch while pre-1.0)
+#   feat!: / BREAKING CHANGE: -> major   (minor while pre-1.0)
+# A commit lands in a train by the PATH it touches, not by its scope - a scope is
+# for humans reading the changelog. Use the component id:
+#   feat(analitiq-connector-builder): ...
+# When squash-merging, enable "Default to PR title for squash merge commits" in
+# the repo settings - that title is what release-please parses.
+#
+# This manages the two PLUGINS only. The PyPI packages are deliberately NOT here:
+# release-please speaks SemVer and their versions are PEP 440 pre-releases
+# (1.0.0rc12). A dry run against this config resolved 1.0.0rc12 as plain 1.0.0
+# and proposed 1.1.0 - silently dropping the rc suffix and jumping the train to a
+# final release. They are released by pushing `contract-models-v*` /
+# `validator-v*` by hand, which also matches their documented discipline: a minor
+# bump is a coordinated engine rollout, not something a commit type should infer.
+#
+# Consequence worth remembering: a HUMAN-pushed tag triggers those workflows
+# normally. Tags created by THIS action with GITHUB_TOKEN would not - GitHub
+# suppresses triggers from that token to prevent loops - which is why no publish
+# job can be wired to release-please output.
 
 on:
   push:
@@ -32,3 +48,4 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Defaults read release-please-config.json and
           # .release-please-manifest.json from the repo root.
+

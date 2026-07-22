@@ -1,0 +1,22 @@
+{
+  "source": "user",
+  "phase": "pre_auth",
+  "storage": "connection.parameters",
+  "type": "string",
+  "required": false,
+  "enum": [
+    "a"
+  ],
+  "ui": {
+    "options": [
+      {
+        "value": "a",
+        "label": "A"
+      },
+      {
+        "value": "z",
+        "label": "Z"
+      }
+    ]
+  }
+}

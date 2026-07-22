@@ -1,0 +1,53 @@
+[build-system]
+# >=77 for the PEP 639 SPDX `license` string below; pip provides it via build isolation.
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "analitiq-validator"
+# Pre-release while the packages are still being shaken out — PyPI versions are
+# immutable/single-use, so iterate with rcN and cut the final 1.0.0 once stable.
+# Kept EQUAL to contract-models/pyproject.toml `version`: the two packages are one
+# release unit and ship in sync (#951 point 4). `test_contract_models_pin.py`
+# fails the build if this version, or the exact pin below, diverges from it.
+version = "1.0.0rc12"
+description = "The Analitiq artifact validator: offline validation of Analitiq documents against the contract models (`analitiq-contract-models`) plus the cross-file and cross-document checks a single-document model cannot express. Today it validates connector-package documents (connector, endpoint, type-map files) and the referential integrity of an assembled pipeline bundle. Import as `analitiq.validator`; CLI `analitiq-validate`."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Analitiq" }]
+keywords = ["analitiq", "connector", "pipeline", "validation", "type-map", "contract"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Quality Assurance",
+]
+# The validator validates via the Analitiq contract models and renders from the
+# SAME authored model layer, so the two packages ship as one release unit. The
+# dependency is an EXACT pin (not a range): the validator only behaves correctly
+# against the contract-models build it was rendered with, and drift is a real
+# defect. An exact `==<rc>` pin still resolves pre-releases without `--pre`
+# (PEP 440). Keep this pin — AND this package's own `version` above — equal to
+# contract-models/pyproject.toml `version`; `test_contract_models_pin.py` fails
+# the build if either diverges. Bump all three together on every release.
+dependencies = [
+    "analitiq-contract-models==1.0.0rc12",
+    # Meta-validates the JSON-Schema documents embedded in api-endpoints
+    # (input/response `schema`) as Draft 2020-12 — a check the dependency-light
+    # contract-models package cannot host.
+    "jsonschema>=4.18,<5",
+]
+
+[project.scripts]
+analitiq-validate = "analitiq.validator:main"
+
+[project.urls]
+Homepage = "https://analitiq.ai"
+Documentation = "https://schemas.analitiq.ai"
+
+# The publishable package is rendered by scripts/build.py from the source package
+# `validator/src/analitiq/validator/` into the public `analitiq.validator`
+# package (src layout). `analitiq` is a PEP 420 namespace shared with
+# `analitiq-contract-models`, so it has no top-level `__init__.py`.
+[tool.setuptools]
+packages = ["analitiq.validator"]
+package-dir = { "" = "src" }

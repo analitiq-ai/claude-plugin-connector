@@ -1,0 +1,18 @@
+{
+  "source": "user",
+  "phase": "pre_auth",
+  "storage": "connection.parameters",
+  "type": "object",
+  "required": false,
+  "enum": [
+    {
+      "a": 1
+    },
+    {
+      "b": 2
+    }
+  ],
+  "default": {
+    "a": 1
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "path": "/x",
+  "headers": {
+    "Authorization": "1"
+  },
+  "headers_remove": [
+    "authorization"
+  ]
+}

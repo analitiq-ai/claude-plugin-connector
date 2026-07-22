@@ -8,7 +8,7 @@ model validator that enforces it. That registry is the single source of truth â€
 this script only *renders* it so agents have an offline-readable file to cite
 instead of hand-restating rules in prose.
 
-The generated file is a **pinned copy**, not a second source: `tests/schema_drift`
+The generated file is a **pinned copy**, not a second source: `tests/connector_builder`
 regenerates it and fails when it is stale, so a contract change surfaces as a red
 build rather than silent prose drift.
 
@@ -19,12 +19,22 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# This repo is the contract's SOURCE, so bootstrap the same way render_schemas.py
+# does rather than relying on an installed wheel â€” requirements-dev.txt
+# deliberately does not install one. Keeps the script runnable standalone (CI
+# calls it directly, outside pytest and its conftest).
+sys.path.insert(0, str(REPO_ROOT / "packages" / "contract-models" / "src"))
+# `analitiq.contracts.shared.common` reads os.environ["DOMAIN"] at import and
+# raises KeyError without it.
+os.environ.setdefault("DOMAIN", "analitiq.ai")
 OUTPUT_PATH = (
-    REPO_ROOT / "src" / "skills" / "connector-builder" / "references" / "advisory-rules.md"
+    REPO_ROOT / "plugins" / "analitiq-connector-builder" / "skills" / "connector-builder" / "references" / "advisory-rules.md"
 )
 
 # Only the resources this plugin authors. Pipelines, streams, connection

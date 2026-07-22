@@ -1,23 +1,23 @@
-name: Contract drift guards
+name: tests
 
-# The plugin's prose has to stay true to the contract it authors against. This
-# suite (tests/schema_drift/) is the gate, in three parts:
-#   - enum/vocabulary pins: values the plugin restates as decision logic
-#     (enum-mappers.md, CLAUDE.md, io-contracts.md, value-expressions.md) must
-#     match the contract, including the validator ids and resolution scopes;
-#   - generated-reference sync: references/advisory-rules.md is rendered from the
-#     contract's advisory registry and must not be stale;
-#   - example validity: every connector/endpoint under skills/*/examples/ must
-#     validate, since creator agents copy them as archetypes.
+# One suite for the whole monorepo. `pytest.ini` sets `testpaths = tests packages`,
+# so a bare `pytest` runs every plugin's suite (tests/<plugin>/) AND each
+# package's own suite (packages/<pkg>/tests/).
 #
-# The guard reads the enums straight from the pinned `analitiq-contract-models`
-# package — the same contract the `connector-schema-validator` agent enforces —
-# so it runs OFFLINE and DETERMINISTIC (no schema fetch). That makes it a real
-# PR/push merge gate, which the old CDN-fetch version couldn't be. It pins the
-# plugin's prose to the contract the validator ENFORCES, not to whatever is live
-# on the CDN; catching a *newer* upstream contract release is a dependency-bump
-# concern (bump the pin below + in src/agents/connector-schema-validator.md),
-# not this guard's job.
+# What the suites gate:
+#   connector_builder/ - three parts, all reading the in-repo contract source so
+#     they stay OFFLINE and DETERMINISTIC (no schema fetch), which is what makes
+#     them usable as a merge gate:
+#       - enum/vocabulary pins: values the plugin restates as decision logic
+#         (enum-mappers.md, skill prose, io-contracts.md) must match the
+#         contract, including validator ids and resolution scopes;
+#       - generated-reference sync: references/advisory-rules.md is rendered from
+#         the contract's advisory registry and must not be stale;
+#       - example validity: every connector/endpoint under skills/*/examples/
+#         must validate, since creator agents copy them as archetypes.
+#   pipeline_builder/  - the same problem solved the other way: contract-owned
+#     facts are GENERATED into the prose, and the suite fails when a generated
+#     block is stale relative to the pin.
 
 on:
   pull_request:
@@ -26,7 +26,7 @@ on:
       - main
   workflow_dispatch:
 
-# Read-only: the suite only checks out and runs pytest — no secrets, no writes.
+# Read-only: the suite only checks out and runs pytest - no secrets, no writes.
 permissions:
   contents: read
 
@@ -35,25 +35,77 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  drift:
-    name: Contract drift guards (pinned contract models)
+  pytest:
+    name: pytest (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The published packages declare `requires-python = ">=3.10"`. These two
+        # are what the plugins are actually exercised on; keep both green so a
+        # 3.13-only or 3.12-only regression cannot land silently.
+        python-version: ['3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Install pinned validator + contract models
-        # Pin BOTH and keep them in lockstep with the self-install pin in
-        # src/agents/connector-schema-validator.md. rc11's validator already
-        # pins analitiq-contract-models==1.0.0rc11 exactly, so double-pinning is
-        # defensive (explicit + reproducible, and safe if a future validator
-        # ever loosens that constraint).
-        run: pip install pytest --pre "analitiq-validator==1.0.0rc11" "analitiq-contract-models==1.0.0rc11"
-      - name: Run offline drift guards
+          python-version: ${{ matrix.python-version }}
+      - name: Install pinned contract packages
+        id: install
+        # The pin lives in requirements-dev.txt only - see CLAUDE.md
+        # "The contract pin". Never inline a version here; that would be a
+        # second copy of a fact one file already owns.
+        run: pip install -r requirements-dev.txt
+      - name: Run the suites
+        id: tests
         # DRIFT_REQUIRE_CONTRACT_MODELS=1 turns a missing/broken contract package
-        # into a hard failure instead of an all-skipped green run — this job is a
+        # into a hard failure instead of an all-skipped green run - this job is a
         # merge gate, so it must never pass without actually running the checks.
         env:
           DRIFT_REQUIRE_CONTRACT_MODELS: '1'
-        run: pytest tests/schema_drift/ -v -rs
+        run: pytest -v -rs
+      - name: Check generated prose blocks match the pinned contract
+        # Gated on the INSTALL, and `!cancelled()` is load-bearing: an `if:`
+        # containing no status-check function gets an implicit `success() &&`
+        # prepended, which would skip this step whenever ANY earlier step failed
+        # - including the test step, i.e. exactly the runs it exists to explain.
+        # test_generated_blocks_in_sync computes the same predicate, so on a
+        # stale block pytest fails first and this step is what prints the diff.
+        # The one carve-out worth keeping: if the install failed, this script
+        # would re-enter its dependency bootstrap and bury the real error.
+        #
+        # The env vars stop that bootstrap. Without them the generator installs
+        # the PUBLISHED wheel into a venv and re-execs, grading the docs against
+        # the last release rather than this PR's source.
+        if: ${{ !cancelled() && steps.install.conclusion == 'success' }}
+        env:
+          ANALITIQ_VALIDATOR_FROM_SOURCE: '1'
+          PYTHONPATH: packages/contract-models/src:packages/validator/src
+          # analitiq.contracts.shared.common reads os.environ["DOMAIN"] at
+          # import; the repo-root conftest sets it for pytest, but this step
+          # runs the script directly.
+          DOMAIN: analitiq.ai
+        run: python3 plugins/analitiq-pipeline-builder/scripts/gen_contract_docs.py --check
+      - name: Check the generated advisory reference is current
+        # references/advisory-rules.md is rendered from the contract's advisory
+        # registry; stale prose here misleads every creator agent that reads it.
+        if: ${{ !cancelled() && steps.install.conclusion == 'success' }}
+        run: python3 scripts/render_advisory.py check
+      - name: Package build guards
+        # These are what keep the private runtime out of the public wheels:
+        # build.py AST-scans for imports outside (stdlib + pydantic/jsonschema),
+        # runs the staged package with `alq` and boto3 absent, and asserts the
+        # generated __init__ / PEP 420 layout. The release workflows run them
+        # too, but only at tag time - by then a leak is already merged. This is
+        # the PR-time gate (it was validator-ci.yml in the infra repo).
+        if: ${{ !cancelled() && steps.install.conclusion == 'success' }}
+        run: |
+          python3 packages/contract-models/scripts/build.py --check
+          python3 packages/validator/scripts/build.py --check
+      - name: Check published schemas match the contract models
+        # schemas/ is RENDERED OUTPUT of packages/contract-models. Without this
+        # gate the two drift silently: a model change that never reaches the
+        # published JSON is invisible until something downstream breaks.
+        # Same reasoning as the step above, hence the same condition.
+        if: ${{ !cancelled() && steps.install.conclusion == 'success' }}
+        run: python3 scripts/render_schemas.py check

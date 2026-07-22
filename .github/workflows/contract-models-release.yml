@@ -1,0 +1,91 @@
+name: Publish analitiq-contract-models
+
+# Build and publish the `analitiq-contract-models` package to PyPI on a
+# `contract-models-vX.Y.Z` tag, via OIDC Trusted Publishing (no stored token).
+#
+# The models are authored DIRECTLY in the public `analitiq.contracts.*` namespace
+# at packages/contract-models/src — that tree IS the published package, not a
+# rendering of a private one. build.py stages it verbatim and guards the result:
+# no `alq` codename leak, no private path leak, boto3-free, minimal surface.
+#
+# Runbook:
+#   1. Bump `version` in packages/contract-models/pyproject.toml (e.g. 1.0.0rc1 -> rc2;
+#      1.0.0 for the first immutable release). Merge to main.
+#   2. Push a tag matching that version: `contract-models-v1.0.0rc2`.
+#   3. This workflow asserts tag == pyproject version, runs the build guards,
+#      builds sdist+wheel from the rendered package, and publishes to PyPI.
+#
+# PyPI versions are immutable: a version is single-use, so use pre-release
+# suffixes (rc1, rc2, .dev1, ...) while iterating and cut the final X.Y.Z once.
+#
+# Required PyPI Trusted Publisher (pypi.org -> project -> Publishing -> Add):
+#   Owner: analitiq-ai   Repository: claude-code-plugins
+#   Workflow name: contract-models-release.yml   Environment: pypi
+# Tag-triggered only. These packages are deliberately NOT managed by
+# release-please: it speaks SemVer and their versions are PEP 440 pre-releases
+# (1.0.0rc12), which it resolves as plain 1.0.0 and then bumps - dropping the rc
+# suffix and jumping the train to a final release. Push the tag by hand.
+#
+# A human-pushed tag triggers this normally. A tag created by the release-please
+# action would NOT: GitHub suppresses workflow triggers from GITHUB_TOKEN to
+# prevent loops. That is why no publish job can be wired to release-please
+# output, and the second reason these stay manual.
+on:
+  push:
+    tags:
+      - "contract-models-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contract-models-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # The PyPI Trusted Publisher for this project is registered with
+    # `Environment name: pypi`. PyPI checks the environment on its side, so a job
+    # WITHOUT this key is rejected at the publish step of an otherwise green run.
+    # The environment also restricts which tags may deploy. Do not remove it
+    # without editing the publisher on PyPI to match.
+    environment: pypi
+    permissions:
+      # A job-level permissions block REPLACES the workflow-level one (unspecified
+      # perms become `none`), so `contents: read` must be re-granted here or
+      # actions/checkout can't read the repo and the publish never builds.
+      contents: read
+      id-token: write # OIDC token for PyPI Trusted Publishing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Derive release version from tag
+        id: ver
+        # build.py --expect-version cross-checks this against pyproject.toml, so
+        # a mistyped tag fails before anything is published.
+        run: echo "version=${{GITHUB_REF_NAME#contract-models-v}}" >> "$GITHUB_OUTPUT"
+
+      - name: Install build tooling
+        run: pip install --quiet build "pydantic>=2.12,<3"
+
+      - name: Build guards (version match, minimal, no alq/private leak, boto3-free)
+        run: python packages/contract-models/scripts/build.py --check --expect-version "${{ steps.ver.outputs.version }}"
+
+      - name: Stage the rendered public package
+        run: python packages/contract-models/scripts/build.py --dist "${{ runner.temp }}/cm-src"
+
+      - name: Build sdist + wheel
+        run: python -m build --outdir "${{ runner.temp }}/cm-dist" "${{ runner.temp }}/cm-src"
+
+      - name: Publish to PyPI (Trusted Publishing, OIDC)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ${{ runner.temp }}/cm-dist
+          print-hash: true

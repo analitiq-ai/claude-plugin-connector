@@ -1,0 +1,528 @@
+{
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "example": {
+              "detail": [
+                {
+                  "loc": [
+                    "terminate_existing_sync"
+                  ],
+                  "msg": "Input should be a valid boolean",
+                  "type": "bool_type"
+                }
+              ],
+              "message": "Request payload failed validation",
+              "success": false
+            },
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        },
+        "description": "The request body failed validation (malformed JSON, wrong type, or unknown field)."
+      },
+      "Forbidden": {
+        "content": {
+          "application/json": {
+            "example": {
+              "message": "Forbidden"
+            },
+            "schema": {
+              "$ref": "#/components/schemas/GatewayError"
+            }
+          }
+        },
+        "description": "The `x-api-key` is invalid or revoked (authorizer Deny / API key rejected). Gateway-level \u2014 the body is `{ message }`, not the canonical envelope."
+      },
+      "InternalError": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                {
+                  "$ref": "#/components/schemas/GatewayError"
+                }
+              ]
+            }
+          }
+        },
+        "description": "Unexpected server error. The Lambda returns the canonical envelope; a rare infrastructure-level 5xx from API Gateway instead carries only `{ message }`."
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "example": {
+              "message": "Pipeline not found: a1b2c3d4-5678-90ab-cdef-1234567890ab",
+              "success": false
+            },
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        },
+        "description": "No pipeline with that id exists for the authenticated org."
+      },
+      "RunForbidden": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "invalidKey": {
+                "summary": "Gateway \u2014 invalid/revoked API key",
+                "value": {
+                  "message": "Forbidden"
+                }
+              },
+              "subscription": {
+                "summary": "Application \u2014 trial expired / no active subscription",
+                "value": {
+                  "message": "Your trial period is over. Please create a subscription.",
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/GatewayError"
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              ]
+            }
+          }
+        },
+        "description": "Two distinct 403 causes: a gateway-level auth failure (invalid/revoked API key \u2014 `{ message }`), OR an application-level rejection when the org is outside its paid/trial window (canonical `{ success: false, message }`)."
+      },
+      "TooManyRequests": {
+        "content": {
+          "application/json": {
+            "example": {
+              "message": "Too Many Requests"
+            },
+            "schema": {
+              "$ref": "#/components/schemas/GatewayError"
+            }
+          }
+        },
+        "description": "Rate limit exceeded (enforced by the API gateway usage plan). Gateway-level \u2014 the body is `{ message }`, not the canonical envelope."
+      },
+      "Unauthorized": {
+        "content": {
+          "application/json": {
+            "example": {
+              "message": "Unauthorized"
+            },
+            "schema": {
+              "$ref": "#/components/schemas/GatewayError"
+            }
+          }
+        },
+        "description": "No `x-api-key` was supplied, or the authorizer could not resolve it. Gateway-level \u2014 the body is `{ message }`, not the canonical envelope."
+      }
+    },
+    "schemas": {
+      "ErrorEnvelope": {
+        "additionalProperties": false,
+        "description": "Canonical error envelope. `success` is always false; `message` is always present.",
+        "properties": {
+          "detail": {
+            "description": "Structured per-field errors; present on 400 validation failures.",
+            "items": {
+              "properties": {
+                "loc": {
+                  "description": "Path to the offending field.",
+                  "items": {
+                    "type": [
+                      "string",
+                      "integer"
+                    ]
+                  },
+                  "type": "array"
+                },
+                "msg": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "error_code": {
+            "description": "Machine-readable error identifier for branching without parsing `message`.",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human-readable error summary.",
+            "type": "string"
+          },
+          "success": {
+            "const": false
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ],
+        "type": "object"
+      },
+      "GatewayError": {
+        "description": "API Gateway-level error body (authorizer deny, invalid/missing API key, throttling) \u2014 produced before the Lambda runs. Carries only `message`, NOT the canonical `{success, ...}` envelope.",
+        "properties": {
+          "message": {
+            "description": "Human-readable error from API Gateway.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "description": "Org Data Sync API key.",
+        "in": "header",
+        "name": "x-api-key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "contact": {
+      "email": "support@analitiq.io",
+      "name": "Analitiq Support"
+    },
+    "description": "Public, API-key-authenticated API for triggering and terminating Analitiq data-pipeline runs.\n\n## Authentication\nEvery request must carry the org's Data Sync API key in the `x-api-key` header. Keys are minted/revoked from the Analitiq settings UI.\n\n## Response format\nApplication responses (handled by the Lambda) use the canonical envelope `{ success, message?, data? }`: success bodies (`success: true`) carry endpoint-specific `data`; error bodies (`success: false`) carry `message` and optionally `error_code` / `detail`. Absent optional fields are omitted from the wire, never null. The request and success-response payloads are published as versioned JSON Schema contracts under `https://schemas.analitiq.ai/data-sync-*/latest.json` and referenced below.\n\n**Gateway-level rejections** (authentication `401`/`403` and throttling `429`) are produced by API Gateway BEFORE the Lambda runs and carry a different, smaller body \u2014 `{ \"message\": ... }` only, with no `success` field. Validate auth/throttle failures against the `GatewayError` shape, not the canonical envelope.\n\n## Throttling\nRequests are throttled per org (steady 1 req/s, burst 5). Exceeding the limit returns `429` with the gateway `{ message }` body.\n\n## Changelog\n- **2026-06-24 \u2014 ADDED**: a run-status endpoint, `GET /pipelines/{pipeline_id}/runs/{invocation_id}`, returns a run's outcome by `invocation_id` (the id from the run endpoint's `202`): a coarse `status` (`queued`/`running`/`succeeded`/`partial`/`failed`/`cancelled`), record counts, timestamps, and \u2014 on `failed`/`partial` \u2014 a customer-safe `error` category. Published as the `data-sync-run-status` contract. This is the public way to poll the outcome of an accepted asynchronous run; no existing endpoint changed.\n- **2026-06-23 \u2014 BREAKING**: the run endpoint is now asynchronous. It returns `202 Accepted` with `data` = `{ invocation_id, pipeline_id }` instead of `200 OK` with the submitted job (`job_id`, `job_name`); the AWS Batch job is dispatched in the background so the request never blocks on the gateway 29-second limit. Poll run history by `invocation_id` for the final outcome. The run success-response contract moved from `data-sync-run-response` to `data-sync-run-accepted`. Terminate is unchanged.\n- **2026-06-12 \u2014 BREAKING**: run/terminate responses now use the canonical `{ success, message?, data? }` envelope. The action fields (`job_id`, `job_name`, `pipeline_id`, `invocation_id`) moved from the top level into `data`; an idempotent terminate with nothing to stop omits `data` entirely (distinguished by `message`). Clients that read the top-level action fields must read them from `data` instead. This is a `v1` in-place breaking change \u2014 there is no compatibility shim.",
+    "title": "Analitiq Data Sync API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/pipelines/{pipeline_id}/run": {
+      "post": {
+        "description": "Accepts a pipeline run for asynchronous execution. The request is validated synchronously (org, billing, pipeline state, duplicate check); on success it returns `202 Accepted` with an `invocation_id` while the AWS Batch job is submitted in the background, so the call never blocks on the gateway's 29-second limit. Poll run history by `invocation_id` for the final outcome. If a run is already in flight and `terminate_existing_sync` is false (default), the request is rejected with `409`.",
+        "operationId": "runPipeline",
+        "parameters": [
+          {
+            "description": "The pipeline to run.",
+            "in": "path",
+            "name": "pipeline_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.analitiq.ai/data-sync-run-request/latest.json"
+              }
+            }
+          },
+          "description": "Optional run options. An empty body is valid.",
+          "required": false
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "invocation_id": "130b7d75-1540-4d04-987c-22e0d326b972",
+                    "pipeline_id": "a1b2c3d4-5678-90ab-cdef-1234567890ab"
+                  },
+                  "message": "Pipeline run accepted.",
+                  "success": true
+                },
+                "schema": {
+                  "$ref": "https://schemas.analitiq.ai/data-sync-run-accepted/latest.json"
+                }
+              }
+            },
+            "description": "Run accepted. The AWS Batch job is dispatched asynchronously; poll run history by `invocation_id` for the final outcome."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/RunForbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Job is already running",
+                  "success": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "A run is already in flight for this pipeline and `terminate_existing_sync` was false."
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Trigger a pipeline run",
+        "tags": [
+          "Pipelines"
+        ]
+      }
+    },
+    "/pipelines/{pipeline_id}/runs/{invocation_id}": {
+      "get": {
+        "description": "Returns the status of a single run by `invocation_id` \u2014 the id handed back by the run endpoint's `202 Accepted`. Poll this to learn whether an accepted run is `queued`, `running`, or has reached a terminal state (`succeeded`, `partial`, `failed`, `cancelled`), along with record counts, timestamps, and \u2014 on `failed`/`partial` \u2014 a customer-safe error category. Scoped to the authenticated org and the pipeline in the path: an unknown run, a run owned by another org, or a run that belongs to a different pipeline all return `404`.",
+        "operationId": "getRunStatus",
+        "parameters": [
+          {
+            "description": "The pipeline the run belongs to.",
+            "in": "path",
+            "name": "pipeline_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The run identifier returned by the run endpoint's 202 accept.",
+            "in": "path",
+            "name": "invocation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "failed": {
+                    "summary": "Run failed with a customer-safe error category",
+                    "value": {
+                      "data": {
+                        "error": {
+                          "code": "SOURCE_AUTH_FAILED",
+                          "message": "Authentication to the data source failed. Check the source connection credentials."
+                        },
+                        "finished_at": "2026-06-24T10:00:30.000000+00:00",
+                        "invocation_id": "130b7d75-1540-4d04-987c-22e0d326b972",
+                        "pipeline_id": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+                        "started_at": "2026-06-24T10:00:12.000000+00:00",
+                        "status": "failed",
+                        "submitted_at": "2026-06-24T10:00:00.000000+00:00"
+                      },
+                      "success": true
+                    }
+                  },
+                  "running": {
+                    "summary": "Run in progress",
+                    "value": {
+                      "data": {
+                        "invocation_id": "130b7d75-1540-4d04-987c-22e0d326b972",
+                        "pipeline_id": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+                        "started_at": "2026-06-24T10:00:12.000000+00:00",
+                        "status": "running",
+                        "submitted_at": "2026-06-24T10:00:00.000000+00:00"
+                      },
+                      "success": true
+                    }
+                  },
+                  "succeeded": {
+                    "summary": "Run completed successfully",
+                    "value": {
+                      "data": {
+                        "finished_at": "2026-06-24T10:03:45.000000+00:00",
+                        "invocation_id": "130b7d75-1540-4d04-987c-22e0d326b972",
+                        "pipeline_id": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+                        "records_failed": 0,
+                        "records_processed": 12480,
+                        "records_total": 12480,
+                        "started_at": "2026-06-24T10:00:12.000000+00:00",
+                        "status": "succeeded",
+                        "submitted_at": "2026-06-24T10:00:00.000000+00:00"
+                      },
+                      "success": true
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "https://schemas.analitiq.ai/data-sync-run-status/latest.json"
+                }
+              }
+            },
+            "description": "The run's current status."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Invalid UUID format: not-a-uuid",
+                  "success": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "The `invocation_id` path parameter is not a valid id."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "No run found for invocation_id 130b7d75-1540-4d04-987c-22e0d326b972",
+                  "success": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No run with that `invocation_id` exists for the authenticated org and pipeline."
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Get the status of a pipeline run",
+        "tags": [
+          "Pipelines"
+        ]
+      }
+    },
+    "/pipelines/{pipeline_id}/terminate": {
+      "post": {
+        "description": "Stops the current run for the pipeline. Idempotent: when there is nothing to stop (no run recorded, run already terminal), it still returns `200` with `success: true` and no `data`, distinguished by `message`. No request body is expected.",
+        "operationId": "terminatePipeline",
+        "parameters": [
+          {
+            "description": "The pipeline to terminate.",
+            "in": "path",
+            "name": "pipeline_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "noop": {
+                    "summary": "Nothing to terminate",
+                    "value": {
+                      "message": "No pipeline run found",
+                      "success": true
+                    }
+                  },
+                  "stopped": {
+                    "summary": "Running job stopped",
+                    "value": {
+                      "data": {
+                        "job_id": "8f1b3c2a-1111-4222-8333-444444444444",
+                        "pipeline_id": "a1b2c3d4-5678-90ab-cdef-1234567890ab"
+                      },
+                      "message": "Pipeline stopped successfully.",
+                      "success": true
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "https://schemas.analitiq.ai/data-sync-terminate-response/latest.json"
+                }
+              }
+            },
+            "description": "Terminate resolved (a running job was stopped, or there was nothing to stop)."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Terminate a pipeline run",
+        "tags": [
+          "Pipelines"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Production",
+      "url": "https://rest.analitiq.ai/v1"
+    },
+    {
+      "description": "Development",
+      "url": "https://rest.analitiq.dev/v1"
+    },
+    {
+      "description": "Local",
+      "url": "https://rest.analitiq.work/v1"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Trigger and terminate pipeline runs",
+      "name": "Pipelines"
+    }
+  ]
+}

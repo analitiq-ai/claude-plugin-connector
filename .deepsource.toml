@@ -1,0 +1,37 @@
+version = 1
+
+# Test code — held to different rules than production (fixtures, asserts,
+# broad imports are fine here). Covers the per-plugin suites at the repo root
+# and each package's own suite.
+test_patterns = [
+  "tests/**",
+  "packages/*/tests/**",
+  "conftest.py",
+]
+
+# Not source: generated output and data fixtures. `schemas/` is rendered by
+# scripts/render_schemas.py (guarded by `render_schemas.py check`); the corpus,
+# advisory fixtures, and example documents are data, not code — and they carry
+# placeholder credentials, so keeping them out also spares the secrets scan a
+# stream of false positives.
+exclude_patterns = [
+  "schemas/**",
+  "packages/*/tests/corpus/**",
+  "packages/contract-models/tests/fixtures/**",
+  "**/examples/**",
+]
+
+# A block's presence enables it; there is no `enabled` key in the current schema
+# (it was pre-2021 and is now rejected as a misconfiguration).
+[[analyzers]]
+name = "python"
+
+  [analyzers.meta]
+  # Both packages declare `requires-python = ">=3.10"`; CI runs 3.12 and 3.13.
+  # Pin the analyzer to a supported version in that range.
+  runtime_version = "3.12.x"
+
+# Flags hardcoded credentials before they land. Needs no CI wiring — relevant
+# here because a token has slipped into a local, gitignored `.envrc` before.
+[[analyzers]]
+name = "secrets"

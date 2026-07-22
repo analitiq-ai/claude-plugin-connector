@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
+  "connection_id": "08080808-0808-4808-8808-080808080808",
+  "connector_id": "xero",
+  "display_name": "Xero \u2014 Acme Corp",
+  "parameters": {
+    "client_id": "1A2B3C4D5E6F7G8H"
+  },
+  "secret_refs": {
+    "client_secret": "env:ANALITIQ_XERO_CLIENT_SECRET"
+  }
+}

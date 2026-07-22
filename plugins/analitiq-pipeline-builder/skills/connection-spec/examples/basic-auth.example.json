@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schemas.analitiq.ai/connection/latest.json",
+  "connection_id": "03030303-0303-4303-8303-030303030303",
+  "connector_id": "jira",
+  "display_name": "Jira \u2014 Acme",
+  "parameters": {
+    "base_url": "https://acme.atlassian.net",
+    "username": "bot@acme.com"
+  },
+  "secret_refs": {
+    "api_token": "env:ANALITIQ_JIRA_API_TOKEN"
+  }
+}

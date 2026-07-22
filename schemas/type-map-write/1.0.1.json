@@ -1,0 +1,45 @@
+{
+  "$defs": {
+    "TypeMapWriteRule": {
+      "additionalProperties": false,
+      "description": "A write rule: `canonical` matches, `native` renders (free-form DDL).",
+      "properties": {
+        "canonical": {
+          "minLength": 1,
+          "title": "Canonical",
+          "type": "string"
+        },
+        "match": {
+          "enum": [
+            "exact",
+            "regex"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "native": {
+          "minLength": 1,
+          "title": "Native",
+          "type": "string"
+        }
+      },
+      "required": [
+        "match",
+        "native",
+        "canonical"
+      ],
+      "title": "TypeMapWriteRule",
+      "type": "object"
+    }
+  },
+  "$id": "https://schemas.analitiq.ai/type-map-write/1.0.1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Public JSON Schema contract for a database connector's `type-map-write.json` \u2014 the write direction (canonical \u2192 native DDL) of its type-map pair, a top-level array of `{match, native, canonical}` rules where `canonical` matches and `native` renders. The full per-rule contract lives in the model and is enforced by the connector validator; this published schema is the structural projection. Source of truth: analitiq.contracts.type_map.TypeMapWriteDoc (Pydantic).",
+  "items": {
+    "$ref": "#/$defs/TypeMapWriteRule"
+  },
+  "minItems": 1,
+  "title": "Analitiq Type Map (write)",
+  "type": "array",
+  "version": "1.0.1"
+}
