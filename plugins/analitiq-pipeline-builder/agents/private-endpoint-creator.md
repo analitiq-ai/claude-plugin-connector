@@ -1,6 +1,6 @@
 ---
 name: private-endpoint-creator
-description: Discover schemas / tables from a live database connection and author one database-endpoint JSON document per selected table, conforming to https://schemas.analitiq.ai/database-endpoint/latest.json. Three sub-modes — discover-schemas, discover-tables, create-endpoints — driven sequentially by the orchestrator with user-interview steps in between. Database connections only. Loads endpoint-spec for the authoring vocabulary.
+description: Discover schemas / tables from a live database connection and author one database-endpoint JSON document per selected table, conforming to https://schemas.analitiq.ai/database-endpoint/latest.json, plus connection-scoped type-map gap files when the connector's base maps don't cover a discovered native. Three sub-modes — discover-schemas, discover-tables, create-endpoints — driven sequentially by the orchestrator with user-interview steps in between. Database connections only. Loads endpoint-spec for the authoring vocabulary.
 tools: Bash, Read
 ---
 
@@ -61,7 +61,9 @@ The agent has three modes; one invocation runs exactly one mode.
 
 ### Mode 3: `create-endpoints`
 
-1. Receive the orchestrator's user-picked table list.
+1. Receive the orchestrator's user-picked table list, plus — on a re-invocation
+   after a type-map ambiguity interview — `write_render_choices`
+   (`{canonical: native}`, see step 7).
 2. For each table, query column metadata:
    - `name` (verbatim, no normalization)
    - `native_type` (provider-native; preserve case, parameterization, etc.)
@@ -95,8 +97,14 @@ The agent has three modes; one invocation runs exactly one mode.
    }
    ```
 
-6. Derive a **fully-qualified** `arrow_type` for **every** column from the native
-   type, using `skills/endpoint-spec/spec-columns.md` as the canonical mapping
+6. Derive a **fully-qualified** `arrow_type` for **every** column. First resolve
+   the distinct native types through the type maps with
+   `scripts/type_map_gaps.py --direction read` (maps in precedence order: the
+   connection's own `definition/type-map-read.json` if present, then the
+   connector's) and freeze the rendered canonical for every covered native — the
+   maps are what the engine resolves with, so the frozen value must be theirs,
+   not a re-derivation. Only for natives in `gaps` derive the canonical
+   yourself, using `skills/endpoint-spec/spec-columns.md` as the mapping
    reference. `arrow_type` is **required**, and parameterized types must carry
    their parameters — `Timestamp(MICROSECOND, UTC)`, `Decimal128(p, s)`,
    `Time64(MICROSECOND)`, `List<Int64>`, etc.; bare `Timestamp` / `Decimal128` /
@@ -104,7 +112,21 @@ The agent has three modes; one invocation runs exactly one mode.
    `Decimal128(p, s)` (use `Decimal256` when `p > 38`). For schemaless or opaque
    containers (MongoDB `BSON.Document`, opaque `jsonb`), prefer `Utf8` or `Binary`
    over guessing a `Struct<…>` field list; add a `notes[]` entry explaining it.
-7. Return a `CreatorOutput[]` (one per table):
+7. **Author connection-scoped type-map gap rules** per
+   `skills/endpoint-spec/spec-type-map-gaps.md`:
+   - For every read gap from step 6, a read rule whose rendered canonical
+     equals the `arrow_type` frozen into the endpoint documents.
+   - Probe the distinct frozen `arrow_type` strings with `--direction write`
+     against the write maps (connection first if present, then connector); for
+     every write gap, a write rule rendering the discovered native that
+     produced the canonical. When several distinct natives share one uncovered
+     canonical, do **not** pick — report it in `type_maps.ambiguities` and
+     leave `type_maps.write` null, unless the orchestrator supplied the choice
+     in `write_render_choices` (a `{canonical: native}` map from the user
+     interview; honor it verbatim).
+   - No gaps in a direction → that key is `null`. When the connection already
+     ships a map, return the existing rules with the new ones appended after.
+8. Return a `CreatorOutput[]` (one per table) plus the type-map result:
 
    ```jsonc
    {
@@ -117,18 +139,29 @@ The agent has three modes; one invocation runs exactly one mode.
          "secondary_files": [],
          "notes": []
        }
-     ]
+     ],
+     "type_maps": {
+       "read":  [ /* full file content for definition/type-map-read.json, or null */ ],
+       "write": [ /* full file content for definition/type-map-write.json, or null */ ],
+       "ambiguities": [ {"canonical": "…", "candidates": ["<native>", "<native>"]} ],
+       "notes": []
+     }
    }
    ```
 
    `directory_slug` equals the endpoint's derived `endpoint_id` and becomes the
    filename stem (`connections/<connection-slug>/definition/endpoints/<endpoint_id>.json`).
+   `type_maps.read` / `type_maps.write` are the complete arrays the orchestrator
+   writes to `connections/<connection-slug>/definition/type-map-{read,write}.json`
+   — `null` means write nothing (never emit an empty array).
 
 ## Required reading
 
 Load on demand:
 
 - `skills/endpoint-spec/SKILL.md` + `spec-database-object.md` + `spec-columns.md`.
+- `skills/endpoint-spec/spec-type-map-gaps.md` — in `create-endpoints` mode,
+  for the type-map resolution and gap-authoring rules of steps 6–7.
 - A matching `skills/endpoint-spec/examples/*.example.json` for the database
   dialect (`postgres`, `mysql`, `bigquery`, `mongodb`).
 
@@ -149,5 +182,10 @@ Load on demand:
   database name as `--catalog` to `endpoint_id.py`.
 - If the connection cannot be reached (network error, bad credentials), surface
   the underlying error verbatim and stop. Do not retry.
+- Connection type-map rules are **gap-only**: never author a rule for a native
+  or canonical the connector's maps already resolve (a connection rule
+  overrides the connector for every stream on this connection), never return
+  an empty rule array, and never remove, reorder, or edit rules an existing
+  connection map already carries — only append.
 - Do **not** author `version`, `connection_id`, `connector_id`,
   `connector_version`, or `schema_hash` — those are server-managed.

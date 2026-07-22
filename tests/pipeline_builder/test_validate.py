@@ -73,7 +73,7 @@ DB_ENDPOINT = {
 }
 
 
-def _write(root: Path, rel: str, doc: dict) -> Path:
+def _write(root: Path, rel: str, doc: dict | list) -> Path:
     p = root / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(doc, indent=2))
@@ -369,3 +369,165 @@ def test_bundle_non_dict_sibling(tmp_path):
     assert not diag["passed"]
     assert any(f["validator"] == "document" and "not a JSON object" in f["message"]
                for f in diag["findings"]), diag["findings"]
+
+
+# ---------------------------------------------------------------------------
+# Connection-scoped type maps (issue #49): the two type_map_* entities plus the
+# bundle's file-level checks. Rule *content* findings come from the published
+# validator; the adapter owns only the filename gates.
+# ---------------------------------------------------------------------------
+
+TYPE_MAP_READ = [
+    {"match": "exact", "native": "CITEXT", "canonical": "Utf8"},
+    {"match": "regex", "native": "^VECTOR\\((?<n>[0-9]+)\\)$", "canonical": "List<Float32>"},
+]
+# Deliberately direction-ASYMMETRIC: the regex rule's canonical is a matcher
+# pattern, which is a contract-model error under read grading — so the "valid as
+# type_map_write" assertions below pin that the adapter actually grades in the
+# write direction (a regression to the read default would fail them). An
+# exact-rule-only fixture validates clean under either direction and pins nothing.
+TYPE_MAP_WRITE = [
+    {"match": "exact", "canonical": "List<Float32>", "native": "VECTOR(3)"},
+    {"match": "regex", "canonical": "^Decimal(128|256)\\((?<p>\\d+),\\s*(?<s>\\d+)\\)$",
+     "native": "NUMERIC(${p}, ${s})"},
+]
+
+
+@pytest.mark.parametrize("entity,fname,doc", [
+    ("type_map_read", "type-map-read.json", TYPE_MAP_READ),
+    ("type_map_write", "type-map-write.json", TYPE_MAP_WRITE),
+])
+def test_valid_type_map_entity(tmp_path, entity, fname, doc):
+    diag = V.diagnostics_for(entity, _write(tmp_path, fname, doc))
+    assert diag["passed"], diag["findings"]
+
+
+def test_type_map_entity_rejects_wrong_filename(tmp_path):
+    # the engine loads the maps by exact filename; the gate must fire ALONE — a
+    # misnamed file's content would otherwise be graded in the wrong direction
+    diag = V.diagnostics_for("type_map_read", _write(tmp_path, "type-map.json", TYPE_MAP_READ))
+    assert not diag["passed"]
+    assert [f["validator"] for f in diag["findings"]] == ["connection-type-map"], diag["findings"]
+    assert "type-map-read.json" in diag["findings"][0]["message"]
+
+
+def test_type_map_entity_direction_mismatch_is_caught(tmp_path):
+    # a write-shaped map under the read entity fails the filename gate, not the model
+    diag = V.diagnostics_for("type_map_write", _write(tmp_path, "type-map-read.json", TYPE_MAP_WRITE))
+    assert not diag["passed"]
+    assert any(f["validator"] == "connection-type-map" for f in diag["findings"]), diag["findings"]
+
+
+@pytest.mark.parametrize("doc", [
+    [],                                                            # empty array — engine load-time error
+    [{"match": "exact", "native": "citext", "canonical": "utf8"}],  # lowercase canonical fails the Arrow pattern
+])
+def test_invalid_type_map_content(tmp_path, doc):
+    diag = V.diagnostics_for("type_map_read", _write(tmp_path, "type-map-read.json", doc))
+    assert not diag["passed"]
+    assert any(f["validator"] == "contract-model" for f in diag["findings"]), diag["findings"]
+
+
+def test_bundle_with_valid_connection_type_maps(tmp_path):
+    doc = _build_bundle(tmp_path)
+    _write(tmp_path, "connections/postgresql/definition/type-map-read.json", TYPE_MAP_READ)
+    _write(tmp_path, "connections/postgresql/definition/type-map-write.json", TYPE_MAP_WRITE)
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert diag["passed"], diag["findings"]
+
+
+def test_bundle_rejects_dead_type_map_filename(tmp_path):
+    # the engine never reads the pre-split name — a lingering file is silently inert
+    # at runtime, so the bundle pass rejects it with a migration finding
+    doc = _build_bundle(tmp_path)
+    _write(tmp_path, "connections/postgresql/definition/type-map.json", TYPE_MAP_READ)
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert not diag["passed"]
+    migration = [f for f in diag["findings"] if f["validator"] == "connection-type-map"]
+    assert migration, diag["findings"]
+    assert migration[0]["severity"] == "error"
+    assert "type-map-read.json" in migration[0]["message"]  # the migration direction
+
+
+def test_bundle_flags_invalid_connection_type_map(tmp_path):
+    doc = _build_bundle(tmp_path)
+    _write(tmp_path, "connections/postgresql/definition/type-map-read.json",
+                [{"match": "exact", "native": "citext", "canonical": "utf8"}])
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert not diag["passed"]
+    bad = [f for f in diag["findings"] if f["validator"] == "contract-model"]
+    assert bad, diag["findings"]
+    # findings are anchored to the owning file so a multi-connection bundle stays legible
+    assert all(f["path"].startswith("connections/postgresql/definition/type-map-read.json")
+               for f in bad), bad
+
+
+def test_bundle_unreadable_connection_type_map(tmp_path):
+    doc = _build_bundle(tmp_path)
+    p = tmp_path / "connections/postgresql/definition/type-map-read.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("[ not valid json")
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert not diag["passed"]
+    assert any(f["validator"] == "connection-type-map" and "Cannot read" in f["message"]
+               for f in diag["findings"]), diag["findings"]
+
+
+def test_type_map_entity_rejects_non_array(tmp_path):
+    # a dict under a load-bearing type-map filename must fail HERE: the published
+    # dispatch detects by shape, so a stray connection document would otherwise be
+    # graded as a connection and pass clean while the engine's loader chokes
+    diag = V.diagnostics_for("type_map_read", _write(tmp_path, "type-map-read.json", CONN_PG))
+    assert not diag["passed"]
+    assert [f["validator"] for f in diag["findings"]] == ["connection-type-map"], diag["findings"]
+    assert "JSON array" in diag["findings"][0]["message"]
+
+
+def test_connection_write_map_filters_connector_vocabulary_warning(tmp_path):
+    # the published type-map-write-coverage warning presumes a connector's
+    # full-vocabulary write map; a gap-only connection map never satisfies it by
+    # design, so the adapter filters it — for the entity run and the bundle alike
+    diag = V.diagnostics_for("type_map_write", _write(tmp_path, "type-map-write.json", TYPE_MAP_WRITE))
+    assert diag["passed"], diag["findings"]
+    assert not any(f["validator"] == "type-map-write-coverage" for f in diag["findings"])
+
+    root = tmp_path / "bundle"
+    doc = _build_bundle(root)
+    _write(root, "connections/postgresql/definition/type-map-write.json", TYPE_MAP_WRITE)
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=root)
+    assert diag["passed"], diag["findings"]
+    assert not any(f["validator"] == "type-map-write-coverage" for f in diag["findings"])
+
+
+def test_bundle_flags_invalid_connection_write_type_map(tmp_path):
+    # pins that the bundle loop reaches the WRITE entry too (a lowercase exact
+    # canonical fails the Arrow pattern under write grading)
+    doc = _build_bundle(tmp_path)
+    _write(tmp_path, "connections/postgresql/definition/type-map-write.json",
+           [{"match": "exact", "canonical": "utf8", "native": "TEXT"}])
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert not diag["passed"]
+    bad = [f for f in diag["findings"] if f["validator"] == "contract-model"]
+    assert bad and all(
+        f["path"].startswith("connections/postgresql/definition/type-map-write.json")
+        for f in bad), diag["findings"]
+
+
+def test_bundle_flags_type_map_that_is_not_a_file(tmp_path):
+    # a directory under a load-bearing name would validate clean and then fail at
+    # the engine's loader — the bundle pass flags it instead
+    doc = _build_bundle(tmp_path)
+    (tmp_path / "connections/postgresql/definition/type-map-read.json").mkdir(parents=True)
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert not diag["passed"]
+    assert any(f["validator"] == "connection-type-map" and "not a readable file" in f["message"]
+               for f in diag["findings"]), diag["findings"]
+
+
+def test_cli_main_type_map_entities(tmp_path, capsys):
+    # the agents drive the CLI, and diagnostics_for-level routing keys off
+    # _TYPE_MAP_FILENAMES — only this pins that ENTITIES exposes the new entities
+    path = _write(tmp_path, "type-map-write.json", TYPE_MAP_WRITE)
+    rc = V.main(["--entity", "type_map_write", "--document", str(path)])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["passed"], out

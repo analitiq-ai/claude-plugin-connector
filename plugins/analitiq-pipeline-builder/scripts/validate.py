@@ -24,23 +24,41 @@ entry point. This adapter routes each entity as follows:
     "unrecognized artifact" finding. Routing by the caller-supplied ``--entity``,
     which is already known here, guarantees the right model runs and yields
     per-field findings instead.
+  * ``type_map_read`` / ``type_map_write`` -> ``analitiq.validator.validate_document``
+    over the connection-scoped type-map rule array, after an adapter filename gate:
+    the engine loads ``connections/<slug>/definition/type-map-{read,write}.json`` by
+    exactly those names (and the published validator derives rule direction from
+    them, defaulting an unknown name to read), so a misnamed file gets the rename
+    finding alone rather than findings that could be graded in the wrong direction.
+    The published ``type-map-write-coverage`` warning is filtered out here: it
+    presumes a connector's full-vocabulary write map, which a gap-only connection
+    map deliberately is not (see ``_type_map_findings``).
   * ``pipeline`` with ``--bundle-root`` -> additionally
     ``analitiq.validator.validate_pipeline_bundle`` over the on-disk bundle, for the
     cross-document referential integrity no single document can verify. A draft
     bundle passes ``require_runnable=False`` (a not-yet-runnable draft is not an
     authoring error); an ``active`` pipeline is held to full runnability.
 
-The adapter adds exactly one check of its own, and only because the published
-contract structurally cannot make it: the published bundle validator receives
-connector *identity* only (slugs), never connector endpoint *contents*, so it
-leaves ``scope='connector'`` endpoint refs unresolved by design
-(``analitiq.validator.pipelines``: "out of scope for this check"). This plugin,
-unlike the service, has the downloaded connector endpoint files on disk, so it
-verifies each ``scope='connector'`` stream ref against the connector's on-disk
-endpoint set and emits a ``connector-endpoint-ref`` **warning** (with an alignment
-suggestion) when the referenced endpoint is absent. It never errors — connectors
-are trusted registry artifacts pinned by ``connector_version`` at runtime — and it
-never edits the connector; the orchestrator aligns the stream's ref instead.
+The adapter adds two checks of its own, each only because the published contract
+structurally cannot make it:
+
+  * ``connector-endpoint-ref`` — the published bundle validator receives
+    connector *identity* only (slugs), never connector endpoint *contents*, so it
+    leaves ``scope='connector'`` endpoint refs unresolved by design
+    (``analitiq.validator.pipelines``: "out of scope for this check"). This plugin,
+    unlike the service, has the downloaded connector endpoint files on disk, so it
+    verifies each ``scope='connector'`` stream ref against the connector's on-disk
+    endpoint set and emits a **warning** (with an alignment suggestion) when the
+    referenced endpoint is absent. It never errors — connectors are trusted
+    registry artifacts pinned by ``connector_version`` at runtime — and it never
+    edits the connector; the orchestrator aligns the stream's ref instead.
+  * ``connection-type-map`` — the published bundle validator receives assembled
+    documents, never a connection's directory, so it cannot see the type-map
+    files the engine loads beside ``connection.json``. The bundle pass therefore
+    validates each connection's present ``type-map-{read,write}.json`` in full
+    (via the published validator) and rejects the dead pre-split ``type-map.json``
+    filename with a migration finding, mirroring the published connector-side
+    check at connection scope.
 
 Validation is offline — no schema is fetched. Usage::
 
@@ -57,7 +75,18 @@ from pathlib import Path
 
 from _analitiq import ensure_deps_or_reexec
 
-ENTITIES = ("pipeline", "stream", "connection", "database_endpoint")
+ENTITIES = ("pipeline", "stream", "connection", "database_endpoint",
+            "type_map_read", "type_map_write")
+
+# The engine loads connection-scoped type maps by these exact filenames under
+# connections/<slug>/definition/ — a differently-named file is silently ignored
+# at runtime, so the adapter gates the name like the endpoint filename gate does.
+_TYPE_MAP_FILENAMES = {"type_map_read": "type-map-read.json",
+                       "type_map_write": "type-map-write.json"}
+# The pre-split filename: the engine never reads it, at either scope. The
+# published validator rejects it beside a connector; the adapter mirrors that
+# for connections, where the published bundle validator cannot see files.
+_LEGACY_TYPE_MAP_FILENAME = "type-map.json"
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +136,85 @@ def _endpoint_findings(doc, document_path: Path) -> list[dict]:
     return validate_document(doc, doc_path=document_path.resolve())
 
 
+def _type_map_findings(entity: str, doc, document_path: Path) -> list[dict]:
+    """Validate a connection-scoped type-map file. The filename gate runs first
+    and alone on a mismatch: the published validator derives rule direction from
+    the filename, so validating a misnamed file's content could grade it in the
+    wrong direction (an unknown filename defaults to read) and bury the one
+    actionable finding (rename it) in noise. A non-list document is likewise
+    gated here — the published dispatch detects by *shape*, so a stray dict
+    under a type-map filename would be graded as some other artifact (a
+    connection document would even pass clean) instead of failing as the
+    non-array the engine's loader will choke on."""
+    expected = _TYPE_MAP_FILENAMES[entity]
+    if document_path.name != expected:
+        return [_finding(
+            "connection-type-map", "error", "",
+            f"file is named {document_path.name!r} but entity {entity!r} requires "
+            f"{expected!r} — the engine loads each direction only from its exact "
+            f"filename (connections/<slug>/definition/{expected}).")]
+    if not isinstance(doc, list):
+        return [_finding(
+            "connection-type-map", "error", "",
+            f"{expected} must be a top-level JSON array of rules, got "
+            f"{type(doc).__name__}.")]
+    from analitiq.validator import validate_document
+    # Resolve the parent but keep the authored basename: the published validator
+    # derives direction from `doc_path.name`, and a full resolve() would follow a
+    # symlinked map to a differently-named target and silently re-grade it.
+    findings = validate_document(doc, doc_path=document_path.parent.resolve() / document_path.name)
+    if entity == "type_map_write":
+        # The published write-vocabulary coverage warning presumes a CONNECTOR
+        # write map, which must cover the full canonical vocabulary. A connection
+        # map is gap-only by rule (spec-type-map-gaps.md) — the warning would fire
+        # on every authored connection write map forever, and its remedy ("add
+        # rules") is exactly the shadowing the gap-only rule forbids. Filtering it
+        # is the same adapter-adapts-published-behavior move as require_runnable.
+        findings = [f for f in findings if f.get("validator") != "type-map-write-coverage"]
+    return findings
+
+
+def _connection_type_map_findings(conn_dir: Path) -> list[dict]:
+    """Validate the connection-scoped type maps beside one connection.json —
+    file-level checks the published bundle validator structurally cannot make
+    (it receives assembled documents, never the connection's directory). A
+    present map is validated in full via the published validator; the dead
+    pre-split filename is rejected with a migration finding, mirroring the
+    published connector-side check."""
+    findings: list[dict] = []
+    definition = conn_dir / "definition"
+    site = f"connections/{conn_dir.name}/definition"
+    legacy = definition / _LEGACY_TYPE_MAP_FILENAME
+    if legacy.exists() or legacy.is_symlink():
+        findings.append(_finding(
+            "connection-type-map", "error", f"{site}/{_LEGACY_TYPE_MAP_FILENAME}",
+            f"{_LEGACY_TYPE_MAP_FILENAME} is the pre-split filename; the engine never "
+            "reads it. Split it into type-map-read.json (native → Arrow) and, for the "
+            "write direction, type-map-write.json (Arrow → native)."))
+    for entity, fname in _TYPE_MAP_FILENAMES.items():
+        path = definition / fname
+        if not (path.exists() or path.is_symlink()):
+            continue
+        if not path.is_file():
+            # A directory or dangling symlink under a load-bearing name would
+            # pass silently here and fail at the engine's loader — the most
+            # expensive place to find out.
+            findings.append(_finding(
+                "connection-type-map", "error", f"{site}/{fname}",
+                f"{fname} exists but is not a readable file (directory or dangling "
+                "symlink); the engine's loader will fail to open it."))
+            continue
+        try:
+            doc = _read_json(path)
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            findings.append(_finding("connection-type-map", "error", f"{site}/{fname}",
+                                     f"Cannot read {fname}: {exc}"))
+            continue
+        findings.extend({**f, "path": f"{site}/{fname}{f.get('path', '')}"}
+                        for f in _type_map_findings(entity, doc, path))
+    return findings
+
+
 def _read_bundle_member(path: Path, findings: list[dict]) -> dict | None:
     """Read one sibling bundle document. On an unreadable/invalid file or a
     non-object payload, append an error finding and return None — so a malformed
@@ -147,6 +255,9 @@ def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> tup
     connections: list[dict] = []
     endpoints: list[dict] = []
     for conn_json in sorted((root / "connections").glob("*/connection.json")):
+        # Connection-scoped type maps are files the engine loads beside the
+        # connection, invisible to the assembled-document bundle — check them here.
+        findings.extend(_connection_type_map_findings(conn_json.parent))
         conn = _read_bundle_member(conn_json, findings)
         if conn is None:
             continue
@@ -312,6 +423,8 @@ def diagnostics_for(entity: str, document_path: Path, bundle_root: Path | None =
 
     if entity == "database_endpoint":
         findings = _endpoint_findings(doc, document_path)
+    elif entity in _TYPE_MAP_FILENAMES:
+        findings = _type_map_findings(entity, doc, document_path)
     else:
         findings = _model_findings(entity, doc)
         if entity == "pipeline" and bundle_root is not None:

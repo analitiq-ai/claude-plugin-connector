@@ -87,6 +87,11 @@ inside `document`; the orchestrator reads it from there for downstream
 cross-references. Endpoint creators carry the slug identity in
 `document.endpoint_id`.
 
+`private-endpoint-creator`'s sub-modes wrap their `CreatorOutput[]` in a
+mode-level envelope (`{"mode", "outputs", …}`, plus `type_maps` in
+`create-endpoints`) — that envelope is defined in the agent file itself,
+not here.
+
 For unsupported cases (e.g., a connector kind the engine can't run),
 the creator returns:
 
@@ -129,12 +134,23 @@ Validator ids the published package can emit:
 
 The `bundle-*` ids only appear when the validator runs with `--bundle-root`.
 
-The adapter adds one id of its own, `connector-endpoint-ref` — a **warning-only**
-check the published bundle validator structurally cannot make, since it receives
-connector identity and never connector endpoint contents. It checks that a
-`scope: "connector"` stream ref names an endpoint the downloaded connector
-actually publishes, and its message carries an alignment suggestion. See
-`stream-spec/spec-endpoint-refs.md`.
+The adapter adds two ids of its own, for checks the published bundle validator
+structurally cannot make:
+
+- `connector-endpoint-ref` — **warning-only**. The published bundle validator
+  receives connector identity and never connector endpoint contents; this checks
+  that a `scope: "connector"` stream ref names an endpoint the downloaded
+  connector actually publishes, and its message carries an alignment suggestion.
+  See `stream-spec/spec-endpoint-refs.md`.
+- `connection-type-map` — **error**. File-level gates on the connection-scoped
+  type maps the engine loads beside `connection.json`: the exact
+  `type-map-{read,write}.json` filenames, a non-array or unreadable map file,
+  and rejection of the dead pre-split `type-map.json` with a migration finding.
+  Content findings for a present map come from the published validator under
+  its own ids — except `type-map-write-coverage`, which the adapter filters
+  for connection maps (it presumes a connector's full-vocabulary write map;
+  a gap-only connection map never satisfies it by design). See
+  `endpoint-spec/spec-type-map-gaps.md`.
 
 A finding raised by a cross-field (relational) rule carries that rule's stable id
 inline in its `message`, as `[ADV-<AREA>-NNN] …`. Quote the id when relaying a

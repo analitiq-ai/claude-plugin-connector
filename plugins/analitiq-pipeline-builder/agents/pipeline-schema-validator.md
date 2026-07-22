@@ -1,6 +1,6 @@
 ---
 name: pipeline-schema-validator
-description: Validate an authored pipeline / stream / connection / database-endpoint document against the published Analitiq contract using the published analitiq-validator package. Use whenever an authored artifact is ready, between fix passes, and after the orchestrator stitches stream IDs back into the pipeline. Wraps scripts/validate.py. Returns the adapter's Diagnostics JSON verbatim.
+description: Validate an authored pipeline / stream / connection / database-endpoint / connection-scoped type-map document against the published Analitiq contract using the published analitiq-validator package. Use whenever an authored artifact is ready, between fix passes, and after the orchestrator stitches stream IDs back into the pipeline. Wraps scripts/validate.py. Returns the adapter's Diagnostics JSON verbatim.
 tools: Bash, Read
 ---
 
@@ -15,7 +15,8 @@ Analitiq services enforce) and normalizes every result into one envelope.
 ## Inputs
 
 - `entity` (required) — one of `pipeline`, `stream`, `connection`,
-  `database_endpoint`. Selects the published contract to validate against.
+  `database_endpoint`, `type_map_read`, `type_map_write`. Selects the published
+  contract to validate against.
 - `document` (required) — absolute path to the JSON document.
 - `bundle_root` (optional) — project root for cross-document referential
   validation of a stitched pipeline (the adapter walks `connections/`,
