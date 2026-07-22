@@ -238,6 +238,41 @@ def test_validator_pin_matches_the_package_this_repo_ships():
         f"CLAUDE.md documents a different validator pin than {VALIDATOR_PIN!r}")
 
 
+def test_connector_validator_agent_states_the_same_pin():
+    """The connector plugin's validator agent self-installs the same pin.
+
+    CLAUDE.md lists the agent's self-install block among the places stating
+    the runtime pin, "each pinned by a test" — this is that test. The block
+    states the version in three forms (the lockstep comment, the version
+    probe, the install command); every version token in the file must equal
+    the pin, so a partial bump cannot leave a probe that never matches what
+    the install command actually installs.
+    """
+    from _analitiq import VALIDATOR_PIN
+
+    pin_version = VALIDATOR_PIN.split("==", 1)[1]
+    agent_md = (REPO_ROOT / "plugins" / "analitiq-connector-builder"
+                / "agents" / "connector-schema-validator.md").read_text()
+
+    versions = re.findall(r"\b\d+\.\d+\.\d+rc\d+\b", agent_md)
+    assert versions, (
+        "connector-schema-validator.md no longer states any pinned version in "
+        "the X.Y.ZrcN form this test recognises (did the packages leave "
+        "pre-release?); restore the self-install pin or update this assertion.")
+    assert set(versions) == {pin_version}, (
+        f"connector-schema-validator.md states versions {sorted(set(versions))!r} "
+        f"but the runtime pin is {pin_version!r} — bump every occurrence "
+        "(comment, probe, install command) together.")
+
+    # The lockstep comment's bare `rcN` shorthand must match the pin too.
+    rc = re.search(r"rc\d+$", pin_version)
+    assert rc, f"pin {pin_version!r} is not an rcN pre-release; update this test"
+    shorthands = re.findall(r"(?<![0-9.])\brc\d+\b", agent_md)
+    assert set(shorthands) <= {rc.group(0)}, (
+        f"connector-schema-validator.md uses bare shorthand(s) "
+        f"{sorted(set(shorthands))!r} that do not match the pin's {rc.group(0)!r}")
+
+
 def test_suite_exercises_in_repo_source_not_an_installed_wheel():
     """The suite must exercise this repo's source, not a published release.
 

@@ -94,16 +94,23 @@ range or an account id in a pagination block, it belongs elsewhere.
 
 ## `offset`
 
-Fixed-size pages addressed by an integer offset. `offset.increment_by` defaults
-to the effective limit. Prefer leaving it out: the contract accepts it, but a
-non-default step is not reliably honoured, so a provider that counts in
-something other than records may not paginate as declared — verify before
-depending on it.
+Fixed-size pages addressed by an integer offset. `offset.increment_by` is
+**required, with no default** — the two offset families read identically in a
+document, so the contract makes you state the step. Match it to what the
+provider's `offset` counts:
+
+- **records returned** → `{ "ref": "response.record_count" }`
+- **the requested window** → the page size actually sent:
+  `{ "ref": "runtime.batch_size" }` when no smaller `limit.max` clamps it;
+  with a cap, the clamped literal — a raw batch size would overshoot and
+  skip rows
+- a positive-integer literal is a fixed step (`1` for page-index-style
+  offsets)
 
 ```json
 {
   "type": "offset",
-  "offset": { "param": "offset", "initial": 0 },
+  "offset": { "param": "offset", "initial": 0, "increment_by": { "ref": "response.record_count" } },
   "limit": { "param": "limit", "default": { "ref": "runtime.batch_size" }, "max": 100 },
   "stop_when": { "empty": { "ref": "response.body.data" } }
 }
