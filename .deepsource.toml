@@ -10,8 +10,10 @@ test_patterns = [
 ]
 
 # Not source: generated output and data fixtures. `schemas/` is rendered by
-# scripts/render_schemas.py (guarded by `render_schemas.py check`); the corpus
-# and advisory trees are JSON test data, not code.
+# scripts/render_schemas.py (guarded by `render_schemas.py check`); the corpus,
+# advisory fixtures, and example documents are data, not code — and they carry
+# placeholder credentials, so keeping them out also spares the secrets scan a
+# stream of false positives.
 exclude_patterns = [
   "schemas/**",
   "packages/*/tests/corpus/**",
@@ -19,9 +21,10 @@ exclude_patterns = [
   "**/examples/**",
 ]
 
+# A block's presence enables it; there is no `enabled` key in the current schema
+# (it was pre-2021 and is now rejected as a misconfiguration).
 [[analyzers]]
 name = "python"
-enabled = true
 
   [analyzers.meta]
   # Both packages declare `requires-python = ">=3.10"`; CI runs 3.12 and 3.13.
@@ -32,4 +35,3 @@ enabled = true
 # here because a token has slipped into a local, gitignored `.envrc` before.
 [[analyzers]]
 name = "secrets"
-enabled = true
