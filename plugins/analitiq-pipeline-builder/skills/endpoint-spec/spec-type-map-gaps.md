@@ -24,7 +24,11 @@ detection are the live reference for it; do not restate their vocabulary here.
 
 Filenames are load-bearing: the engine loads exactly these two names from the
 connection's `definition/`. The pre-split `type-map.json` is dead — the engine
-never reads it, and the validator rejects it with a migration finding.
+never reads it, and the validators reject it with a migration finding. The
+published `type-map-write-coverage` warning does not apply here — it presumes
+a connector's full-vocabulary write map, which a gap-only connection map
+deliberately is not — so the validator adapter filters it; never "fix" a
+coverage warning by adding connection rules.
 
 ## Gap detection
 
@@ -75,7 +79,7 @@ uncovered ones. Pass only map files that exist.
   arithmetic no rule can express). No map rule, connector or connection, is
   consulted for such a family, so a connection write rule for it is dead
   weight. If the connector's package files show an override covering the gap
-  family, record the gap in `notes[]` instead of authoring a rule.
+  family, record the gap in `type_maps.notes` instead of authoring a rule.
 
 ## What a clean result does not prove
 

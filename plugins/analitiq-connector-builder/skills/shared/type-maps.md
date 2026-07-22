@@ -12,7 +12,7 @@ never by this plugin.
 | Scope | Files | Authored by |
 |---|---|---|
 | Connector | `{connector_id}/definition/type-map-read.json` / `type-map-write.json` | this plugin (`spec-type-maps.md`) |
-| Connection | `connections/<connection_id>/definition/type-map-read.json` / `type-map-write.json` | `analitiq-pipeline-builder`, for natives the connector maps don't cover on that deployment |
+| Connection | `connections/<connection-slug>/definition/type-map-read.json` / `type-map-write.json` | `analitiq-pipeline-builder`, for natives the connector maps don't cover on that deployment |
 
 Both scopes share one rule shape and one published schema pair
 (`https://schemas.analitiq.ai/type-map-read/latest.json` /
@@ -47,10 +47,11 @@ are therefore authored gap-only.
   write map each time (`CREATE TABLE IF NOT EXISTS` no-ops database-side for
   an existing table, but the rendering still runs), so a write-side gap fails
   a destination stream even when its table already exists.
-- **Dialect overrides bypass the maps.** Where a connector's dialect overrides
-  `render_column_type` for a canonical family (see `spec-type-maps.md`
-  §Database coverage), no map rule — connector or connection — is consulted
-  for that family.
+- **Dialect overrides bypass the write maps.** Where a connector's dialect
+  overrides `render_column_type` for a canonical family (see
+  `spec-type-maps.md` §Database coverage), no **write** rule — connector or
+  connection — is consulted for that family. Read-side rules are unaffected:
+  `render_column_type` exists only on the Arrow → native DDL path.
 
 ## File-presence semantics
 

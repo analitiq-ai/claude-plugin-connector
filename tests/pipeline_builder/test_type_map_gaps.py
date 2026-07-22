@@ -1,10 +1,12 @@
 """Tests for the type-map gap prober (plugins/analitiq-pipeline-builder/scripts/type_map_gaps.py).
 
-The script holds no matching logic — resolution dispatches to the published
-`analitiq-validator` helpers (the exact semantics every runtime reader uses).
-These tests pin the *wiring*: probe/rule routing per direction, map precedence
-(connection primary over connector fallback, mirroring the engine's
-`TypeMapper.compose`), gap reporting, and the CLI envelope.
+The script holds no matching logic — resolution dispatches to the pinned
+`analitiq-validator`'s internal helpers (the exact semantics every runtime
+reader uses); these tests exercise them against the in-repo source, which moves
+in lockstep with the pin. They pin the *wiring*: probe/rule routing per
+direction, map precedence (connection primary over connector fallback,
+mirroring the engine's `TypeMapper.compose`), per-map model validation, gap
+reporting, and the CLI envelope.
 """
 from __future__ import annotations
 
@@ -117,3 +119,59 @@ def test_cli_missing_map_is_an_error(tmp_path, capsys):
                  "--probes-file", str(probes)])
     assert rc == 2
     assert not capsys.readouterr().out
+
+
+def test_duplicate_probes_deduped(tmp_path):
+    result = G.resolve("read", ["vector(3)", "vector(3)"], [_map(tmp_path, "r.json", CONNECTOR_READ)])
+    assert result["gaps"] == ["vector(3)"]
+    assert list(result["resolved"]) == ["vector(3)"]
+
+
+def test_malformed_rule_fails_loud(tmp_path):
+    # the resolver mirrors runtime semantics and SKIPS a malformed rule — which
+    # would surface as a false "gap" and drive the agent to shadow the rule the
+    # map intended. The prober must therefore refuse the map outright, naming it.
+    bad = _map(tmp_path, "r.json", [{"match": "exact", "native": "CITEXT"}])  # no canonical
+    with pytest.raises(ValueError, match="r.json"):
+        G.resolve("read", ["citext"], [bad])
+
+
+def test_map_direction_must_match_model(tmp_path):
+    # a write regex rule's canonical is a matcher pattern — invalid as a read
+    # rule's rendered Arrow type — so model validation per --direction catches a
+    # write map probed as read even under a neutral filename. (The reverse is not
+    # always model-detectable — rule shapes are symmetric for exact rules — which
+    # is what the CLI filename gate is for.)
+    with pytest.raises(ValueError, match="not a valid read type map"):
+        G.resolve("read", ["citext"], [_map(tmp_path, "m.json", CONNECTOR_WRITE)])
+
+
+def test_cli_rejects_direction_filename_mismatch(tmp_path, capsys):
+    m = _map(tmp_path, "type-map-read.json", CONNECTOR_READ)
+    probes = tmp_path / "probes.json"
+    probes.write_text('["Utf8"]')
+    rc = G.main(["--direction", "write", "--map", str(m), "--probes-file", str(probes)])
+    assert rc == 2
+    err = capsys.readouterr()
+    assert not err.out
+    assert "read-direction map" in err.err
+
+
+def test_cli_parse_error_names_the_file(tmp_path, capsys):
+    bad = tmp_path / "broken.json"
+    bad.write_text("[ not json")
+    probes = tmp_path / "probes.json"
+    probes.write_text('["citext"]')
+    rc = G.main(["--direction", "read", "--map", str(bad), "--probes-file", str(probes)])
+    assert rc == 2
+    assert "broken.json" in capsys.readouterr().err
+
+
+def test_cli_reads_probes_from_stdin(tmp_path, capsys, monkeypatch):
+    # stdin is the documented primary invocation (spec-type-map-gaps.md)
+    import io
+    m = _map(tmp_path, "type-map-read.json", CONNECTOR_READ)
+    monkeypatch.setattr("sys.stdin", io.StringIO('["citext"]'))
+    rc = G.main(["--direction", "read", "--map", str(m)])
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["resolved"] == {"citext": "Utf8"}

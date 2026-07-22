@@ -87,6 +87,11 @@ inside `document`; the orchestrator reads it from there for downstream
 cross-references. Endpoint creators carry the slug identity in
 `document.endpoint_id`.
 
+`private-endpoint-creator`'s sub-modes wrap their `CreatorOutput[]` in a
+mode-level envelope (`{"mode", "outputs", …}`, plus `type_maps` in
+`create-endpoints`) — that envelope is defined in the agent file itself,
+not here.
+
 For unsupported cases (e.g., a connector kind the engine can't run),
 the creator returns:
 
@@ -139,9 +144,12 @@ structurally cannot make:
   See `stream-spec/spec-endpoint-refs.md`.
 - `connection-type-map` — **error**. File-level gates on the connection-scoped
   type maps the engine loads beside `connection.json`: the exact
-  `type-map-{read,write}.json` filenames, and rejection of the dead pre-split
-  `type-map.json` with a migration finding. Content findings for a present map
-  come from the published validator under its own ids. See
+  `type-map-{read,write}.json` filenames, a non-array or unreadable map file,
+  and rejection of the dead pre-split `type-map.json` with a migration finding.
+  Content findings for a present map come from the published validator under
+  its own ids — except `type-map-write-coverage`, which the adapter filters
+  for connection maps (it presumes a connector's full-vocabulary write map;
+  a gap-only connection map never satisfies it by design). See
   `endpoint-spec/spec-type-map-gaps.md`.
 
 A finding raised by a cross-field (relational) rule carries that rule's stable id
