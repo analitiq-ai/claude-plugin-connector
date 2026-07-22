@@ -22,7 +22,7 @@ uniqueness and determinism::
 
 The same locator yields the same ``endpoint_id`` on every re-discovery
 (idempotent), and the result always satisfies the published ``endpoint_id``
-slug pattern (``shared.common.SLUG_PATTERN``).
+slug pattern (``analitiq.contracts.shared.common.SLUG_PATTERN``).
 
 This is the single source of truth for the derivation: the discovery path
 and the connection/endpoint validators import it so they cannot drift.
@@ -105,7 +105,7 @@ def derive_db_endpoint_id(
     Slug order is schema, table (``name``), catalog — catalog last, only when
     present. Empty slugs are dropped (the hash still disambiguates); when every
     slug is empty the id is the bare 8-hex hash, which still matches the
-    published slug pattern (``shared.common.SLUG_PATTERN``).
+    published slug pattern (``analitiq.contracts.shared.common.SLUG_PATTERN``).
     """
     if not name:
         raise ValueError("database endpoint name is required to derive endpoint_id")
