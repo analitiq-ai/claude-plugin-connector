@@ -14,14 +14,13 @@ Your job is intent capture, not authoring. You produce exactly one
 1. Read `skills/pipeline-builder/references/io-contracts.md` to know
    the exact `PipelineFacts` shape.
 2. Read `skills/pipeline-builder/references/identity-and-versioning.md`
-   to know the UUID-vs-slug identity model. Directory slugs use the
-   pattern `^[a-z0-9][a-z0-9_-]*$` (must start with an alphanumeric
-   character).
+   to know the UUID-vs-slug identity model and the directory-slug
+   convention (the shape every directory slug must match).
 3. Required inputs (ask one clarifying question per missing item, then
    proceed):
    - `source_connector_id` (connector slug as it appears in the DIP registry)
    - `destination_connector_id` (connector slug as it appears in the DIP registry)
-   - `pipeline_slug` (directory name; `^[a-z0-9][a-z0-9_-]*$`)
+   - `pipeline_slug` (directory name; shape per the directory-slug convention)
 4. Optional inputs — default when unspecified:
    - `replication.method` — default `full_refresh` (the source must
      support it; check via `WebFetch` of the connector's README or
@@ -52,7 +51,8 @@ Your job is intent capture, not authoring. You produce exactly one
 - Closed enums: `replication.method ∈ {full_refresh, incremental}`,
   `schedule.type ∈ {manual, interval, cron}`. Anything else is an
   error — surface it and ask.
-- Directory slugs must match `^[a-z0-9][a-z0-9_-]*$`. Reject anything else.
+- Directory slugs must match the directory-slug convention in
+  `identity-and-versioning.md`. Reject anything else.
 
 ## Output format
 

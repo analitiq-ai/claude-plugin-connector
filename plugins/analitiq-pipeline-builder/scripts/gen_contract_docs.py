@@ -112,19 +112,37 @@ def render_schema_urls() -> str:
     return "\n".join(out) + "\n"
 
 
+# Concern label -> (module, constant name). Single source for both the
+# `shared-vocabulary` block and the hand-typed-pattern gate in
+# tests/pipeline_builder/test_prose_vocabulary.py — the pattern-flavored twin of
+# `published_vocabularies()`. The gate scans every `*_PATTERN` constant in the
+# modules named here, not just these rows.
+_SHARED_PATTERN_ROWS = (
+    ("Slug (ids; directories by convention)", "analitiq.contracts.shared.common", "SLUG_PATTERN"),
+    ("UUID (`*_id` identity fields)", "analitiq.contracts.shared.types", "UUID_PATTERN"),
+    ("Cron expression", "analitiq.contracts.shared.common", "CRON_PATTERN"),
+    ("No edge whitespace (`display_name`, tags)", "analitiq.contracts.shared.common",
+     "NO_EDGE_WHITESPACE_PATTERN"),
+)
+
+
+def shared_patterns() -> dict[str, str]:
+    """The patterns the `shared-vocabulary` block emits, keyed by dotted constant name."""
+    import importlib
+
+    return {
+        f"{module}.{name}": getattr(importlib.import_module(module), name)
+        for _label, module, name in _SHARED_PATTERN_ROWS
+    }
+
+
 def render_shared_vocabulary() -> str:
     from analitiq.contracts.shared import common
-    from analitiq.contracts.shared import types
 
-    rows = [
-        ("Slug (ids + directory names)", "analitiq.contracts.shared.common.SLUG_PATTERN", common.SLUG_PATTERN),
-        ("UUID (`*_id` identity fields)", "analitiq.contracts.shared.types.UUID_PATTERN", types.UUID_PATTERN),
-        ("Cron expression", "analitiq.contracts.shared.common.CRON_PATTERN", common.CRON_PATTERN),
-        ("No edge whitespace (`display_name`, tags)", "analitiq.contracts.shared.common.NO_EDGE_WHITESPACE_PATTERN",
-         common.NO_EDGE_WHITESPACE_PATTERN),
-    ]
+    patterns = shared_patterns()
     out = ["| Concern | Published constant | Pattern |", "|---|---|---|"]
-    out += [f"| {c} | {_code(n)} | {_code(v)} |" for c, n, v in rows]
+    out += [f"| {label} | {_code(f'{module}.{name}')} | {_code(patterns[f'{module}.{name}'])} |"
+            for label, module, name in _SHARED_PATTERN_ROWS]
     out.append("")
     bounds = [
         ("`display_name` length", f"{common.DISPLAY_NAME_MIN}..{common.DISPLAY_NAME_MAX}"),
@@ -521,7 +539,7 @@ def published_vocabularies() -> dict[str, dict]:
     """Every closed vocabulary an author picks a value from, read off the package.
 
     Single source for both the generated `enum-vocabulary` block and the prose
-    gate in tests/test_prose_vocabulary.py. Restating this list in either place
+    gate in tests/pipeline_builder/test_prose_vocabulary.py. Restating this list in either place
     would recreate exactly the drift this module exists to prevent.
 
     Each value is {label, members, published_as}.
