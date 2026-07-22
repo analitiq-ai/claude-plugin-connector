@@ -125,10 +125,12 @@ EXPECTED_RESOLUTION_SCOPES = {
 }
 # Where the slug pattern — the `connector_id` / `endpoint_id` charset, owned by
 # `analitiq.contracts.shared.common.SLUG_PATTERN` — may appear hand-typed in the
-# plugin's prose, and how many times (issue #58). Every other site references
-# one of these instead of restating the regex:
+# plugin's prose, and how many times (issue #58). No other site restates the
+# regex: the agent-consumed sites reference one of these, and the rest (README,
+# the orchestrator's hard rules, definition-of-done) say "the slug pattern"
+# without spelling it:
 #   - metadata-and-versioning.md — the canonical `connector_id` statement (the
-#     field table); the creator agents and README point here.
+#     field table); the creator agents point here.
 #   - endpoint-identity.md — the canonical `endpoint_id` statement (Invariants).
 #   - io-contracts.md — two embedded JSON Schemas agents consume as machine
 #     vocabulary (the `resources[].key` description and the
@@ -227,10 +229,12 @@ def _bare_marker_arrow_types() -> set[str] | None:
 
 # A slug-flavored charset literal: a character class opening with `a-z0-9`,
 # plus any following classes / quantifiers / `$` anchor. Matches the exact
-# SLUG_PATTERN and any paraphrase of it (`[a-z0-9_-]+`, a bare `[a-z0-9]`), so a
-# loosened copy is caught, while the `[0-9]+` / `[A-Z]+` classes in type-map
-# regex examples are not. Line-based: a copy wrapped across lines yields a
-# truncated match, which fails the equality test and surfaces the site anyway.
+# SLUG_PATTERN and the realistic paraphrases of it (`[a-z0-9_-]+`, a bare
+# `[a-z0-9]`) — a respelled class like `[0-9a-z_-]` evades it, the accepted
+# limit of a lexical detector — while the `[0-9]+` / `[A-Z]+` classes in
+# type-map regex examples are not matched. Line-based: a copy wrapped across
+# lines yields a truncated match, which fails the equality test and surfaces
+# the site anyway.
 _SLUG_LITERAL_RE = re.compile(r"\^?\[a-z0-9[^]]*\](?:\[[^]]*\]|[*+$])*")
 
 
@@ -497,6 +501,32 @@ def test_slug_pattern_sites_are_pinned() -> None:
         "A hand-typed copy appeared or a canonical statement vanished — "
         "reference the canonical sites instead of adding copies, or update "
         "EXPECTED_SLUG_PATTERN_SITES if the move is deliberate."
+    )
+
+
+def test_slug_literal_detector_recall() -> None:
+    """Pin the detector itself — its recall is what the two gates above stand on.
+
+    A later "simplification" (say, to `re.escape(SLUG_PATTERN)`) would keep both
+    gates green on the exact-pattern sites while silently dropping paraphrase
+    coverage — the exact blind spot the 5 pre-#58 loose copies lived in.
+    """
+    assert _SLUG_LITERAL_RE.fullmatch(SLUG_PATTERN), (
+        "_SLUG_LITERAL_RE no longer fully matches SLUG_PATTERN itself — the "
+        "canonical sites would surface as truncated/divergent literals."
+    )
+    paraphrases = ["[a-z0-9_-]+", "[a-z0-9]"]
+    missed = [p for p in paraphrases if not _SLUG_LITERAL_RE.fullmatch(p)]
+    assert not missed, (
+        f"_SLUG_LITERAL_RE no longer catches {missed} — a reintroduced loose "
+        "copy would pass both slug-pattern gates."
+    )
+    # Non-slug charsets that legitimately appear in type-map regex examples.
+    non_slug = ["[0-9]+", "[A-Z]+", r"^Time(32|64)\([A-Z]+\)$"]
+    false_hits = [s for s in non_slug if _SLUG_LITERAL_RE.search(s)]
+    assert not false_hits, (
+        f"_SLUG_LITERAL_RE now matches non-slug charsets {false_hits} — the "
+        "type-map regex examples would start failing the equality gate."
     )
 
 
