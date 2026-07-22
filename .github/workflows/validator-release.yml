@@ -73,7 +73,9 @@ jobs:
         id: ver
         # build.py --expect-version cross-checks this against pyproject.toml, so
         # a mistyped tag fails before anything is published.
-        run: echo "version=${{GITHUB_REF_NAME#validator-v}}" >> "$GITHUB_OUTPUT"
+        # Shell parameter expansion, not an Actions expression — `${{ ... }}`
+        # here is a workflow-file parse error that fails every trigger at startup.
+        run: echo "version=${GITHUB_REF_NAME#validator-v}" >> "$GITHUB_OUTPUT"
 
       - name: Install build + test tooling
         # `jsonschema` is a declared validator dependency (it meta-validates the
