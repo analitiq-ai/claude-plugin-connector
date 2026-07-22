@@ -27,6 +27,7 @@ failure there, never a green all-skipped gate. Run `-rs` to print skip reasons.
 from __future__ import annotations
 
 import re
+from collections import Counter
 
 import pytest
 
@@ -35,13 +36,16 @@ import pytest
 # so this merge gate can never pass by skipping. (A renamed submodule errors at
 # the imports below, which the parent-package guard does not cover — that
 # asymmetry is intentional: both surface as red in CI.)
-from _pins import assert_pinned_versions, require_contract_models  # noqa: E402
+from _pins import REPO_ROOT, assert_pinned_versions, require_contract_models  # noqa: E402
 
 require_contract_models("analitiq.contracts")
 
 from pydantic import TypeAdapter  # noqa: E402  (imports gated by the guard above)
 from analitiq.contracts.connector import Connector  # noqa: E402
 from analitiq.contracts.endpoints import ApiEndpointDoc  # noqa: E402
+from analitiq.contracts.shared.common import SLUG_PATTERN  # noqa: E402
+
+PLUGIN_ROOT = REPO_ROOT / "plugins" / "analitiq-connector-builder"
 
 # --- plugin-side expected sets ---------------------------------------------
 # These mirror the schema-owned enums restated across CLAUDE.md and
@@ -118,6 +122,24 @@ EXPECTED_RESOLUTION_SCOPES = {
     "runtime",
     "request",
     "response",
+}
+# Where the slug pattern — the `connector_id` / `endpoint_id` charset, owned by
+# `analitiq.contracts.shared.common.SLUG_PATTERN` — may appear hand-typed in the
+# plugin's prose, and how many times (issue #58). No other site restates the
+# regex: the agent-consumed sites reference one of these, and the rest (README,
+# the orchestrator's hard rules, definition-of-done) say "the slug pattern"
+# without spelling it:
+#   - metadata-and-versioning.md — the canonical `connector_id` statement (the
+#     field table); the creator agents point here.
+#   - endpoint-identity.md — the canonical `endpoint_id` statement (Invariants).
+#   - io-contracts.md — two embedded JSON Schemas agents consume as machine
+#     vocabulary (the `resources[].key` description and the
+#     `endpoint_files[].endpoint_id` constraint), which need the literal.
+# A new copy is a recorded decision: it fails the count test until listed here.
+EXPECTED_SLUG_PATTERN_SITES = {
+    "skills/connector-builder/references/endpoint-identity.md": 1,
+    "skills/connector-builder/references/io-contracts.md": 2,
+    "skills/connector-builder/references/metadata-and-versioning.md": 1,
 }
 
 
@@ -203,6 +225,27 @@ def _bare_marker_arrow_types() -> set[str] | None:
     if not isinstance(raw, str) or not re.fullmatch(r"\w+(?:\|\w+)+", raw):
         return None
     return set(raw.split("|"))
+
+
+# A slug-flavored charset literal: a character class opening with `a-z0-9`,
+# plus any following classes / quantifiers / `$` anchor. Matches the exact
+# SLUG_PATTERN and the realistic paraphrases of it (`[a-z0-9_-]+`, a bare
+# `[a-z0-9]`) — a respelled class like `[0-9a-z_-]` evades it, the accepted
+# limit of a lexical detector — while the `[0-9]+` / `[A-Z]+` classes in
+# type-map regex examples are not matched. Line-based: a copy wrapped across
+# lines yields a truncated match, which fails the equality test and surfaces
+# the site anyway.
+_SLUG_LITERAL_RE = re.compile(r"\^?\[a-z0-9[^]]*\](?:\[[^]]*\]|[*+$])*")
+
+
+def _slug_literal_sites() -> list[tuple[str, int, str]]:
+    """Every (relpath, lineno, literal) slug-charset occurrence in the plugin's prose."""
+    return [
+        (path.relative_to(PLUGIN_ROOT).as_posix(), lineno, match.group(0))
+        for path in sorted(PLUGIN_ROOT.rglob("*.md"))
+        for lineno, line in enumerate(path.read_text().splitlines(), 1)
+        for match in _SLUG_LITERAL_RE.finditer(line)
+    ]
 
 
 def _diff_msg(label: str, schema_set: set[str] | None, expected: set[str], fix: str) -> str:
@@ -416,4 +459,110 @@ def test_transport_types_match_schema(connector_schema: dict) -> None:
         EXPECTED_TRANSPORT_TYPES,
         "update TransportTypeMapper in "
         "plugins/analitiq-connector-builder/skills/connector-builder/references/enum-mappers.md.",
+    )
+
+
+def test_slug_pattern_restatements_match_contract() -> None:
+    """Every hand-typed slug-charset literal must equal the contract's SLUG_PATTERN.
+
+    Catches the contract's pattern moving out from under a prose copy, and a
+    loose paraphrase being reintroduced — `[a-z0-9_-]+` accepts a leading `_` /
+    `-` the contract rejects, which is how 5 of the pre-#58 copies were wrong.
+    """
+    wrong = [
+        (rel, lineno, literal)
+        for rel, lineno, literal in _slug_literal_sites()
+        if literal != SLUG_PATTERN
+    ]
+    assert not wrong, (
+        f"slug-pattern literals diverging from the contract's {SLUG_PATTERN!r}:\n"
+        + "\n".join(
+            f"  plugins/analitiq-connector-builder/{rel}:{lineno}  {literal!r}"
+            for rel, lineno, literal in wrong
+        )
+        + "\nWrite the contract's exact pattern, or reference a canonical site "
+        "in EXPECTED_SLUG_PATTERN_SITES instead of restating it."
+    )
+
+
+def test_slug_pattern_sites_are_pinned() -> None:
+    """The set of files carrying the literal is a recorded decision, per file.
+
+    Both directions: a new copy appearing anywhere in the plugin's prose fails
+    until it is listed with a reason, and a canonical statement disappearing
+    (consolidated away, or reworded past the detector) fails so the references
+    pointing at it cannot silently dangle.
+    """
+    counts = dict(Counter(rel for rel, _lineno, _literal in _slug_literal_sites()))
+    assert counts == EXPECTED_SLUG_PATTERN_SITES, (
+        "slug-pattern occurrence counts changed (found vs. expected):\n"
+        f"  found:    {counts}\n"
+        f"  expected: {EXPECTED_SLUG_PATTERN_SITES}\n"
+        "A hand-typed copy appeared or a canonical statement vanished — "
+        "reference the canonical sites instead of adding copies, or update "
+        "EXPECTED_SLUG_PATTERN_SITES if the move is deliberate."
+    )
+
+
+def test_slug_literal_detector_recall() -> None:
+    """Pin the detector itself — its recall is what the two gates above stand on.
+
+    A later "simplification" (say, to `re.escape(SLUG_PATTERN)`) would keep both
+    gates green on the exact-pattern sites while silently dropping paraphrase
+    coverage — the exact blind spot the 5 pre-#58 loose copies lived in.
+    """
+    assert _SLUG_LITERAL_RE.fullmatch(SLUG_PATTERN), (
+        "_SLUG_LITERAL_RE no longer fully matches SLUG_PATTERN itself — the "
+        "canonical sites would surface as truncated/divergent literals."
+    )
+    paraphrases = ["[a-z0-9_-]+", "[a-z0-9]"]
+    missed = [p for p in paraphrases if not _SLUG_LITERAL_RE.fullmatch(p)]
+    assert not missed, (
+        f"_SLUG_LITERAL_RE no longer catches {missed} — a reintroduced loose "
+        "copy would pass both slug-pattern gates."
+    )
+    # Non-slug charsets that legitimately appear in type-map regex examples.
+    non_slug = ["[0-9]+", "[A-Z]+", r"^Time(32|64)\([A-Z]+\)$"]
+    false_hits = [s for s in non_slug if _SLUG_LITERAL_RE.search(s)]
+    assert not false_hits, (
+        f"_SLUG_LITERAL_RE now matches non-slug charsets {false_hits} — the "
+        "type-map regex examples would start failing the equality gate."
+    )
+
+
+def test_slug_pattern_governs_the_restated_fields(
+    connector_schema: dict, api_endpoint_schema: dict
+) -> None:
+    """SLUG_PATTERN must be the pattern the contract puts on the restated fields.
+
+    The two tests above pin prose to the imported constant. If `connector_id` /
+    `endpoint_id` ever stopped using SLUG_PATTERN, they would keep passing while
+    pinning prose to a constant that no longer governs the fields it describes —
+    so anchor the constant to the generated schemas here.
+    """
+    connector_id_patterns = {
+        name: props["connector_id"].get("pattern")
+        for name, node in connector_schema.get("$defs", {}).items()
+        if isinstance(node, dict)
+        and "connector_id" in (props := node.get("properties") or {})
+    }
+    assert connector_id_patterns, (
+        "no $def carries a connector_id property — the connector contract was "
+        "restructured; re-anchor this guard."
+    )
+    endpoint_id_pattern = (
+        (api_endpoint_schema.get("properties") or {}).get("endpoint_id") or {}
+    ).get("pattern")
+    off = {
+        field: pattern
+        for field, pattern in {
+            **{f"{name}.connector_id": p for name, p in connector_id_patterns.items()},
+            "ApiEndpointDoc.endpoint_id": endpoint_id_pattern,
+        }.items()
+        if pattern != SLUG_PATTERN
+    }
+    assert not off, (
+        f"fields no longer constrained by SLUG_PATTERN ({SLUG_PATTERN!r}): {off}. "
+        "The prose pins above now reference the wrong constant — re-anchor them "
+        "to whatever governs connector_id/endpoint_id."
     )

@@ -38,9 +38,9 @@ value names the on-disk directory (`{connector_id}/`), so the contract
 path `connectors/{connector_id}/definition/connector.json` and the
 plugin's output path align without a rewrite layer.
 
-The connector contract requires `connector_id` to match
-`^[a-z0-9][a-z0-9_-]*$` (a lowercase slug); this plugin authors that slug
-directly, so directory names stay portable and the identifier is stable.
+The connector contract requires `connector_id` to match the slug pattern
+in the field table above; this plugin authors that slug directly, so
+directory names stay portable and the identifier is stable.
 
 ## Registry-stamped fields
 

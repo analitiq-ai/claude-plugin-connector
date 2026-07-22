@@ -146,9 +146,8 @@ For each successfully built connector:
 └── README.md
 ```
 
-`connector_id` is the stable connector slug (`[a-z0-9_-]+`); the plugin
-authors it into `connector.json` and uses the same value as the on-disk
-directory name. Registry-stamped fields (`created_at`, `updated_at`) are
+`connector_id` is the stable connector slug; the plugin authors it into
+`connector.json` and uses the same value as the on-disk directory name. Registry-stamped fields (`created_at`, `updated_at`) are
 NEVER written to disk.
 
 ### Existing directories (build vs. update)

@@ -73,10 +73,10 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
 ## Authoring order
 
 1. **Top-level metadata** — `$schema`, `kind: "database"`, `connector_id`
-   (the stable connector slug, matching `[a-z0-9_-]+`; this also names
-   the on-disk `{connector_id}/` directory AND the package entry
-   points), `display_name`, `description`, `tags`, `version` (start at
-   `1.0.0`).
+   (the stable connector slug — pattern in `metadata-and-versioning.md`;
+   this also names the on-disk `{connector_id}/` directory AND the
+   package entry points), `display_name`, `description`, `tags`,
+   `version` (start at `1.0.0`).
 2. **Transports** — populate `transports` with one entry per logical
    transport. Set `default_transport`. Pick the transport and driver per
    the **driver-selection decision order** in `spec-driver-selection.md`

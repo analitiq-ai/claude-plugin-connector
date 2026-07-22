@@ -67,10 +67,10 @@ The `connector-spec-api` skill is preloaded. Beyond that, read:
 ## Authoring order
 
 1. **Top-level metadata** — `$schema` (`https://schemas.analitiq.ai/connector/latest.json`),
-   `kind: "api"`, `connector_id` (the stable connector slug, matching
-   `[a-z0-9_-]+`; this also names the on-disk `{connector_id}/`
-   directory), `display_name`, `description`, `tags`, `version` (start
-   at `1.0.0`).
+   `kind: "api"`, `connector_id` (the stable connector slug — pattern in
+   `metadata-and-versioning.md`; this also names the on-disk
+   `{connector_id}/` directory), `display_name`, `description`, `tags`,
+   `version` (start at `1.0.0`).
 2. **Transports** — populate `transports` map, `default_transport`, and
    `transport_defaults`. Use `transport_type: "http"`. For multi-origin
    providers (e.g. separate `auth` / `discovery` / `api` origins), define

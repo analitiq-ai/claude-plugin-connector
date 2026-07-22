@@ -62,8 +62,8 @@ was raised.
 1. Set `$schema` to `https://schemas.analitiq.ai/api-endpoint/latest.json`.
 2. Set `endpoint_id` to `endpoint_facts.resource` **verbatim** — it is
    already the derived full-locator key (see the `resources[].key` rule in
-   `io-contracts.md`); do not shorten, re-slugify, or alias it. Pattern
-   `^[a-z0-9][a-z0-9_-]*$`; the schema does not accept `alias` on endpoints.
+   `io-contracts.md`, which also carries the slug pattern); do not shorten,
+   re-slugify, or alias it. The schema does not accept `alias` on endpoints.
    The orchestrator writes the file as `endpoints/{endpoint_id}.json`, and
    the `endpoint-filename` check requires the file's basename to equal this
    value.

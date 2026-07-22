@@ -18,7 +18,7 @@ The **verbatim locator** lives in a separate field the engine reads:
 
 Because the engine acts on the verbatim field, the handle can be derived,
 sanitized, or hashed freely — as long as it is unique within its owner and
-matches `^[a-z0-9][a-z0-9_-]*$`.
+matches the slug charset (see Invariants below).
 
 > **`endpoint_id` = a deterministic, collision-safe handle derived from the
 > resource's full locator; the verbatim locator is always *also* stored in the

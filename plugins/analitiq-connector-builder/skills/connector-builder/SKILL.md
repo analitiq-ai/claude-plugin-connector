@@ -252,9 +252,9 @@ Report to the user:
 
 ## Hard rules
 
-- The plugin authors `connector_id` (the stable connector slug,
-  matching `[a-z0-9_-]+`, same value as the on-disk `{connector_id}/`
-  directory name). The registry-stamped fields `created_at` and
+- The plugin authors `connector_id` (the stable connector slug, same
+  value as the on-disk `{connector_id}/` directory name). The
+  registry-stamped fields `created_at` and
   `updated_at` are written by the registry on insert/update and must
   not appear in authored documents — `connector_id` is NOT in that
   set.

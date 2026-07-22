@@ -27,7 +27,7 @@ shared core.
   in-enum; it cannot check it is the right one.)
 - [ ] **`connector_id` is the intended stable slug** and matches the
   on-disk `{connector_id}/` directory the orchestrator will write. (The
-  schema checks the `[a-z0-9_-]+` pattern, not that it is the slug the
+  schema checks the slug pattern, not that it is the slug the
   user/provider actually means.)
 - [ ] **`display_name`, `description`, and `tags` are meaningful**, not
   placeholders.
