@@ -89,8 +89,8 @@ cross-references. Endpoint creators carry the slug identity in
 
 `private-endpoint-creator`'s sub-modes wrap their `CreatorOutput[]` in a
 mode-level envelope (`{"mode", "outputs", …}`, plus `type_maps` in
-`create-endpoints`) — that envelope is defined in the agent file itself,
-not here.
+`create-endpoints` / `author-new-table`) — that envelope is defined in the
+agent file itself, not here.
 
 For unsupported cases (e.g., a connector kind the engine can't run),
 the creator returns:

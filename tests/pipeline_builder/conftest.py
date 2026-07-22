@@ -1,9 +1,10 @@
 """Make this suite's `importorskip` guards fatal in CI.
 
-Every module here opens with `pytest.importorskip("analitiq.validator", ...)`,
-which is right for offline local work but wrong for a merge gate: if the source
-tree were missing or renamed, all five modules would skip and the job would go
-green having validated nothing.
+Every contract-backed module here opens with
+`pytest.importorskip("analitiq.validator", ...)` (prose-only modules need no
+import), which is right for offline local work but wrong for a merge gate: if
+the source tree were missing or renamed, they would all skip and the job would
+go green having validated nothing.
 
 `tests/connector_builder/test_schema_drift.py` already solves this with
 `DRIFT_REQUIRE_CONTRACT_MODELS`; that variable was the only consumer, so the

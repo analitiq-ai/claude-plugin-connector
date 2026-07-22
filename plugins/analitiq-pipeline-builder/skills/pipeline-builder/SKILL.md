@@ -203,10 +203,11 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    in parallel.
 
 5. **Endpoint discovery (database connections only)** — for each
-   database connection, run the three-mode discovery flow with
+   database connection, run the three discovery sub-modes with
    `private-endpoint-creator`: `discover-schemas` → user picks →
    `discover-tables` → user picks → `create-endpoints`. Sub-modes
-   are sequential per connection but parallel across connections.
+   are sequential per connection but parallel across connections
+   (except the `author-new-table` ordering constraint below).
 
    For each table the user selects, check whether an endpoint file for
    it already exists under `connections/<connection-slug>/definition/endpoints/`.
@@ -235,30 +236,39 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    sub-mode for that table instead of `create-endpoints`. The engine
    creates the physical table on the first pipeline run; the plugin
    only authors the endpoint document and runs no DDL.
-   - Collect the target `{schema}.{table}`. The schema must be one
-     `discover-schemas` returned — the engine never creates schemas,
-     so halt and ask for an existing schema (or a different target)
-     rather than authoring a first run that cannot succeed.
+   - Collect the full target identity: `{schema}.{table}`, plus
+     `catalog` where the dialect uses one (for schemaless dialects
+     the database travels as `catalog` and `schema` is omitted —
+     same identity rules as discovery). The target namespace must be
+     one discovery returned — whether the engine creates a missing
+     schema is dialect-owned, so a discovered namespace is the only
+     target that succeeds everywhere; halt and ask for a discovered
+     one (or a different target) instead of authoring a first run
+     that may fail.
    - Collect the new table's `primary_keys`, suggesting the source
      endpoint's own primary keys as the default. An `upsert` write
      mode needs them as the stream's `conflict_keys`.
    - Compute the endpoint filename with `scripts/endpoint_id.py` (as
-     above); an existing file for it is an existing endpoint — reuse
-     per the rules above instead of re-authoring.
+     above, passing the same `--catalog` / `--schema` / `--name`
+     arguments discovery would); an existing file for it is an
+     existing endpoint — reuse per the rules above instead of
+     re-authoring.
    - Invoke `author-new-table` with the target, the primary keys, and
-     the path of the source endpoint document that will feed the
-     stream (the source's database-endpoint file, or the connector's
-     api-endpoint file for an API source). This branch reads the
-     source side's artifacts, so run it only after they exist — the
-     source connection's discovery for a database source, phase 2's
-     connector download for an API source.
+     the source endpoint document that will feed the stream, passed
+     **inline** — the source's `create-endpoints` output for a
+     database source (its file may not be written to disk yet), or
+     the connector's api-endpoint document for an API source. Run
+     this branch only after that document exists: after the source
+     connection's `create-endpoints` for a database source, after
+     phase 2's connector download for an API source.
    - If the return carries `type_maps.write_gaps`, ask the user one
      question per canonical — what native type this destination
-     should render it to — then re-invoke with `write_render_choices`.
-     The re-run must return no `write_gaps`.
-   - Everything else — `type_maps` handling, validation, file writes —
-     is identical to `create-endpoints`. Record in the final summary
-     that the table is pending creation by the engine's first run.
+     should render it to — then re-invoke `author-new-table` with
+     `write_render_choices`. The re-run must return no `write_gaps`.
+   - `type_maps` file writes and validation are identical to
+     `create-endpoints`; an `author-new-table` return never carries
+     read rules or ambiguities. Record in the final summary that the
+     table is pending creation by the engine's first run.
 
    **Connection-scoped type maps.** The `create-endpoints` return carries a
    `type_maps` object alongside `outputs` — connection-scoped gap rules for
@@ -352,7 +362,9 @@ and leaves everything else — including `.secrets/` — untouched.
    - Additive change (a new stream, endpoint, or destination) → dispatch the
      matching creator to author **only the new artifact**, then wire it in (e.g.
      append the new `stream_id` to `pipeline.streams`). Existing files are
-     untouched.
+     untouched. A destination endpoint for a table that does not exist yet
+     follows the Phase 5 new-table branch (run `discover-schemas` first for
+     the namespace check).
    - Removal → drop the reference, and only if the user confirms, the file
      itself.
 3. **Never** change an identity field (`pipeline_id` / `stream_id` /

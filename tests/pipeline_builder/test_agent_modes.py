@@ -24,6 +24,11 @@ MODES = (
     "author-new-table",
 )
 
+# Return-envelope keys the orchestrator dispatches on — same drift class as
+# the mode names: prose on both sides, and a rename in one file silently
+# strands the other (the interview branch just never fires).
+ENVELOPE_KEYS = ("write_render_choices", "write_gaps")
+
 
 def test_agent_declares_exactly_the_pinned_modes():
     declared = re.findall(
@@ -40,3 +45,21 @@ def test_orchestrator_references_every_mode():
     assert not missing, (
         f"pipeline-builder SKILL.md never names sub-mode(s) {missing!r}"
     )
+
+
+def _names_in_backticks(text: str, token: str) -> bool:
+    # Match the token inside any backticked span, so dotted forms like
+    # `type_maps.write_gaps` count as naming `write_gaps`.
+    return re.search(rf"`[^`]*{re.escape(token)}[^`]*`", text) is not None
+
+
+def test_both_sides_name_every_envelope_key():
+    agent = AGENT.read_text(encoding="utf-8")
+    orchestrator = ORCHESTRATOR.read_text(encoding="utf-8")
+    missing = [
+        (name, key)
+        for name, text in (("agent", agent), ("orchestrator", orchestrator))
+        for key in ENVELOPE_KEYS
+        if not _names_in_backticks(text, key)
+    ]
+    assert not missing, f"envelope key(s) unnamed on one side: {missing!r}"
