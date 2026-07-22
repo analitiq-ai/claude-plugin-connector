@@ -1,0 +1,157 @@
+name: Publish schemas to schemas.analitiq.ai
+
+# Upload the rendered schemas/ tree to the serving bucket behind
+# schemas.<DOMAIN>. The bucket and CDN live in the infra repo's Terraform
+# (terraform/schemas.tf — "this Terraform owns only the SERVING
+# infrastructure"); the publisher IAM role is specified by infrastructure#1018
+# (not yet applied). This workflow is the external uploader that Terraform
+# hands the objects to.
+#
+# Auth is OIDC only — this repo is public and stores no static credentials
+# (CLAUDE.md → Credentials). The `schemas` GitHub Environment supplies:
+#   AWS_ROLE_ARN     assumable role, trust pinned to repo:analitiq-ai/
+#                    claude-code-plugins:environment:schemas (variable)
+#   AWS_REGION       the bucket's region                     (variable)
+#   SCHEMAS_BUCKET   e.g. analitiq-schemas-prod              (variable)
+# None are secrets. The environment mirrors the `pypi` reviewer gate
+# (required reviewer Analitiq-Bot); its deployment branches permit only
+# `main`, where `pypi` permits only release tags.
+#
+# Publish semantics — the Cache-Control convention matches what the infra
+# repo's terraform/schemas.tf documents; the no-delete policy is this
+# workflow's own (stated on infrastructure#1018):
+#   * additive — no deletes, ever. Retiring an object is an infra-side call.
+#   * pinned versions (X.Y.Z.json) are immutable: uploaded once, never
+#     overwritten. First write wins; a re-run byte-compares and skips them,
+#     and a pinned file that no longer matches its published object fails
+#     the run. That covers data-sync-run-response/1.0.0.json too — hand-
+#     authored but VERSIONED, so changing it means renaming to a new triple,
+#     never editing in place.
+#   * everything else (latest.json, index.json, and the two versionless
+#     hand-authored files) is mutable with a 5-minute TTL. There is no
+#     CloudFront invalidation; the short TTL is the only refresh path.
+#   * Content-Type follows the served convention: application/schema+json
+#     for schema documents, application/json for the index.json manifests
+#     and the data-sync-api OpenAPI doc.
+#
+# The committed tree is rendered for DOMAIN=analitiq.ai (render_schemas.py
+# refuses any other), so this workflow publishes the PROD host's content.
+# Publishing to a dev bucket needs the per-environment `$id` host rewrite the
+# retired infra uploader performed — out of scope until infrastructure#1018
+# settles it.
+#
+# After a failed run, nothing retriggers automatically until the next push
+# touching schemas/ — re-publish by hand via workflow_dispatch. Partial
+# uploads are safe to re-run: pinned objects skip, pointers re-upload.
+
+on:
+  push:
+    branches: [main]
+    paths: ["schemas/**"]
+  # For the initial backfill, re-publishing after environment changes, and
+  # recovery after a failed run.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: schemas-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: schemas
+    permissions:
+      contents: read
+      id-token: write # OIDC token for the assumed AWS role
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        # The dependency set is owned by requirements-dev.txt — never inline a
+        # version here (tests.yml states the same rule at its install step).
+        run: pip install --quiet -r requirements-dev.txt
+
+      - name: Verify schemas/ matches the contract models
+        # tests.yml already gates merges with these; running them again here
+        # means a hand-edited tree can't publish even if that gate is
+        # bypassed. Coverage, stated precisely: the render check covers the 13
+        # rendered resources, the pytest guard covers canonical-types.json.
+        # The two remaining hand-authored files have no content gate in this
+        # workflow — data-sync-run-response/1.0.0.json is protected by the
+        # first-write-wins byte-compare at upload, data-sync-api/openapi.json
+        # only by PR review.
+        run: |
+          python3 scripts/render_schemas.py check
+          python3 -m pytest -q packages/contract-models/tests/unit/test_canonical_types_schema.py
+
+      - name: Assume the publisher role (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload (additive; pinned versions first-write-wins)
+        env:
+          BUCKET: ${{ vars.SCHEMAS_BUCKET }}
+        run: |
+          set -euo pipefail
+          : "${BUCKET:?SCHEMAS_BUCKET is unset or empty — check the schemas environment variables}"
+          uploaded=0 skipped=0
+          cd schemas
+          expected=$(find . -name '*.json' -type f | wc -l | tr -d ' ')
+          while IFS= read -r -d '' f; do
+            key="${f#./}"
+            case "$(basename "$f")" in
+              index.json|openapi.json) ctype="application/json" ;;
+              *) ctype="application/schema+json" ;;
+            esac
+            if [[ "$(basename "$f")" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.json$ ]]; then
+              # Immutable pinned version: first write wins, never overwritten.
+              # The probe downloads the published object and byte-compares —
+              # deliberately not an ETag check (ETags stop being MD5s under
+              # multipart uploads or SSE-KMS, and a failed local hash must not
+              # read as divergence). Only a definite missing-object error may
+              # fall through to the upload; anything else (403, throttling,
+              # network) stops the run rather than being misread as "absent"
+              # and overwriting an immutable object.
+              rc=0
+              err=$(aws s3api get-object --bucket "$BUCKET" --key "$key" \
+                      "$RUNNER_TEMP/published.json" 2>&1 >/dev/null) || rc=$?
+              if [ "$rc" -eq 0 ]; then
+                if ! cmp -s "$f" "$RUNNER_TEMP/published.json"; then
+                  echo "::error file=schemas/$key::pinned version differs from the published object — publish a new version triple instead of editing $key in place" >&2
+                  exit 1
+                fi
+                skipped=$((skipped + 1))
+                continue
+              elif [[ "$err" != *NoSuchKey* && "$err" != *"(404)"* && "$err" != *"Not Found"* ]]; then
+                echo "::error::probe failed for $key (not a missing-object error — refusing to treat as absent): $err" >&2
+                exit 1
+              fi
+              cache="public, max-age=31536000, immutable"
+            else
+              cache="public, max-age=300, must-revalidate"
+            fi
+            aws s3 cp "$f" "s3://$BUCKET/$key" \
+              --content-type "$ctype" \
+              --cache-control "$cache" \
+              --no-progress
+            uploaded=$((uploaded + 1))
+          done < <(find . -name '*.json' -type f -print0 | LC_ALL=C sort -z)
+          # sort -z (LC_ALL=C): digits < 'i' < 'l', so within each resource the
+          # pinned X.Y.Z.json lands before index.json and latest.json — a
+          # mid-run failure never leaves a pointer at content that isn't up.
+          if [ "$((uploaded + skipped))" -ne "$expected" ] || [ "$expected" -eq 0 ]; then
+            echo "::error::processed $((uploaded + skipped)) of $expected schema files — the find/loop plumbing is broken" >&2
+            exit 1
+          fi
+          echo "uploaded=$uploaded skipped-existing-pinned=$skipped"

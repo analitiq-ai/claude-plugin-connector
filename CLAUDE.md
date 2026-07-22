@@ -42,12 +42,23 @@ requirements-dev.txt              # runtime deps of the packages + pytest
 **`schemas/` is generated, not authored.** It is rendered from
 `packages/contract-models` by `scripts/render_schemas.py`; `render_schemas.py check`
 re-renders and fails on any diff, and CI runs it. Never hand-edit a file under
-`schemas/`. Three files are exceptions, hand-authored and outside the registry
-because they have no version triple: `canonical-types.json` (guarded by
-`packages/contract-models/tests/unit/test_canonical_types_schema.py`),
-`data-sync-api/openapi.json`, and `data-sync-run-response/1.0.0.json`. They are
-served only because the publishing bucket globs `**/*.json`, and
-`render_schemas.py check` never inspects them.
+`schemas/`. Three files are exceptions, hand-authored and outside the registry:
+`canonical-types.json` (guarded by
+`packages/contract-models/tests/unit/test_canonical_types_schema.py`) and
+`data-sync-api/openapi.json`, which have no version triple, and
+`data-sync-run-response/1.0.0.json`, which is versioned but hand-maintained —
+the publish treats every pinned `X.Y.Z.json` as immutable, so changing it means
+renaming to a new triple, never editing in place. They are served only because
+the publish workflow globs `**/*.json`, and `render_schemas.py check` never
+inspects them.
+
+`.github/workflows/schemas-publish.yml` uploads the tree to the serving bucket
+(defined in the infra repo's Terraform) on pushes to main touching `schemas/`.
+The publish is additive — pinned `X.Y.Z.json` objects are first-write-wins
+(byte-compared on re-runs; divergence fails the publish) and never overwritten,
+nothing is ever deleted — and mutable pointers (`latest.json`, `index.json`,
+the two versionless hand-authored files) rely on a 5-minute TTL, not CloudFront
+invalidation. Auth is OIDC via the `schemas` environment — see "Credentials".
 
 Only the 13 public resources render here. The ~40 internal-audience schemas stay
 in the infra repo with the private half of the renderer;
@@ -257,6 +268,22 @@ prevention back on.
 These are live GitHub environment settings, not repo files, so they are not
 covered by any test here; changing the reviewer or the tag rules is a settings
 edit in the repo's Environments page.
+
+### The `schemas` environment
+
+`schemas-publish.yml` publishes `schemas/` to the serving bucket through the
+`schemas` environment, built to mirror `pypi`'s reviewer gate: **sole required
+reviewer Analitiq-Bot** (same single-account trade-off as above),
+`prevent_self_review` off, deployment branches restricted to `main` (where
+`pypi` restricts to release tags). It holds three environment **variables**,
+none of them secrets: `AWS_ROLE_ARN`, `AWS_REGION`, `SCHEMAS_BUCKET`. The role
+is specified by infrastructure#1018 (not yet applied there): OIDC trust pinned
+to this repo's `schemas` environment, permissions `s3:PutObject` +
+`s3:GetObject` on objects (GetObject authorizes the first-write-wins probe)
+and `s3:ListBucket` — no delete, matching the workflow's additive publish
+semantics. The same live-settings caveat as `pypi` applies: the reviewer,
+branch rule, and variables are Environments-page settings, covered by no test
+here.
 
 The repo is **public**. Its workflow files are world-readable and that is fine:
 the gate is authorization, not secrecy. Two rules follow from it — never use
