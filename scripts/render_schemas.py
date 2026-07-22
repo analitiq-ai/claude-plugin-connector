@@ -1203,26 +1203,36 @@ def _is_additive(old: Any, new: Any, path: tuple = ()) -> bool:
     if old == new:
         return True
     if isinstance(old, dict) and isinstance(new, dict):
-        for k in set(new) - set(old):
-            if k in _TIGHTENING_NEW_KEYWORDS:
-                return False
-        if (new.get("additionalProperties", True) is False
-                and old.get("additionalProperties", True) is not False):
-            return False
-        for k, v in old.items():
-            if k not in new:
-                return False
-            if not _is_additive(v, new[k], path + (k,)):
-                return False
-        return True
+        return _dict_is_additive(old, new, path)
     if isinstance(old, list) and isinstance(new, list):
-        if path and path[-1] == "required":
-            return set(new).issubset(set(old))
-        for item in old:
-            if item not in new:
-                return False
-        return True
+        return _list_is_additive(old, new, path)
     return False
+
+
+def _dict_is_additive(old: dict, new: dict, path: tuple) -> bool:
+    """The dict half of `_is_additive` — pure extraction, same rules."""
+    for k in set(new) - set(old):
+        if k in _TIGHTENING_NEW_KEYWORDS:
+            return False
+    if (new.get("additionalProperties", True) is False
+            and old.get("additionalProperties", True) is not False):
+        return False
+    for k, v in old.items():
+        if k not in new:
+            return False
+        if not _is_additive(v, new[k], path + (k,)):
+            return False
+    return True
+
+
+def _list_is_additive(old: list, new: list, path: tuple) -> bool:
+    """The list half of `_is_additive` — pure extraction, same rules."""
+    if path and path[-1] == "required":
+        return set(new).issubset(set(old))
+    for item in old:
+        if item not in new:
+            return False
+    return True
 
 
 def classify(old: dict | None, new: dict) -> str:
