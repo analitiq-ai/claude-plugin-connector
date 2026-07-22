@@ -11,7 +11,7 @@ slugs and are independent of the UUID identity stored inside the documents.
 <!-- BEGIN GENERATED: shared-vocabulary -->
 | Concern | Published constant | Pattern |
 |---|---|---|
-| Slug (ids + directory names) | `analitiq.contracts.shared.common.SLUG_PATTERN` | `^[a-z0-9][a-z0-9_-]*$` |
+| Slug (ids; directories by convention) | `analitiq.contracts.shared.common.SLUG_PATTERN` | `^[a-z0-9][a-z0-9_-]*$` |
 | UUID (`*_id` identity fields) | `analitiq.contracts.shared.types.UUID_PATTERN` | `^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$` |
 | Cron expression | `analitiq.contracts.shared.common.CRON_PATTERN` | `^cron\(.+\)$` |
 | No edge whitespace (`display_name`, tags) | `analitiq.contracts.shared.common.NO_EDGE_WHITESPACE_PATTERN` | `^\S(?:[\s\S]*\S)?$` |

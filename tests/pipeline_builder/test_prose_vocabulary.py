@@ -68,6 +68,11 @@ anchoring each entry to a hash of its section's backticked tokens, which trips o
 every unrelated wording edit in that section — churn that would train people to
 re-baseline the hash without reading, which is worse than the hole. Eight
 sections are exposed; they are the eight in ALLOWED_RESTATEMENTS.
+
+A third gate, separate from the two above, covers PATTERNS rather than
+vocabularies (issue #50) — see
+`test_shared_patterns_are_not_hand_typed_outside_generated_blocks`, which
+states its own coverage and limits.
 """
 from __future__ import annotations
 
@@ -408,6 +413,27 @@ def test_allow_list_has_no_stale_entries():
         "— that is drift. Check the doc before touching this list.")
 
 
+def _published_shared_patterns() -> dict[str, str]:
+    """Every `*_PATTERN` string constant in the shared modules the block sources.
+
+    The module set derives from `_SHARED_PATTERN_ROWS`, so the gate and the
+    renderer cannot scan different sources; the constants are enumerated rather
+    than restated, so a pattern the contract adds at a pin bump joins the gate
+    automatically instead of needing a scope decision — for a forbid-gate,
+    silent inclusion is the safe default.
+    """
+    import importlib
+
+    found = {}
+    for module in sorted({m for _label, m, _name in G._SHARED_PATTERN_ROWS}):
+        mod = importlib.import_module(module)
+        for name in dir(mod):
+            value = getattr(mod, name)
+            if name.endswith("_PATTERN") and isinstance(value, str):
+                found[f"{module}.{name}"] = value
+    return found
+
+
 def test_shared_patterns_are_not_hand_typed_outside_generated_blocks():
     """The pattern-flavored twin of the vocabulary gate (issue #50).
 
@@ -417,14 +443,27 @@ def test_shared_patterns_are_not_hand_typed_outside_generated_blocks():
     convention once (identity-and-versioning.md §Identifier shapes, pinned BY
     REFERENCE to the published pattern) and replaced the copies with citations.
 
-    This keeps it that way, for every published shared pattern: a pattern
-    literal outside a generated block is a new hand-maintained copy, which
-    either drifts from the contract or silently freezes the convention. Literal
-    substring match — so, unlike the vocabulary heuristic, fenced examples and
-    jsonc comments are covered too.
+    This keeps it that way, for every `*_PATTERN` constant the shared contract
+    modules publish — not just the four the shared-vocabulary block emits: a
+    pattern literal outside a generated block is a new hand-maintained copy,
+    which either drifts from the contract or silently freezes the convention.
+    Matching is a literal substring per line, in both the raw form and the
+    markdown-escaped form the rendered tables show (`_md_escape` turns `|` into
+    `\\|`, so a copy pasted from a rendered doc differs from the constant) — so,
+    unlike the vocabulary heuristic, fenced examples and jsonc comments are
+    covered too.
+
+    Detection limits, stated so nobody over-trusts it: the match is exact and
+    per-line, so a pattern wrapped across a line break, a hand-typed *variant*
+    (an unanchored fragment, `+` for `*`), or a prose paraphrase of the shape is
+    not seen — the same class of blind spot as the vocabulary gate's subset row.
     """
-    patterns = G.shared_patterns()
+    patterns = _published_shared_patterns()
     assert patterns, "no published shared patterns — vacuous pass"
+    missing = sorted(set(G.shared_patterns()) - set(patterns))
+    assert not missing, (
+        f"the shared-vocabulary block emits constants the gate cannot see: "
+        f"{missing}. A row names a non-string or renamed constant.")
     offenders = []
     for path in sorted(G.DOCS_ROOT.rglob("*.md")):
         outside = G._BLOCK_RE.sub(lambda m: "\n" * m.group(0).count("\n"),
@@ -433,7 +472,7 @@ def test_shared_patterns_are_not_hand_typed_outside_generated_blocks():
         for lineno, line in enumerate(outside.splitlines(), 1):
             offenders += [f"  {rel}:{lineno}  [{constant}]"
                           for constant, pattern in patterns.items()
-                          if pattern in line]
+                          if pattern in line or G._md_escape(pattern) in line]
     assert not offenders, (
         "published shared patterns hand-typed outside any generated block:\n"
         + "\n".join(offenders)

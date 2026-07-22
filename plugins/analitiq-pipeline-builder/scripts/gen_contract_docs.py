@@ -114,10 +114,11 @@ def render_schema_urls() -> str:
 
 # Concern label -> (module, constant name). Single source for both the
 # `shared-vocabulary` block and the hand-typed-pattern gate in
-# tests/test_prose_vocabulary.py — the pattern-flavored twin of
-# `published_vocabularies()`.
+# tests/pipeline_builder/test_prose_vocabulary.py — the pattern-flavored twin of
+# `published_vocabularies()`. The gate scans every `*_PATTERN` constant in the
+# modules named here, not just these rows.
 _SHARED_PATTERN_ROWS = (
-    ("Slug (ids + directory names)", "analitiq.contracts.shared.common", "SLUG_PATTERN"),
+    ("Slug (ids; directories by convention)", "analitiq.contracts.shared.common", "SLUG_PATTERN"),
     ("UUID (`*_id` identity fields)", "analitiq.contracts.shared.types", "UUID_PATTERN"),
     ("Cron expression", "analitiq.contracts.shared.common", "CRON_PATTERN"),
     ("No edge whitespace (`display_name`, tags)", "analitiq.contracts.shared.common",
@@ -126,7 +127,7 @@ _SHARED_PATTERN_ROWS = (
 
 
 def shared_patterns() -> dict[str, str]:
-    """Every published shared pattern, keyed by its dotted constant name."""
+    """The patterns the `shared-vocabulary` block emits, keyed by dotted constant name."""
     import importlib
 
     return {
@@ -538,7 +539,7 @@ def published_vocabularies() -> dict[str, dict]:
     """Every closed vocabulary an author picks a value from, read off the package.
 
     Single source for both the generated `enum-vocabulary` block and the prose
-    gate in tests/test_prose_vocabulary.py. Restating this list in either place
+    gate in tests/pipeline_builder/test_prose_vocabulary.py. Restating this list in either place
     would recreate exactly the drift this module exists to prevent.
 
     Each value is {label, members, published_as}.
