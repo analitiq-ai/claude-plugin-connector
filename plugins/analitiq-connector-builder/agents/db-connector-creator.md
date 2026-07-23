@@ -82,15 +82,16 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
    the **driver-selection decision order** in `spec-driver-selection.md`
    (first match wins): (1) first-class ADBC driver → `adbc`; (2) Arrow
    Flight SQL endpoint → `adbc` via the Flight SQL driver; (3) native
-   bulk-load protocol → async `sqlalchemy` transport with the bulk path
-   in the connector class; (4) async `sqlalchemy` with batched INSERT
+   bulk-load protocol → `sqlalchemy` transport with the bulk path
+   in the connector class; (4) `sqlalchemy` with batched INSERT
    as the last resort. Never the JDBC bridge.
    - **`adbc`** — required field `driver` from the schema's closed enum
      (`postgresql`, `snowflake`, `bigquery`; the enum is the sole
      validator — extending it is a schema-contract change). Provide
      `dsn` (the `url_template` shape) when the driver accepts a URI
-     (postgresql; Redshift uses the libpq-compatible `postgresql`
-     driver with a `postgresql://...` DSN); otherwise carry connection
+     (postgresql — but Redshift does NOT take this tier; its canonical
+     path is the sync SQLAlchemy `redshift+redshift_connector` driver,
+     see `spec-driver-selection.md`); otherwise carry connection
      state in `db_kwargs` (snowflake authenticates entirely via kwargs;
      bigquery typically takes a project/dataset via kwargs as well,
      with no DSN). `db_kwargs` is a key/value object of driver-specific
@@ -101,10 +102,14 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
      `db_kwargs`.** TLS for ADBC transports is expressed via
      `db_kwargs` entries (e.g. `adbc.postgresql.sslmode`) — the generic
      `tls` block is SQLAlchemy-only.
-   - **`sqlalchemy`** — carry `driver` as an **async** DBAPI (e.g.
-     `"postgresql+asyncpg"`, `"mysql+aiomysql"`, `"mariadb+aiomysql"`;
-     sync drivers fail at connect with "The asyncio extension requires
-     an async driver") and `dsn`. Author `tls.mode` (referencing
+   - **`sqlalchemy`** — carry `driver` in `dialect+driver` form (e.g.
+     `"postgresql+asyncpg"`, `"mysql+aiomysql"`, or a sync driver such
+     as `"redshift+redshift_connector"`) and `dsn`. Sync and async are
+     both supported (dispatch is engine-side — see
+     `spec-driver-selection.md` §Constraints); prefer an async driver
+     where the system has a working one and reach for a sync driver
+     only when that is the system's viable path (e.g. Redshift).
+     Author `tls.mode` (referencing
      `connection.parameters.ssl_mode`) and `tls.ca_certificate`
      (referencing `secrets.ssl_ca_certificate`).
 
@@ -167,8 +172,8 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
      `render_column_type` override only for logic the write map cannot
      express. Imports come from the CDK only.
    - `init_py` — re-exports the connector + dialect classes.
-   - `requirements_txt` — THIS connector's driver(s) only: the async
-     DBAPI for SQLAlchemy transports and/or the matching
+   - `requirements_txt` — THIS connector's driver(s) only: the
+     SQLAlchemy DBAPI (sync or async) and/or the matching
      `adbc-driver-{driver}` wheel (+ `adbc-driver-manager`) for ADBC.
    - `pyproject_toml` — `name = "analitiq-connector-{connector_id}"`,
      dynamic dependencies sourced from `requirements.txt`, package-dir
@@ -186,14 +191,16 @@ discipline, and dialect behavior. Do not restate validator rules.
 
 - [ ] **Driver chosen strictly per the decision order** in
   `spec-driver-selection.md` (first-class ADBC → Arrow Flight SQL →
-  async SQLAlchemy + native bulk path → async SQLAlchemy batched
-  INSERT), and a one-line rationale holds for why earlier tiers were
-  skipped. (The validator accepts any in-enum driver; it cannot check
+  SQLAlchemy + native bulk path → SQLAlchemy batched INSERT), and a
+  one-line rationale holds for why earlier tiers were skipped. (The
+  validator accepts any well-formed `dialect+driver`; it cannot check
   the *order* was followed.)
-- [ ] **Every SQLAlchemy driver is async** (`postgresql+asyncpg`,
-  `mysql+aiomysql`, `mariadb+aiomysql`) — no sync DBAPI. (A sync driver
-  is schema-valid but fails at connect time; nothing in the validator
-  catches it.)
+- [ ] **Every SQLAlchemy `driver` is in `dialect+driver` form** and
+  names a driver that actually exists (`postgresql+asyncpg`,
+  `mysql+aiomysql`, `redshift+redshift_connector`). Sync and async are
+  both accepted (see `spec-driver-selection.md` §Constraints). Prefer
+  async where the system has a working async driver; reach for a sync
+  driver only when it is the system's viable path.
 - [ ] **`requirements.txt` lists only this connector's driver(s)** — no
   engine pins, no stray dependencies.
 - [ ] **`pyproject.toml` entry points are named `{connector_id}` under
@@ -263,8 +270,8 @@ disk.
   engine — only the CDK (`cdk.sql.dialects.SqlDialect`,
   `cdk.sql.generic.GenericSQLConnector`,
   `cdk.transport_factory.ca_ssl_context`, `cdk.type_map`).
-- Drivers must be async (SQLAlchemy transports) or ADBC. Never select
-  the JDBC bridge.
+- Drivers must be a real SQLAlchemy `dialect+driver` registration (sync
+  or async) or ADBC. Never select the JDBC bridge.
 
 ## Output format
 

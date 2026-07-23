@@ -68,6 +68,14 @@ EXPECTED_AUTH_TYPES = {
     "none",
 }
 EXPECTED_ADBC_DRIVERS = {"postgresql", "snowflake", "bigquery"}
+# SqlAlchemyTransport.driver is deliberately an OPEN `dialect+driver` pattern —
+# no driver allow-list (sync and async DBAPIs are both authorable; dispatch is
+# engine-side). The openness itself is what the prose restates as decision
+# logic (spec-driver-selection.md §Constraints, the Redshift routing, the
+# db-connector-creator checklist), so pin the pattern: a re-tightening — e.g.
+# a revert to the old async-only alternation — must fail here and move the
+# prose in the same change.
+EXPECTED_SQLALCHEMY_DRIVER_PATTERN = r"^[a-z][a-z0-9_]*\+[a-z][a-z0-9_]*$"
 EXPECTED_DSN_ENCODINGS = {
     "raw",
     "host",
@@ -179,6 +187,32 @@ def _enum_at(schema: dict, *path: str) -> set[str] | None:
     if not isinstance(enum, list):
         return None
     return set(enum)
+
+
+def _pattern_at(schema: dict, *path: str) -> str | None:
+    """Return the `pattern` at `$defs/.../<path>`, looking through `anyOf`.
+
+    Optional fields (`str | None`) carry their constraint inside an `anyOf`
+    branch rather than on the property node itself. Same restructure
+    tolerance as `_enum_at`: a missing path, a non-dict node, or no string
+    `pattern` on the node or any branch yields None.
+    """
+    node: object = schema
+    for key in path:
+        if not isinstance(node, dict) or key not in node:
+            return None
+        node = node[key]
+    if not isinstance(node, dict):
+        return None
+    branches = node.get("anyOf")
+    candidates: list[dict] = [node]
+    if isinstance(branches, list):
+        candidates += [b for b in branches if isinstance(b, dict)]
+    for cand in candidates:
+        pattern = cand.get("pattern")
+        if isinstance(pattern, str):
+            return pattern
+    return None
 
 
 def _const_types(schema: dict, def_suffix: str, const_field: str = "type") -> set[str] | None:
@@ -305,6 +339,27 @@ def test_adbc_drivers_match_schema(connector_schema: dict) -> None:
         EXPECTED_ADBC_DRIVERS,
         "update the driver-selection guidance (enum-mappers.md, "
         "spec-driver-selection.md).",
+    )
+
+
+def test_sqlalchemy_driver_pattern_matches_schema(connector_schema: dict) -> None:
+    pattern = _pattern_at(
+        connector_schema, "$defs", "SqlAlchemyTransport", "properties", "driver"
+    )
+    fix = (
+        "update the driver guidance (spec-driver-selection.md, "
+        "spec-dsn-bindings.md, enum-mappers.md, db-connector-creator.md, "
+        "connector-spec-db/SKILL.md, io-contracts.md) and "
+        "EXPECTED_SQLALCHEMY_DRIVER_PATTERN together."
+    )
+    if pattern is None:
+        pytest.fail(
+            "SqlAlchemyTransport.driver: pattern not found at the expected "
+            f"pointer — the contract was restructured. {fix}"
+        )
+    assert pattern == EXPECTED_SQLALCHEMY_DRIVER_PATTERN, (
+        f"SqlAlchemyTransport.driver pattern drift — {fix} "
+        f"schema={pattern!r} expected={EXPECTED_SQLALCHEMY_DRIVER_PATTERN!r}"
     )
 
 

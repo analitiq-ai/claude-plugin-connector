@@ -114,9 +114,10 @@ When the resource is writable, also ground:
   exists), `flight_sql_endpoint` (only when the server documents an Arrow
   Flight SQL endpoint), `bulk_load_protocol` (the documented native bulk-load
   path, e.g. `COPY FROM stdin`, `LOAD DATA LOCAL INFILE`), and
-  `async_sqlalchemy_driver` (the async DBAPI, e.g. `mysql+aiomysql`). Leave
-  each unset when the docs don't establish it — the JDBC bridge never counts
-  as an ADBC driver.
+  `sqlalchemy_driver` (the SQLAlchemy `dialect+driver`, sync or async, e.g.
+  `mysql+aiomysql` or `redshift+redshift_connector`). Leave each unset when
+  the docs don't establish it — the JDBC bridge never counts as an ADBC
+  driver.
 - WebSearch is for locating the official docs only (when the user did not
   supply a URL) — never a source of facts. Every extracted fact must come from
   a first-party documentation page fetched with WebFetch; never cite blogs,

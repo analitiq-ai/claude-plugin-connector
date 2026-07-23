@@ -15,12 +15,12 @@ Apply in order; stop at the first match.
    protocol; no row-by-row path at all.
 2. **The server exposes an Arrow Flight SQL endpoint** → ADBC via the
    generic Flight SQL driver.
-3. **Neither, but the system has a native bulk-load protocol** → async
+3. **Neither, but the system has a native bulk-load protocol** →
    SQLAlchemy transport for connect/DDL, with the bulk path implemented
    in the connector's own class (the thick path) against the raw
    cursor.
-4. **None of the above** → async SQLAlchemy transport with batched
-   INSERT. This is the fallback, not the default — pick it last.
+4. **None of the above** → SQLAlchemy transport with batched INSERT.
+   This is the fallback, not the default — pick it last.
 
 ## 1. First-class ADBC drivers
 
@@ -49,10 +49,16 @@ support for it, so treat it as coordinated work with the contract and platform
 owners rather than something a connector author can unblock alone. Until the
 enum entry exists, select the next tier in the decision order.
 
-**Redshift** is served by the libpq-compatible PostgreSQL ADBC driver:
-`transport_type: "adbc"`, driver `postgresql`, dsn template
-`postgresql://{username}:{password}@{host}:{port}/{database}?sslmode={ssl_mode}`
-(this is what the `redshift` connector in the registry does).
+**Redshift** takes the SQLAlchemy transport with the **sync**
+`redshift+redshift_connector` driver — the engine's canonical Redshift
+path, with Redshift-specific bind-param and TLS handling already built
+for this driver. `redshift_connector` is a sync DBAPI; the engine runs
+it on the sync SQLAlchemy engine automatically (see "Constraints"
+below), so no ADBC entry is needed. DSN template
+`redshift+redshift_connector://{username}:{password}@{host}:{port}/{database}`.
+The libpq-compatible PostgreSQL ADBC driver (`transport_type: "adbc"`,
+driver `postgresql`) also reaches Redshift over the postgres wire, but
+the sync SQLAlchemy path is the one the engine is tuned for.
 
 ## 2. Flight SQL
 
@@ -76,9 +82,9 @@ native bulk path below) instead.
 ## 3. Native bulk-load protocols (no ADBC)
 
 Each of these is roughly 10x faster than parameterized INSERT, even
-batched. The connect/DDL layer stays on the async SQLAlchemy transport;
-the bulk write runs against the raw driver cursor in the connector's
-own class.
+batched. The connect/DDL layer stays on the SQLAlchemy transport; the
+bulk write runs against the raw driver cursor in the connector's own
+class.
 
 | System | Driver | Bulk path |
 |---|---|---|
@@ -90,10 +96,19 @@ own class.
 
 ## Constraints from the engine contract
 
-- SQLAlchemy transports require an **async** DBAPI
-  (`postgresql+asyncpg`, `mysql+aiomysql`, `mariadb+aiomysql`). Sync
-  drivers (`pymysql`, `redshift_connector`) fail at connect with "The
-  asyncio extension requires an async driver".
+- SQLAlchemy transports accept a **sync or async** DBAPI. The engine
+  builds the sync vs async SQLAlchemy engine automatically from the
+  dialect's own `is_async` capability — there is no driver allow-list.
+  Async drivers (`postgresql+asyncpg`, `mysql+aiomysql`) run on the
+  async engine; sync drivers (`redshift+redshift_connector`,
+  `postgresql+psycopg2`) run on the sync engine, in a worker thread off
+  the event loop. Prefer async where the system has
+  a working async driver; use a sync driver when that is the system's
+  viable path (Redshift's `redshift_connector` is the canonical sync
+  case). The declared `driver` must be a real SQLAlchemy
+  `dialect+driver` registration — e.g. `redshift_connector` registers
+  under the `redshift` dialect, so `postgresql+redshift_connector` is
+  invalid and fails at transport build.
 - The driver lives ONLY in the connector's `requirements.txt`. The
   engine image ships no database drivers.
 - Known pin: aiomysql's adapter still passes the deprecated positional

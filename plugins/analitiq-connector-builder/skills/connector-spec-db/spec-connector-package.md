@@ -16,7 +16,7 @@ The connector root IS the Python package:
 ```
 {connector_id}/
   definition/
-    connector.json                   # declares connector_id; async/ADBC drivers only
+    connector.json                   # declares connector_id; SQLAlchemy/ADBC drivers
     type-map-read.json               # native → Arrow; regex patterns UPPERCASE
     type-map-write.json              # Arrow → native; REQUIRED for kind: database
   __init__.py                        # re-exports the connector class
@@ -81,8 +81,8 @@ package-dir = { "analitiq_connector_{connector_id}" = "." }
 
 ## `requirements.txt`
 
-THIS connector's driver(s) only — the async DBAPI for SQLAlchemy
-transports and/or the `adbc-driver-{driver}` wheel (+
+THIS connector's driver(s) only — the SQLAlchemy DBAPI (sync or async)
+for SQLAlchemy transports and/or the `adbc-driver-{driver}` wheel (+
 `adbc-driver-manager`) for ADBC transports. See
 `spec-driver-selection.md` for choosing. Comment non-obvious pins (e.g.
 `pymysql<1.2`).
