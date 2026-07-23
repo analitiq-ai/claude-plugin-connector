@@ -178,7 +178,7 @@ and surface the diagnostics; do not write partial files. The validator
 script is single-shot; iteration discipline lives in the orchestrator's
 prose, not in the script. The cap is best-effort and not runtime-enforced;
 runtime enforcement is tracked at
-https://github.com/analitiq-ai/ai-plugins-official/issues/26.
+https://github.com/analitiq-ai/claude-code-plugins/issues/3.
 
 ### 5. Endpoint fan-out (api only)
 
