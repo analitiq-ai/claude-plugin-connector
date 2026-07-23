@@ -463,7 +463,8 @@ def test_write_coverage_probe_gaps_are_documented() -> None:
         "Json": lambda p: p == "Json",
         # The bare shape markers reach the write map verbatim from API-sourced
         # endpoint documents (issue #75) — the probe set must keep exercising
-        # them or the spec's container-coverage rule loses its only signal.
+        # them or the spec's container-coverage rule loses its only automated
+        # signal.
         "Object": lambda p: p == "Object",
         "List": lambda p: p == "List",
         "Decimal128": lambda p: p.startswith("Decimal128"),

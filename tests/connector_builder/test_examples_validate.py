@@ -132,6 +132,45 @@ def test_example_type_maps_validate(example_dir: Path, tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "example_dir",
+    [d for d in _example_dirs() if (d / "type-map-write.json").exists()],
+    ids=lambda d: d.name,
+)
+def test_example_write_maps_render_bare_container_markers(
+    example_dir: Path, tmp_path: Path
+) -> None:
+    """Every example write map must render the bare `Object`/`List` markers.
+
+    The engine probes the write map with a destination column's `arrow_type`
+    verbatim, and API-sourced documents carry the bare markers — a map without
+    rules for them hard-errors the stream at configuration (issue #75). The
+    coverage finding is warning-severity, so the error-only checks above would
+    stay green if the rules were dropped; assert on the warning *naming* the
+    markers instead of on warning absence, because an abbreviated example
+    legitimately still warns about other families.
+    """
+    definition = _stage(example_dir, tmp_path).parent
+    map_path = definition / "type-map-write.json"
+    document = json.loads(map_path.read_text(encoding="utf-8"))
+    findings = validate_document(
+        document,
+        doc_path=map_path.resolve(),
+        schema_url=TYPE_MAP_SCHEMAS["type-map-write.json"],
+    )
+    named = [
+        f["message"]
+        for f in findings
+        if f["validator"] == "type-map-write-coverage"
+        and ("'Object'" in f["message"] or "'List'" in f["message"])
+    ]
+    assert not named, (
+        f"{example_dir.name} write map has no rule rendering the bare "
+        f"Object/List markers — the archetype teaches a map that fails on the "
+        f"first API-sourced struct/array column:\n" + "\n".join(named)
+    )
+
+
 @pytest.mark.parametrize("example_dir", _example_dirs(), ids=lambda d: d.name)
 def test_example_endpoints_validate(example_dir: Path, tmp_path: Path) -> None:
     """Endpoints must also hold up standalone.

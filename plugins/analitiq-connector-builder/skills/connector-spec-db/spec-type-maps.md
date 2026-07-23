@@ -190,10 +190,11 @@ The shape markers `Object` and `List` split by direction:
 
 **No `Map` canonical exists at runtime.** The engine's type-family set
 has no `Map`, so a `Map<…>` write rule is dead — it can never match a
-canonical that syncs — and a column declared `Map<…>` fails
-unconditionally at stream configuration regardless of map content. Never
-author `Map` rules; the contract tolerating the spelling is the
-vocabulary gap tracked in issue #81.
+canonical that syncs — and a column declared `Map<…>` fails before any
+data syncs regardless of map content: an unmapped-type error if no rule
+matches, the same schema-construction death as the other angle-bracket
+forms if a regex rule covers it. Never author `Map` rules; the contract
+tolerating the spelling is the vocabulary gap tracked in issue #81.
 
 ## Non-obvious natives (derive, don't guess)
 
@@ -201,8 +202,9 @@ When researching a new system's natives, these are the calls that aren't
 mechanical — the same judgment transfers across providers:
 
 - **Semi-structured / container** (`JSON`, `JSONB`, `VARIANT`, `OBJECT`,
-  `ARRAY`, `MAP`, `STRUCT`, `…[]`) → a container canonical (`Json`), never a
-  scalar (enforced — see "Schemaless / JSON-shaped natives").
+  `ARRAY`, `MAP`, `STRUCT`, `…[]`) → `Json`, the only container canonical a
+  read map can render — never a scalar (enforced — see "Schemaless /
+  JSON-shaped natives").
 - **Opaque scalar types with no Arrow equivalent** (`INTERVAL`, `MONEY`,
   network types `INET`/`CIDR`/`MACADDR`, `UUID`, `ENUM(...)`, `XML`) →
   `Utf8`. They are atomic strings on the wire; don't invent a numeric/Decimal
@@ -286,12 +288,13 @@ database-package concept (DDL rendering).
     off the same unit: `Time32(SECOND|MILLISECOND)` for coarse,
     `Time64(MICROSECOND|NANOSECOND)` for fine.
 
-**Write map:** cover the **full canonical vocabulary** — every Arrow type a
-source could hand this system needs a rendering, including the parameterized
-families (Decimal via a regex with `${p}`/`${s}` captures), both the bare
-and tz-aware `Timestamp` forms, and the bare container markers `Object` /
-`List` (see "Schemaless / JSON-shaped natives" — API sources hand them over
-as literal canonicals).
+**Write map:** cover the **full executable canonical vocabulary** — every
+Arrow type a source can actually hand this system needs a rendering (the
+angle-bracket nested families are dead grammar and get no rules — see
+"Canonical types"), including the parameterized families (Decimal via a
+regex with `${p}`/`${s}` captures), both the bare and tz-aware `Timestamp`
+forms, and the bare container markers `Object` / `List` (see "Schemaless /
+JSON-shaped natives" — API sources hand them over as literal canonicals).
 
 Run the validator and reconcile every family its `type-map-write-coverage`
 warning names. A gap is legitimate **only** when the connector's dialect takes
@@ -311,9 +314,9 @@ passes. Verify by hand at least:
   narrowed to `Decimal128` shows nothing)
 
 Treat that as the floor rather than the whole set: rarer scalars are
-unprobed too. The `Object` / `List` markers are probed, but only by
-validator releases newer than some deployed pins — verify their rules by
-hand as well rather than trusting a clean warning.
+unprobed too. Older validator releases do not probe the `Object` /
+`List` markers at all, so a clean warning proves nothing about them —
+verify their rules by hand as well.
 
 Mind precision survival on the write side: MySQL's write map renders
 `DATETIME(6)` / `TIME(6)` so microseconds survive the round trip — a
