@@ -52,15 +52,20 @@ user is overriding it.
 
 ## TLS verification needs its CA material
 
-A database connection authored with `ssl_mode: "verify-ca"` or `"verify-full"`
-**must** also supply the contract's CA-material input (`ssl_ca_certificate` in
-the connectors that declare one), even where the driver would silently fall back
-to the host's trust store. Verifying against whatever CAs happen to be installed
-is not the mode the user asked for, and the fallback makes a misconfigured
-connection look healthy. If the user selects a verifying mode without supplying
-the certificate, ask for it rather than authoring the mode alone. The CA input
-routes like any other input — by its declared `storage`, which is normally
-`secrets`, so it becomes a pointer in `secret_refs`.
+A database connection authored with any certificate-verification mode — a mode
+from the connector's declared `ssl_mode` enum that verifies the server
+certificate against a CA, whatever the connector's vocabulary names it
+(`verify-ca`/`verify-full` are the libpq-shaped example) — **must** also supply
+the contract's CA-material input (`ssl_ca_certificate` in the connectors that
+declare one), even where the driver would silently fall back to the host's trust
+store. The mode vocabulary is connector-defined, so judge each enum value by
+what it does, not by these example spellings. Verifying against whatever CAs
+happen to be installed is not the mode the user asked for, and the fallback
+makes a misconfigured connection look healthy. If the user selects a verifying
+mode without supplying the certificate, ask for it rather than authoring the
+mode alone. The CA input routes like any other input — by its declared
+`storage`, which is normally `secrets`, so it becomes a pointer in
+`secret_refs`.
 
 ## Secrets — reference, never embed
 
