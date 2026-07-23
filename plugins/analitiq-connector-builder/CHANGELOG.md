@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.7](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-connector-builder-v0.1.6...analitiq-connector-builder-v0.1.7) (2026-07-23)
+
+
+### Bug Fixes
+
+* **analitiq-connector-builder:** ground TLS vocabularies in author-time research, not per-DB reference tables ([#78](https://github.com/analitiq-ai/claude-code-plugins/issues/78)) ([4a30104](https://github.com/analitiq-ai/claude-code-plugins/commit/4a301046a4398a51b2ec080fb1d89a223d15a263))
+* **analitiq-connector-builder:** repoint fix-loop tracking link to claude-code-plugins[#3](https://github.com/analitiq-ai/claude-code-plugins/issues/3) ([6cf5d56](https://github.com/analitiq-ai/claude-code-plugins/commit/6cf5d56fad01c258988447d903bdc49b67f4b1cc))
+
 ## [0.1.6](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-connector-builder-v0.1.5...analitiq-connector-builder-v0.1.6) (2026-07-23)
 
 

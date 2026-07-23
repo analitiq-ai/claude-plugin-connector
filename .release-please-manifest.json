@@ -1,4 +1,4 @@
 {
-  "plugins/analitiq-connector-builder": "0.1.6",
+  "plugins/analitiq-connector-builder": "0.1.7",
   "plugins/analitiq-pipeline-builder": "0.1.2"
 }
