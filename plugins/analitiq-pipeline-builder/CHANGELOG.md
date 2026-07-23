@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-pipeline-builder-v0.1.2...analitiq-pipeline-builder-v0.1.3) (2026-07-23)
+
+
+### Bug Fixes
+
+* **analitiq-pipeline-builder:** trigger the CA-material rule on mode meaning, not libpq spellings ([#84](https://github.com/analitiq-ai/claude-code-plugins/issues/84)) ([7cea32d](https://github.com/analitiq-ai/claude-code-plugins/commit/7cea32daf5fcfe3eb837b23c5865eaee6dc7207b))
+* trim the canonical-type vocabulary to the engine-executable set, generated from the published grammar manifest ([#86](https://github.com/analitiq-ai/claude-code-plugins/issues/86)) ([b94cafa](https://github.com/analitiq-ai/claude-code-plugins/commit/b94cafad3ccc2fa924d29752eb919b6ffad2a685))
+
 ## [0.1.2](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-pipeline-builder-v0.1.1...analitiq-pipeline-builder-v0.1.2) (2026-07-23)
 
 
