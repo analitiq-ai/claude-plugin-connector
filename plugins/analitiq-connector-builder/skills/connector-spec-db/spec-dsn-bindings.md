@@ -11,9 +11,9 @@ fields are:
 | `adbc` | `driver` — closed enum: `postgresql`, `snowflake`, `bigquery` | `db_kwargs` (object; values may be value expressions). **AdbcTransport requires at least one of `dsn` / `db_kwargs`.** TLS lives inside `db_kwargs` (e.g. `adbc.postgresql.sslmode`); no `tls` block. |
 
 Transport choice follows the decision order in
-`spec-driver-selection.md` (first-class ADBC → Flight SQL → SQLAlchemy
-+ native bulk path → SQLAlchemy batched INSERT; never the JDBC bridge).
-For databases in the ADBC driver enum, prefer `adbc`
+`spec-driver-selection.md` (first-class ADBC → Flight SQL →
+SQLAlchemy + native bulk path → SQLAlchemy batched INSERT; never the
+JDBC bridge). For databases in the ADBC driver enum, prefer `adbc`
 — it exchanges Arrow columns natively and avoids the SQLAlchemy
 row-to-Arrow conversion. The chosen driver ships ONLY in the
 connector's `requirements.txt` (the engine pins no database drivers).
