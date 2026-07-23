@@ -11,7 +11,8 @@
     "ssl_mode": "verify-full"
   },
   "secret_refs": {
-    "password": "env:ANALITIQ_POSTGRESQL_PASSWORD"
+    "password": "env:ANALITIQ_POSTGRESQL_PASSWORD",
+    "ssl_ca_certificate": "env:ANALITIQ_POSTGRESQL_SSL_CA_CERTIFICATE"
   },
   "tags": [
     "production",

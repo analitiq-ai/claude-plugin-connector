@@ -52,15 +52,22 @@ user is overriding it.
 
 ## TLS verification needs its CA material
 
-A database connection authored with `ssl_mode: "verify-ca"` or `"verify-full"`
-**must** also supply the contract's CA-material input (`ssl_ca_certificate` in
-the connectors that declare one), even where the driver would silently fall back
-to the host's trust store. Verifying against whatever CAs happen to be installed
-is not the mode the user asked for, and the fallback makes a misconfigured
-connection look healthy. If the user selects a verifying mode without supplying
-the certificate, ask for it rather than authoring the mode alone. The CA input
-routes like any other input — by its declared `storage`, which is normally
-`secrets`, so it becomes a pointer in `secret_refs`.
+A database connection authored with any certificate-verification mode — a mode
+from the connector's declared `ssl_mode` enum that verifies the server
+certificate against a CA, whatever the connector's vocabulary names it
+(`verify-ca`/`verify-full` are the libpq-shaped example) — **must** also supply
+the contract's CA-material input (`ssl_ca_certificate` in the connectors that
+declare one), even where the driver would silently fall back to the host's trust
+store. The mode vocabulary is connector-defined: judge each enum value by what
+it does, not by these example spellings, and when a mode's meaning is not
+evident from the connector's contract, ask the user rather than guessing
+whether it verifies. Verifying against whatever CAs
+happen to be installed is not the mode the user asked for, and the fallback
+makes a misconfigured connection look healthy. If the user selects a verifying
+mode without supplying the certificate, ask for it rather than authoring the
+mode alone. The CA input routes like any other input — by its declared
+`storage`, which is normally `secrets`, so it becomes a pointer in
+`secret_refs`.
 
 ## Secrets — reference, never embed
 
@@ -76,7 +83,10 @@ environment:
 {
   "connector_id": "postgresql",
   "parameters": { "host": "db.example.com", "port": 5432, "database": "analytics", "ssl_mode": "verify-full" },
-  "secret_refs": { "password": "env:ANALITIQ_POSTGRESQL_PASSWORD" }
+  "secret_refs": {
+    "password": "env:ANALITIQ_POSTGRESQL_PASSWORD",
+    "ssl_ca_certificate": "env:ANALITIQ_POSTGRESQL_SSL_CA_CERTIFICATE"
+  }
 }
 ```
 
@@ -88,7 +98,10 @@ the user names their own variable. Emit the sibling template the user fills in:
 
 ```jsonc
 // .secrets/credentials.json
-{ "ANALITIQ_POSTGRESQL_PASSWORD": "<paste-password-here>" }
+{
+  "ANALITIQ_POSTGRESQL_PASSWORD": "<paste-password-here>",
+  "ANALITIQ_POSTGRESQL_SSL_CA_CERTIFICATE": "<paste-ca-pem-here>"
+}
 ```
 
 The user (or CI) exports these into the environment where the pipeline runs (or
