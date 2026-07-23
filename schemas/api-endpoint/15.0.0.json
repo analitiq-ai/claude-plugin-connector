@@ -2788,7 +2788,7 @@
       "type": "object"
     }
   },
-  "$id": "https://schemas.analitiq.ai/api-endpoint/latest.json",
+  "$id": "https://schemas.analitiq.ai/api-endpoint/15.0.0.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Public JSON Schema contract for API endpoint documents (owned by connectors with `kind: 'api'`) \u2014 authored shape only. Endpoint documents have no top-level `kind` field; the owning connector's `kind` selects this schema. Reserved server-managed fields (endpoint_id, connector_id, connector_version, connection_id, schema_hash) are forbidden in the authored shape. The persisted catalog-row shape is internal and not published. Source of truth: analitiq.contracts.endpoints.ApiEndpointDoc (Pydantic).",

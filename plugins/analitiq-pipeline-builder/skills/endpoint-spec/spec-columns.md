@@ -44,34 +44,23 @@ Fully-qualified Apache Arrow canonical type string. Base names are
 PascalCase from `arrow/format/Schema.fbs`.
 
 <!-- BEGIN GENERATED: arrow-types -->
-`arrow_type` is validated by one published regex, `analitiq.contracts.endpoints.ARROW_TYPE_PATTERN`. Its top-level alternatives fall into three families.
+`arrow_type` is validated by one published regex, `analitiq.contracts.endpoints.ARROW_TYPE_PATTERN` — generated from the engine-published grammar manifest, so it accepts exactly what the engine executes. Its top-level alternatives fall into two families.
 
 **Plain names** — write them exactly as shown:
 
-`Null`, `Boolean`, `Int8`, `Int16`, `Int32`, `Int64`, `UInt8`, `UInt16`, `UInt32`, `UInt64`, `Float16`, `Float32`, `Float64`, `Utf8`, `LargeUtf8`, `Binary`, `LargeBinary`, `Date32`, `Date64`, `Object`, `List`, `Json`
+`Binary`, `Boolean`, `Date32`, `Date64`, `Float16`, `Float32`, `Float64`, `Int16`, `Int32`, `Int64`, `Int8`, `Json`, `LargeBinary`, `LargeUtf8`, `List`, `Null`, `Object`, `UInt16`, `UInt32`, `UInt64`, `UInt8`, `Utf8`
 
 **Parameterized** — the parameter is part of the type and is *not* optional; a bare name here is rejected:
 
+- `Decimal128\((?:[1-9]|1[0-9]|2[0-9]|3[0-8])\s*,\s*(?:0|[1-9][0-9]*)\)`
+- `Decimal256\((?:[1-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9]|6[0-9]|7[0-6])\s*,\s*(?:0|[1-9][0-9]*)\)`
+- `Duration\((?:SECOND|MILLISECOND|MICROSECOND|NANOSECOND)\)`
 - `FixedSizeBinary\([1-9][0-9]*\)`
 - `Time32\((?:SECOND|MILLISECOND)\)`
 - `Time64\((?:MICROSECOND|NANOSECOND)\)`
-- `Timestamp\((?:SECOND|MILLISECOND|MICROSECOND|NANOSECOND)(?:\s*,\s*(?:null|[A-Za-z_][A-Za-z0-9_/\-]*|Etc/GMT[+\-][0-9]{1,2}|[+\-](?:0[0-9]|1[0-4]):[0-5][0-9]))?\)`
-- `Duration\((?:SECOND|MILLISECOND|MICROSECOND|NANOSECOND)\)`
-- `Interval\((?:YEAR_MONTH|DAY_TIME|MONTH_DAY_NANO)\)`
-- `Decimal128\((?:[1-9]|[12][0-9]|3[0-8])\s*,\s*-?[0-9]+\)`
-- `Decimal256\((?:[1-9]|[1-6][0-9]|7[0-6])\s*,\s*-?[0-9]+\)`
+- `Timestamp\((?:SECOND|MILLISECOND|MICROSECOND|NANOSECOND)(?:\s*,\s*(?:null|[A-Za-z_][A-Za-z0-9_/\-]*|Etc/GMT[+\-][0-9]{1,2}|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9]))?\)`
 
-**Containers** — the inner type is itself an `arrow_type`:
-
-- `List<.+>`
-- `LargeList<.+>`
-- `FixedSizeList<.+>\[[1-9][0-9]*\]`
-- `Struct<.+>`
-- `Map<.+,\s*.+>`
-- `SparseUnion<.+>`
-- `DenseUnion<.+>`
-- `Dictionary<.+,\s*.+>`
-- `RunEndEncoded<.+,\s*.+>`
+There are **no angle-bracket container forms**: nested data is declared with the bare authored-shape markers `Object` / `List` (with sibling `properties` / `items` on the owning column or field spec) or opaque `Json`. `Decimal128/256` additionally require scale <= precision — a cross-parameter bound the regex cannot express; the validator enforces it.
 <!-- END GENERATED: arrow-types -->
 
 Units are the literal Flatbuffers enum identifiers, uppercase, and each type
@@ -104,14 +93,10 @@ Timestamp(MILLISECOND, +05:30)
 Time32(SECOND)
 Time64(NANOSECOND)
 Duration(MICROSECOND)
-Interval(YEAR_MONTH)
 FixedSizeBinary(16)
-List<Int64>
-LargeList<Utf8>
-FixedSizeList<Int64>[8]
-Struct<id:Int64, name:Utf8>
-Map<Utf8, Int64>
-Dictionary<Int32, Utf8>
+Object
+List
+Json
 ```
 
 ### Mapping guidance
@@ -130,21 +115,28 @@ Dictionary<Int32, Utf8>
 | BSON `Date` / JavaScript `Date` (ms epoch) | `Timestamp(MILLISECOND, UTC)` |
 | `time` | `Time64(MICROSECOND)` |
 | `bytea` / `BLOB` | `Binary` |
-| arrays | `List<…>` |
-| record / composite / STRUCT | `Struct<field:Type, …>` |
+| arrays | `List` + sibling `items` when the element shape is known, else `Json` |
+| record / composite / STRUCT | `Object` + sibling `properties` when introspected, else `Json` |
+| JSON / JSONB / VARIANT (not introspected) | `Json` |
 
-For schemaless or opaque container types (e.g. MongoDB `BSON.Document`,
-PostgreSQL `jsonb` you do not introspect), prefer `Utf8` (JSON-as-text)
-or `Binary` over guessing a `Struct<…>` field list.
+### Nested data is authored-shape only
 
-### Inner grammar for `Struct<…>` / `Map<…>`
+There are **no angle-bracket container canonicals** (`Struct<…>`, `List<…>`,
+`Map<…>`): the engine does not execute them, and the contract rejects them
+(issue #81). Declare nested shape with the bare markers plus sibling keys on
+the **column itself**:
 
-`ARROW_TYPE_PATTERN` enforces only that the angle brackets are present and
-non-empty (`Struct<.+>`, `Map<.+, .+>`); the inner grammar shown above
-(`field:Type, …` for structs; `key, value` for maps) is the recommended
-convention but is **not** regex-enforced. Stay consistent with the
-canonical examples block so downstream consumers can parse the inner
-shape unambiguously.
+- `Object` — requires a non-empty sibling `properties` map of field specs
+  (recursive: each child is `{arrow_type, …}` and may itself be `Object`/`List`).
+- `List` — requires a sibling `items` field spec for the element.
+- `Json` — opaque; no `properties` or `items` permitted. Use it when you do
+  not introspect the inner shape.
+
+See `examples/bigquery-struct-table.example.json` for a BigQuery `STRUCT`
+column declared as `Object` + `properties`. For schemaless or opaque container
+types (e.g. MongoDB `BSON.Document`, PostgreSQL `jsonb` you do not
+introspect), use `Json` — never a scalar like `Utf8`, which throws the
+structure away.
 
 ## `nullable`
 

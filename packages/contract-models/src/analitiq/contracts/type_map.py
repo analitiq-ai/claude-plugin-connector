@@ -24,6 +24,11 @@ from typing import Annotated, Literal
 
 from pydantic import Field, RootModel, model_validator
 
+from analitiq.contracts.arrow_grammar import (
+    CONTAINER_CANONICAL_HEADS as _CONTAINER_CANONICAL_HEADS,
+    TEMPLATE_DUMMY_SUBSTITUTIONS,
+    validate_cross_params,
+)
 from analitiq.contracts.endpoints import ARROW_TYPE_PATTERN
 from analitiq.contracts.shared.common import StrictModel
 
@@ -31,8 +36,7 @@ from analitiq.contracts.shared.common import StrictModel
 # `arrow_type` does (`ARROW_TYPE_PATTERN`, incl. the `Json`/`Object`/`List`
 # markers): one source of truth, so a type map cannot render a canonical an
 # endpoint would reject. The pattern requires parameterized types to carry their
-# parameters (`Timestamp(MICROSECOND)`, not bare `Timestamp`; `List<Int64>`, not
-# `List(Int64)`) — issue #424.
+# parameters (`Timestamp(MICROSECOND)`, not bare `Timestamp`) — issue #424.
 _ARROW_TYPE_RE = re.compile(ARROW_TYPE_PATTERN)
 
 # `${name}` render-side substitution (empty `${}` captured too, flagged below).
@@ -79,14 +83,19 @@ def _validate_type_map_canonical(value: str) -> None:
     Substitutions are parameter-positional, so one placeholder per parameter
     (`Decimal128(${p}, ${s})`, not `Decimal128(${p})`)."""
     if _PLACEHOLDER_RE.search(value):
-        # Dummies span the parameter grammars: a number (Decimal/FixedSize*),
-        # and one keyword from each temporal enum family — SECOND (Time32/
-        # Timestamp/Duration), MICROSECOND (Time64/Timestamp/Duration), YEAR_MONTH
-        # (Interval). A templated canonical is valid if ANY dummy resolves it.
+        # Dummies span the parameter grammars — a number for int positions plus
+        # one keyword per temporal unit family, derived from the vendored
+        # engine grammar. A templated canonical is valid if ANY dummy resolves
+        # it. Cross-parameter bounds are NOT checked on a templated canonical:
+        # a placeholder has no value to compare, and a dummy substitution would
+        # reject valid templates (`Decimal128(${p}, 9)` is not `scale > precision`).
         candidates = [_PLACEHOLDER_RE.sub(d, value)
-                      for d in ("1", "SECOND", "MICROSECOND", "YEAR_MONTH")]
+                      for d in TEMPLATE_DUMMY_SUBSTITUTIONS]
     else:
         candidates = [value]
+        # Literal canonical: enforce the bounds the regex cannot express
+        # (Decimal scale <= precision), matching the endpoint model's check.
+        validate_cross_params(value)
     # `fullmatch`, not `match`, so a trailing newline (which Python `$` allows)
     # is rejected — matching the endpoint model's arrow_type check.
     if not any(_ARROW_TYPE_RE.fullmatch(c) for c in candidates):
@@ -100,16 +109,12 @@ _ECMA_NAMED_BACKREF = re.compile(r"\\k<([A-Za-z_][A-Za-z0-9_]*)>")
 # `(?P>)`. None are valid ECMA-262.
 _PYTHON_REGEX_FEATURE = re.compile(r"\(\?P[<=>]")
 
-# Canonical (Arrow) container heads — the engine's own vocabulary, so listing
-# them is DB-agnostic. A read rule that maps a structured native to a scalar
-# canonical (not one of these) silently drops the value's structure. Covers every
-# nested Arrow head `ARROW_TYPE_PATTERN` accepts (incl. the union/dictionary/
-# run-end-encoded families), so a structured native → nested canonical isn't
-# wrongly flagged as a structure-dropping scalar mapping.
-_CONTAINER_CANONICAL_HEADS = {
-    "Json", "Object", "List", "LargeList", "FixedSizeList", "Struct", "Map",
-    "DenseUnion", "SparseUnion", "Dictionary", "RunEndEncoded",
-}
+# Canonical (Arrow) container heads — the engine's own vocabulary, so reasoning
+# over them is DB-agnostic. A read rule that maps a structured native to a
+# scalar canonical (not one of these) silently drops the value's structure.
+# Derived from the vendored engine grammar (imported above): the structural
+# authored-shape markers plus opaque `Json` — the only container canonicals the
+# executable vocabulary carries.
 
 
 def _to_python_regex(pattern: str) -> str:
@@ -212,6 +217,9 @@ class TypeMapReadExactRule(_TypeMapRuleBase):
 
     @model_validator(mode="after")
     def _check(self) -> "TypeMapReadExactRule":
+        # Cross-parameter bounds the field pattern cannot express
+        # (Decimal scale <= precision).
+        validate_cross_params(self.canonical)
         _guard_container_not_collapsed(self.native, "exact", self.canonical)
         return self
 
@@ -267,6 +275,9 @@ class TypeMapWriteExactRule(_TypeMapRuleBase):
 
     @model_validator(mode="after")
     def _check(self) -> "TypeMapWriteExactRule":
+        # Cross-parameter bounds the field pattern cannot express
+        # (Decimal scale <= precision).
+        validate_cross_params(self.canonical)
         # A write `native` render may carry `${length}` DDL hints — they must be
         # syntactically valid (no empty `${}` / unclosed `${`).
         _validate_render_placeholders(self.native)

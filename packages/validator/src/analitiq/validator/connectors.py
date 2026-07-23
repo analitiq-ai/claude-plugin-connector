@@ -169,15 +169,16 @@ def _render_canonical(native: str, rules: list) -> str | None:
 
 
 # Collapse whitespace ONLY around Arrow separators — not inside identifiers.
-_CANONICAL_SEP_WS = re.compile(r"\s*([,()<>\[\]:])\s*")
+_CANONICAL_SEP_WS = re.compile(r"\s*([,()])\s*")
 
 
 def _canonical_eq(a: str, b: str) -> bool:
     """Compare two Arrow canonical types ignoring separator spacing only. The
     intra-parameter spacing of `Decimal128(38, 9)` vs `Decimal128(38,9)` is not
-    significant, but a space INSIDE an identifier IS (`Struct<first name:Utf8>` ≠
-    `Struct<firstname:Utf8>`) — so whitespace is collapsed only around the Arrow
-    separators (`,()<>[]:`), never deleted wholesale."""
+    significant, but whitespace INSIDE a token IS (`Time stamp(SECOND)` is not
+    `Timestamp(SECOND)`) — so whitespace is collapsed only around the Arrow
+    separators (`,()`, the executable vocabulary's only punctuation), never
+    deleted wholesale."""
     norm = lambda s: _CANONICAL_SEP_WS.sub(r"\1", s).strip()  # noqa: E731
     return norm(a) == norm(b)
 

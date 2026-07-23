@@ -58,7 +58,7 @@
       "type": "object"
     }
   },
-  "$id": "https://schemas.analitiq.ai/type-map-write/latest.json",
+  "$id": "https://schemas.analitiq.ai/type-map-write/3.0.0.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Public JSON Schema contract for a database connector's `type-map-write.json` \u2014 the write direction (canonical \u2192 native DDL) of its type-map pair, a top-level array of `{match, native, canonical}` rules where `canonical` matches and `native` renders. The full per-rule contract lives in the model and is enforced by the connector validator; this published schema is the structural projection. Source of truth: analitiq.contracts.type_map.TypeMapWriteDoc (Pydantic).",
   "items": {

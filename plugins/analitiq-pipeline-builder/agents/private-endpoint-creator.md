@@ -108,11 +108,16 @@ The agent has four modes; one invocation runs exactly one mode.
    yourself, using `skills/endpoint-spec/spec-columns.md` as the mapping
    reference. `arrow_type` is **required**, and parameterized types must carry
    their parameters — `Timestamp(MICROSECOND, UTC)`, `Decimal128(p, s)`,
-   `Time64(MICROSECOND)`, `List<Int64>`, etc.; bare `Timestamp` / `Decimal128` /
+   `Time64(MICROSECOND)`, etc.; bare `Timestamp` / `Decimal128` /
    `Time64` are rejected. Carry precision/scale from `native_type` into
-   `Decimal128(p, s)` (use `Decimal256` when `p > 38`). For schemaless or opaque
-   containers (MongoDB `BSON.Document`, opaque `jsonb`), prefer `Utf8` or `Binary`
-   over guessing a `Struct<…>` field list; add a `notes[]` entry explaining it.
+   `Decimal128(p, s)` (use `Decimal256` when `p > 38`, and keep scale <=
+   precision — the validator enforces it). For structured/container natives
+   (arrays, STRUCTs, JSON), declare the authored shape — `Object` + sibling
+   `properties` or `List` + sibling `items` when introspected, `Json` when
+   opaque (MongoDB `BSON.Document`, uninspected `jsonb`); never a scalar like
+   `Utf8`, and never an angle-bracket form (`Struct<…>`, `List<…>` — the
+   contract rejects them, issue #81). Add a `notes[]` entry when you fall back
+   to `Json`.
 7. **Author connection-scoped type-map gap rules** per
    `skills/endpoint-spec/spec-type-map-gaps.md`:
    - For every read gap from step 6, a read rule whose rendered canonical

@@ -655,23 +655,32 @@ def _split_top_level_alternatives(pattern: str) -> list[str]:
 def render_arrow_types() -> str:
     """The Arrow type vocabulary, split out of the published column pattern.
 
-    `arrow_type` is one regex covering scalars, parameterized types and
-    containers. Prose used to transcribe it as several hand-kept tables; this
-    splits the published pattern instead, so the vocabulary cannot drift.
+    `arrow_type` is one regex covering scalars, parameterized types and the
+    authored-shape container markers. Prose used to transcribe it as several
+    hand-kept tables; this splits the published pattern instead, so the
+    vocabulary cannot drift. The pattern itself is generated from the
+    engine-published, vendored grammar manifest
+    (`analitiq.contracts.arrow_grammar`) — see issue #81.
     """
     from analitiq.contracts.endpoints import ARROW_TYPE_PATTERN
 
     alternatives = _split_top_level_alternatives(_unwrap_alternation(ARROW_TYPE_PATTERN))
     plain = [a for a in alternatives if a.replace("_", "").isalnum()]
-    parameterized = [a for a in alternatives if a not in plain and "<" not in a]
-    containers = [a for a in alternatives if "<" in a]
-    if not (plain and parameterized and containers):
-        raise RuntimeError("could not split ARROW_TYPE_PATTERN into its three families")
+    parameterized = [a for a in alternatives if a not in plain]
+    if not (plain and parameterized):
+        raise RuntimeError("could not split ARROW_TYPE_PATTERN into its two families")
+    if any("<" in a for a in alternatives):
+        raise RuntimeError(
+            "ARROW_TYPE_PATTERN grew angle-bracket alternatives; restore the "
+            "container section this renderer dropped when the vocabulary was "
+            "trimmed to the executable set (issue #81)"
+        )
 
     out = [
         "`arrow_type` is validated by one published regex, "
-        "`analitiq.contracts.endpoints.ARROW_TYPE_PATTERN`. Its top-level "
-        "alternatives fall into three families.",
+        "`analitiq.contracts.endpoints.ARROW_TYPE_PATTERN` — generated from the "
+        "engine-published grammar manifest, so it accepts exactly what the "
+        "engine executes. Its top-level alternatives fall into two families.",
         "",
         "**Plain names** — write them exactly as shown:",
         "",
@@ -684,10 +693,13 @@ def render_arrow_types() -> str:
     out += [f"- `{a}`" for a in parameterized]
     out += [
         "",
-        "**Containers** — the inner type is itself an `arrow_type`:",
-        "",
+        "There are **no angle-bracket container forms**: nested data is declared "
+        "with the bare authored-shape markers `Object` / `List` (with sibling "
+        "`properties` / `items` on the owning column or field spec) or opaque "
+        "`Json`. `Decimal128/256` additionally require scale <= precision — a "
+        "cross-parameter bound the regex cannot express; the validator enforces "
+        "it.",
     ]
-    out += [f"- `{a}`" for a in containers]
     return "\n".join(out) + "\n"
 
 

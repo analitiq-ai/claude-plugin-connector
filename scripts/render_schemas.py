@@ -1061,6 +1061,372 @@ def get_resource(name: str) -> Resource:
 
 
 # ---------------------------------------------------------------------------
+# canonical-types.json — generated from the vendored engine grammar
+# ---------------------------------------------------------------------------
+# Not a registry Resource: the document is versionless and mutable (no
+# {X.Y.Z}/latest/index triple — it rides the publish workflow's `**/*.json`
+# glob). Its ACCEPTED SET is generated from the engine-published, vendored
+# grammar manifest (`analitiq.contracts.arrow_grammar`, issue #81); only the
+# prose below — titles, descriptions, display grouping — is authored here.
+# `check` (and the dedicated `canonical-types --check`) fails when the
+# committed file differs from the rendered output, exactly like a registered
+# resource.
+
+from analitiq.contracts import arrow_grammar  # noqa: E402
+
+CANONICAL_TYPES_PATH = SCHEMAS_ROOT / "canonical-types.json"
+
+#: Display grouping + prose for the published `$defs`. Membership is validated
+#: against the grammar at build time: every engine family appears in exactly
+#: one group and no group names an unknown family — so trimming or adding a
+#: family in the vendored manifest fails this render loudly instead of
+#: silently publishing a stale vocabulary.
+_CANONICAL_GROUPS: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
+    (
+        "null_type",
+        "Null",
+        "Arrow Null logical type. Column contains only null values. Zero storage.",
+        ("Null",),
+    ),
+    (
+        "boolean_type",
+        "Boolean",
+        "Arrow Boolean logical type. 1-bit values: true or false.",
+        ("Boolean",),
+    ),
+    (
+        "integer_type",
+        "Int / UInt",
+        "Arrow signed and unsigned integer logical types at fixed widths of 8, "
+        "16, 32, or 64 bits. Width should reflect the source system's declared "
+        "width — do not upcast `Int32` to `Int64` unless the engine requires it.",
+        ("Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"),
+    ),
+    (
+        "floating_type",
+        "FloatingPoint",
+        "Arrow IEEE-754 floating-point logical types. Float16 is half-precision; "
+        "Float32 is single-precision; Float64 is double-precision.",
+        ("Float16", "Float32", "Float64"),
+    ),
+    (
+        "binary_type",
+        "Binary",
+        "Arrow binary logical types. `Binary` is variable-length with 32-bit "
+        "offsets; `LargeBinary` is variable-length with 64-bit offsets; "
+        "`FixedSizeBinary(byte_width)` is fixed-length.",
+        ("Binary", "LargeBinary", "FixedSizeBinary"),
+    ),
+    (
+        "string_type",
+        "Utf8",
+        "Arrow UTF-8 string logical types. `Utf8` uses 32-bit offsets (capped "
+        "~2 GiB total per array); `LargeUtf8` uses 64-bit offsets.",
+        ("Utf8", "LargeUtf8"),
+    ),
+    (
+        "date_type",
+        "Date",
+        "Arrow Date logical types. `Date32` is days since the Unix epoch; "
+        "`Date64` is milliseconds since the Unix epoch (must be a multiple of "
+        "86_400_000).",
+        ("Date32", "Date64"),
+    ),
+    (
+        "time_type",
+        "Time",
+        "Arrow time-of-day logical types. `Time32` supports SECOND and "
+        "MILLISECOND units; `Time64` supports MICROSECOND and NANOSECOND units.",
+        ("Time32", "Time64"),
+    ),
+    (
+        "timestamp_type",
+        "Timestamp",
+        "Arrow Timestamp logical type. Unit is one of SECOND, MILLISECOND, "
+        "MICROSECOND, NANOSECOND. Timezone is optional; when omitted, the type "
+        "is zone-naive / local. When present, the timezone is either `null` "
+        "(explicit zone-naive), an IANA zone (`UTC`, `America/New_York`, "
+        "`Etc/GMT±N`), or a fixed `±HH:MM` offset. When mapping from a source "
+        "that declares a zoned type (e.g., Postgres `TIMESTAMP WITH TIME "
+        "ZONE`), use `UTC` unless there is a source-specific reason otherwise.",
+        ("Timestamp",),
+    ),
+    (
+        "duration_type",
+        "Duration",
+        "Arrow Duration logical type. Elapsed time with unit SECOND, "
+        "MILLISECOND, MICROSECOND, or NANOSECOND.",
+        ("Duration",),
+    ),
+    (
+        "decimal_type",
+        "Decimal",
+        "Arrow Decimal128 or Decimal256 logical type. `Decimal128(precision, "
+        "scale)` supports precision 1-38; `Decimal256(precision, scale)` "
+        "supports precision 1-76. Scale is 0 <= scale <= precision; the "
+        "scale-vs-precision bound is a cross-parameter rule enforced by the "
+        "validator API and the contract models, not by these patterns. Use "
+        "`Decimal128` unless the source precision exceeds 38.",
+        ("Decimal128", "Decimal256"),
+    ),
+    (
+        "authored_shape_type",
+        "Authored-shape JSON container",
+        "Bare authored-shape JSON container markers — the vocabulary's ONLY "
+        "nested-data grammar. `Object` declares a JSON object with a sibling "
+        "`properties` map describing each child (recursive). `List` declares a "
+        "JSON array with a sibling `items` field spec describing the element "
+        "(recursive). `Json` declares an opaque JSON object or array with no "
+        "inner shape — no `properties` or `items` permitted. Sibling-key "
+        "enforcement is performed by the validator API and the contract models "
+        "(`analitiq.contracts`), not by this string vocabulary.",
+        ("Object", "List", "Json"),
+    ),
+)
+
+#: Examples embedded in the top-level description. Each is validated against
+#: the generated pattern at render time, so a stale example fails the render.
+_CANONICAL_EXAMPLES: tuple[str, ...] = (
+    "Utf8",
+    "Int64",
+    "Boolean",
+    "Date32",
+    "Decimal128(38, 9)",
+    "Decimal256(76, 0)",
+    "Timestamp(MICROSECOND)",
+    "Timestamp(MICROSECOND, UTC)",
+    "Timestamp(MILLISECOND, +05:30)",
+    "Time32(SECOND)",
+    "Time64(NANOSECOND)",
+    "Duration(MICROSECOND)",
+    "FixedSizeBinary(16)",
+    "Object",
+    "List",
+    "Json",
+)
+
+
+def _canonical_types_description() -> str:
+    examples = "\n".join(f"  {e}" for e in _CANONICAL_EXAMPLES)
+    return (
+        "Analitiq's profile of the Apache Arrow logical type system. Canonical "
+        "types are strings that identify an Arrow logical type in the form used "
+        "by `type_map.canonical` entries on connector definitions and "
+        "`arrow_type` fields throughout the schema contracts.\n\n"
+        "Ownership: the ACCEPTED SET below is generated from the engine-"
+        "published Arrow type grammar manifest "
+        f"(`https://schemas.analitiq.ai/{arrow_grammar.ENGINE_GRAMMAR_RESOURCE}/latest.json`, "
+        f"pinned at v{arrow_grammar.ENGINE_GRAMMAR_VERSION}) — the set of "
+        "families the platform executes end-to-end. A family appears here only "
+        "after the engine executes it; the contract adopts it by consuming the "
+        "new manifest version, never by hand-editing this document.\n\n"
+        "Standard (one screen):\n\n"
+        "Base form: PascalCase Arrow type name from `arrow/format/Schema.fbs`.\n\n"
+        "Two parameter shapes:\n"
+        "  - Bare name, no params — scalar types and the authored-shape JSON "
+        "container markers: `Utf8`, `Int64`, `Boolean`, `Date32`, `Binary`, "
+        "`Object`, `List`, `Json`.\n"
+        "  - Parens `( )` for value params — parameterized scalars (units, "
+        "precision/scale, byte widths): `Decimal128(38, 9)`, "
+        "`Timestamp(MICROSECOND, UTC)`, `FixedSizeBinary(16)`.\n\n"
+        "Nested data is declared with the authored-shape markers only: "
+        "`Object` / `List` carry their inner shape in sibling `properties` / "
+        "`items` keys of the OWNING document (endpoint column, stream field "
+        "spec), and `Json` is opaque. There are no fully-typed nested type "
+        "strings in this vocabulary.\n\n"
+        "Unit values inside parens are the literal Flatbuffers enum "
+        "identifiers — uppercase:\n"
+        "  - `TimeUnit`: `SECOND`, `MILLISECOND`, `MICROSECOND`, `NANOSECOND`.\n\n"
+        "Timezone (Timestamp only): optional second arg. `null`, IANA name "
+        "(including `Etc/GMT±N`), or fixed `±HH:MM` offset.\n\n"
+        "Full canonical examples:\n"
+        f"{examples}\n\n"
+        "Why uppercase unit names instead of PyArrow shorthand (`us`/`ms`/`ns`): "
+        "the uppercase identifiers are the only spelling that's actually in the "
+        "Arrow specification (the Flatbuffers `TimeUnit` enum). PyArrow's "
+        "shortcodes are a Python-library convenience and read ambiguously in "
+        "spec text (`us` parses as 'United States' to a casual reader or LLM). "
+        "The engine tolerates the short forms on input; this authoring "
+        "vocabulary does not. The translation to PyArrow constructor args is "
+        "the runtime's job, not the spec's.\n\n"
+        "Why parens: parens hold values (integers, enums). The vocabulary has "
+        "no type-parameter (angle-bracket) forms — nested shapes belong to the "
+        "owning document's sibling keys, not to the type string.\n\n"
+        "Reference: https://arrow.apache.org/docs/format/Columnar.html#logical-types.\n\n"
+        "Scope note: `Decimal128/256` scale <= precision is a cross-parameter "
+        "bound regex cannot express; the validator API and the contract models "
+        "enforce it. Sibling-key rules for `Object`/`List`/`Json` are likewise "
+        "the owning document's contract, not this string vocabulary's.\n\n"
+        "Version note: Arrow view types (`Utf8View`, `BinaryView`, `ListView`, "
+        "`LargeListView`), the typed nested families (`List<T>`, `LargeList<T>`, "
+        "`FixedSizeList<T>[n]`, `Struct<...>`, `Map<K, V>`), unions, encodings "
+        "(`Dictionary`, `RunEndEncoded`), and `Interval` are not part of this "
+        "canonical vocabulary: the platform does not execute them end-to-end. "
+        "They return, if ever, by shipping in the engine first and re-consuming "
+        "the grammar manifest (issue #81's re-add policy) — never by editing "
+        "this document."
+    )
+
+
+def _canonical_group_schema(members: tuple[str, ...]) -> dict[str, Any]:
+    """Schema node for one display group, from the grammar fragments."""
+    branches: list[dict[str, Any]] = []
+    for family in members:
+        if arrow_grammar.FAMILIES[family].get("params"):
+            branches.append(
+                {
+                    "type": "string",
+                    "pattern": "^" + arrow_grammar.family_pattern(family) + "$",
+                }
+            )
+        else:
+            branches.append({"const": family})
+    if all("const" in b for b in branches):
+        if len(branches) == 1:
+            return {"const": members[0]}
+        return {"enum": list(members)}
+    if len(branches) == 1:
+        return branches[0]
+    return {"oneOf": branches}
+
+
+def build_canonical_types_doc() -> dict[str, Any]:
+    """Build the full canonical-types.json document: generated accepted set
+    (from the vendored engine grammar) + authored prose."""
+    grouped = [f for _, _, _, members in _CANONICAL_GROUPS for f in members]
+    if sorted(grouped) != sorted(arrow_grammar.FAMILY_NAMES) or len(grouped) != len(
+        set(grouped)
+    ):
+        raise SystemExit(
+            "canonical-types display grouping is out of sync with the vendored "
+            "engine grammar: every family must appear in exactly one group. "
+            f"grammar={sorted(arrow_grammar.FAMILY_NAMES)} grouped={sorted(grouped)}"
+        )
+    pattern_re = re.compile(arrow_grammar.ARROW_TYPE_PATTERN)
+    for example in _CANONICAL_EXAMPLES:
+        if not pattern_re.fullmatch(example):
+            raise SystemExit(
+                f"canonical-types example {example!r} does not match the "
+                "generated ARROW_TYPE_PATTERN — update _CANONICAL_EXAMPLES"
+            )
+
+    defs: dict[str, Any] = {
+        "canonical_type": {
+            "title": "canonical_type",
+            "description": (
+                "A canonical type string. Must match one of the Arrow logical "
+                "type families below — exactly the families the engine "
+                "executes, per the pinned grammar manifest."
+            ),
+            "type": "string",
+            "oneOf": [
+                {"$ref": f"#/$defs/{def_name}"}
+                for def_name, _, _, _ in _CANONICAL_GROUPS
+            ],
+        }
+    }
+    for def_name, title, description, members in _CANONICAL_GROUPS:
+        node: dict[str, Any] = {"title": title, "description": description}
+        node.update(_canonical_group_schema(members))
+        defs[def_name] = node
+
+    templated_branches: list[dict[str, Any]] = [
+        {"$ref": "#/$defs/canonical_type"}
+    ]
+    for family in arrow_grammar.PARAMETERIZED_FAMILY_NAMES:
+        params = ", ".join(
+            p["name"] for p in arrow_grammar.FAMILIES[family]["params"]
+        )
+        templated_branches.append(
+            {
+                "description": (
+                    f"Templated {family}({params}) — each parameter position "
+                    "accepts its literal grammar (at its valid range/enum, "
+                    "exactly as the strict vocabulary requires) or a `${name}` "
+                    "placeholder."
+                ),
+                "pattern": "^"
+                + arrow_grammar.family_pattern(family, templated=True)
+                + "$",
+            }
+        )
+    defs["canonical_type_or_template"] = {
+        "title": "canonical_type_or_template",
+        "description": (
+            "A canonical type string OR a templated canonical type carrying "
+            "`${name}` placeholders in parameter positions. Used by type-map "
+            "regex rules where parameters are substituted from named capture "
+            "groups (e.g. `Decimal128(${precision}, ${scale})`). Each "
+            "parameter position accepts either a LITERAL canonical value at "
+            "its valid range/enum (`38`, `MICROSECOND`, `UTC`) or a `${name}` "
+            "placeholder; a literal out of range is rejected exactly as the "
+            "strict vocabulary rejects it, so `Decimal128(999, 0)` and "
+            "`Time32(NANOSECOND)` do NOT match. A `${name}` placeholder must "
+            "be a valid identifier (`[A-Za-z_][A-Za-z0-9_]*`), matching the "
+            "native capture-group naming it resolves from; `${1bad}` / `${ }` "
+            "do not match. Outside parameter positions, the canonical Arrow "
+            "base name must appear verbatim — `not an arrow type ${precision}` "
+            "does not match. Templated branches use `anyOf` (not `oneOf`) "
+            "because a literal parameterized canonical (e.g. "
+            "`Timestamp(MICROSECOND, UTC)`) intentionally matches both the "
+            "strict canonical_type vocabulary AND the templated branch — both "
+            "readings are correct, and `anyOf` reflects that. This vocabulary "
+            "mirrors the runtime `_validate_type_map_canonical` shape check "
+            "plus the placeholder-name rule its sibling validators enforce; a "
+            "differential parity test pins that alignment."
+        ),
+        "type": "string",
+        "anyOf": templated_branches,
+    }
+
+    return {
+        "$schema": SCHEMA_DRAFT,
+        "$id": f"{CANONICAL_BASE}/canonical-types.json",
+        "title": "Analitiq canonical types",
+        "description": _canonical_types_description(),
+        "$comment": (
+            "GENERATED by scripts/render_schemas.py from the vendored engine "
+            "grammar manifest (analitiq.contracts.arrow_grammar) — do not "
+            "hand-edit; run `render_schemas.py canonical-types` after a pin "
+            "bump. Validating a value directly against this document's URL "
+            "checks it against the strict canonical_type vocabulary. Type-map "
+            "regex rules that permit ${name} templates reference the "
+            "#/$defs/canonical_type_or_template fragment explicitly."
+        ),
+        "$ref": "#/$defs/canonical_type",
+        "$defs": defs,
+    }
+
+
+def _canonical_types_text() -> str:
+    return json.dumps(build_canonical_types_doc(), indent=2) + "\n"
+
+
+def check_canonical_types() -> tuple[bool, str]:
+    """(ok, message) — committed canonical-types.json vs rendered output."""
+    hint = "`scripts/render_schemas.py canonical-types`"
+    if not CANONICAL_TYPES_PATH.exists():
+        return (False, f"canonical-types: {CANONICAL_TYPES_PATH} is missing; run {hint}")
+    if CANONICAL_TYPES_PATH.read_text() != _canonical_types_text():
+        return (
+            False,
+            "canonical-types: canonical-types.json is stale or hand-edited; "
+            f"re-run {hint}",
+        )
+    return (True, "canonical-types: OK — canonical-types.json matches rendered output")
+
+
+def cmd_canonical_types(args: argparse.Namespace) -> int:
+    if args.check:
+        ok, msg = check_canonical_types()
+        print(msg, file=None if ok else sys.stderr)
+        return 0 if ok else 1
+    CANONICAL_TYPES_PATH.write_text(_canonical_types_text())
+    print(f"wrote {CANONICAL_TYPES_PATH.relative_to(REPO_ROOT)}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Rendering
 # ---------------------------------------------------------------------------
 
@@ -1480,6 +1846,15 @@ def cmd_check(args: argparse.Namespace) -> int:
             print(msg, file=sys.stderr)
         else:
             print(msg)
+    # canonical-types.json is generated but not a registry Resource (versionless
+    # + mutable); a full check covers it so CI needs no extra invocation.
+    if not args.resource:
+        ok, msg = check_canonical_types()
+        if not ok:
+            failed = True
+            print(msg, file=sys.stderr)
+        else:
+            print(msg)
     return 1 if failed else 0
 
 
@@ -1610,6 +1985,10 @@ def cmd_list(args: argparse.Namespace) -> int:
             seen.add(f"{resource.dir().relative_to(REPO_ROOT).as_posix()}/**")
         seen.add("scripts/render_schemas.py")
         seen.add(".github/workflows/tests.yml")
+        # Generated canonical-types.json + the vendored grammar it renders from.
+        seen.add("schemas/canonical-types.json")
+        seen.add(f"{_CONTRACTS_PREFIX}/arrow_grammar.py")
+        seen.add(f"{_CONTRACTS_PREFIX}/arrow_type_grammar.json")
         for p in sorted(seen):
             print(p)
         return 0
@@ -1658,6 +2037,19 @@ def main(argv: list[str] | None = None) -> int:
         help="check just one resource; default checks every registered resource",
     )
     p_check.set_defaults(func=cmd_check)
+
+    p_ct = sub.add_parser(
+        "canonical-types",
+        help="render schemas/canonical-types.json from the vendored engine "
+        "grammar (versionless + mutable, so no write/{X.Y.Z} machinery)",
+    )
+    p_ct.add_argument(
+        "--check",
+        action="store_true",
+        help="exit 1 if the committed file differs from rendered output "
+        "(also part of the full `check` run)",
+    )
+    p_ct.set_defaults(func=cmd_canonical_types)
 
     p_classify = sub.add_parser(
         "classify",

@@ -135,11 +135,10 @@ the driver happens to hand the value over as text on the wire.
 `Json` is the **only** container canonical a read map can render. The shape
 markers `Object` / `List` need a sibling `properties` / `items` sub-schema
 that a string→string rule cannot carry, and the typed angle-bracket forms
-(`List<…>`, `Struct<…>`, `Map<…>`) are contract grammar without a runtime —
-the engine executes none of them, so a read map that renders one freezes a
-canonical into the discovered endpoint that fails the stream at schema
-construction (see issue #81). The contract patterns validate outer shape
-only, so such a rule validates **clean** and dies at runtime.
+(`List<…>`, `Struct<…>`, `Map<…>`) are not contract grammar at all — the
+vocabulary is trimmed to the executable set (issue #81), so a rule that
+renders one now fails validation at author time instead of freezing a
+canonical that would die at schema construction.
 
 > **Only the syntactic half is enforced** (ADV-TMAP-001/002). The contract
 > flags a native whose *shape* is visibly a container — angle brackets
@@ -182,19 +181,17 @@ The shape markers `Object` and `List` split by direction:
   ```
 
   Author these as `exact` rules over the bare markers — do **not** widen
-  them to regexes over the typed forms (`^(?:Struct<.+>|Object)$`,
-  `^(?:Large)?List(?:<.+>)?$`). The angle-bracket families can never
-  sync (issue #81), so covering them only converts an early, visible
-  unmapped-type error into a table created for a stream that then dies
-  at schema construction.
+  them to regexes over angle-bracket forms (`^(?:Struct<.+>|Object)$`,
+  `^(?:Large)?List(?:<.+>)?$`). Those spellings are outside the canonical
+  vocabulary entirely (issue #81) — no endpoint or read rule can produce
+  them — so such branches are dead pattern surface that misleads the
+  next author.
 
-**No `Map` canonical exists at runtime.** The engine's type-family set
-has no `Map`, so a `Map<…>` write rule is dead — it can never match a
-canonical that syncs — and a column declared `Map<…>` fails before any
-data syncs regardless of map content: an unmapped-type error if no rule
-matches, the same schema-construction death as the other angle-bracket
-forms if a regex rule covers it. Never author `Map` rules; the contract
-tolerating the spelling is the vocabulary gap tracked in issue #81.
+**No `Map` canonical exists.** The vocabulary has no `Map` family
+(issue #81 trimmed it): a `Map<…>` spelling fails validation as a read
+render or an exact write canonical, and as a write regex matcher it can
+never match a canonical that syncs. Never author `Map` rules; map-shaped
+natives resolve to `Json` like every other structured container.
 
 ## Non-obvious natives (derive, don't guess)
 
@@ -329,14 +326,14 @@ shared Arrow vocabulary — bare names where the type has no parameters
 (`Int32`, `Int64`, `Float64`, `Utf8`, `Boolean`, `Binary`, `Date32`),
 parens for parameterized scalars (`Decimal128(p, s)`,
 `Decimal256(p, s)`, `Timestamp(MICROSECOND, UTC)`, `Time64(MICROSECOND)`,
-`FixedSizeBinary(16)`), and angle brackets for nested types
-(`List<Int64>`, `Struct<id:Int64, name:Utf8>`, `Map<Utf8, Int64>`).
+`FixedSizeBinary(16)`), and the bare authored-shape container markers
+(`Object`, `List`, `Json`).
 
-The angle-bracket nested families are published grammar with **no
-runtime behind them** — the engine executes nested data only through the
-authored-shape path (`Object` / `List` with a sub-schema, opaque
-`Json`). Do not author them as map canonicals or endpoint `arrow_type`s;
-issue #81 tracks trimming the vocabulary to the executable set.
+There are no angle-bracket nested forms: the vocabulary is generated from
+the engine-published grammar manifest and carries exactly the families the
+engine executes end-to-end (issue #81). Nested data goes through the
+authored-shape path only — `Object` / `List` with a sub-schema on the
+owning document, opaque `Json`.
 
 The full vocabulary is `schemas/canonical-types.json`, published at
 [`https://schemas.analitiq.ai/canonical-types.json`](https://schemas.analitiq.ai/canonical-types.json)

@@ -26,7 +26,11 @@
     {
       "name": "customer",
       "native_type": "STRUCT<name STRING, age INT64>",
-      "arrow_type": "Struct<name:Utf8, age:Int64>",
+      "arrow_type": "Object",
+      "properties": {
+        "name": { "arrow_type": "Utf8" },
+        "age": { "arrow_type": "Int64" }
+      },
       "nullable": true,
       "ordinal_position": 3
     }

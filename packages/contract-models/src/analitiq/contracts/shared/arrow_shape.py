@@ -1,7 +1,8 @@
 """Shared enforcement for authored-shape Arrow container markers.
 
-The Arrow `arrow_type` vocabulary admits three bare markers that declare
-JSON-container intent without a fully-typed `Struct<…>` / `List<…>` spec:
+The Arrow `arrow_type` vocabulary is authored-shape only for nested data: three
+bare markers declare JSON-container intent (fully-typed angle-bracket forms are
+not part of the executable vocabulary — see ``analitiq.contracts.arrow_grammar``):
 
 - ``Object`` — JSON object with a sibling ``properties`` map (recursive).
 - ``List``   — JSON array with a sibling ``items`` field spec (recursive).
@@ -23,13 +24,20 @@ from __future__ import annotations
 
 from typing import Any
 
+from analitiq.contracts.arrow_grammar import validate_cross_params
+
 
 def enforce_container_shape(
     arrow_type: str,
     properties: Any,
     items: Any,
 ) -> None:
-    """Validate sibling-key presence for the authored-shape markers.
+    """Validate the model-layer ``arrow_type`` semantics beyond the regex:
+    sibling-key presence for the authored-shape markers, plus cross-parameter
+    bounds the pattern cannot express (Decimal scale <= precision).
+
+    This is the single chokepoint every model-layer ``arrow_type`` field runs
+    through, so no acceptance site can forget either rule.
 
     Raises ``ValueError`` so Pydantic model validators surface the message as
     a ``ValidationError`` at the owning field path. Non-raising callers — see
@@ -37,6 +45,7 @@ def enforce_container_shape(
     the same matrix in their own error-list dialect because they operate on
     raw dicts rather than Pydantic-coerced instances.
     """
+    validate_cross_params(arrow_type)
     if arrow_type == "Object":
         if properties is None:
             raise ValueError("arrow_type 'Object' requires sibling 'properties'")

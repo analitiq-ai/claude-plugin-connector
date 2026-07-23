@@ -277,9 +277,10 @@ def test_normalize_native_is_the_canonical(validator):
 def test_canonical_eq_normalizes_separators_not_identifiers(validator):
     eq = validator._canonical_eq
     assert eq("Decimal128(38, 9)", "Decimal128(38,9)")          # param spacing insignificant
-    assert eq("Struct<a:Int64, b:Utf8>", "Struct<a:Int64,b:Utf8>")
-    # A space INSIDE a Struct field name is significant — must NOT compare equal (Codex r4).
-    assert not eq("Struct<first name:Utf8>", "Struct<firstname:Utf8>")
+    assert eq("Timestamp(MICROSECOND, UTC)", "Timestamp(MICROSECOND,UTC)")
+    # Whitespace INSIDE a token is significant — must NOT compare equal.
+    assert not eq("Time stamp(SECOND)", "Timestamp(SECOND)")
+    assert not eq("Timestamp(MICRO SECOND)", "Timestamp(MICROSECOND)")
 
 
 def test_walk_collects_tuple_form_items(validator):

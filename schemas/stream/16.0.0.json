@@ -1662,7 +1662,7 @@
       "type": "object"
     }
   },
-  "$id": "https://schemas.analitiq.ai/stream/latest.json",
+  "$id": "https://schemas.analitiq.ai/stream/16.0.0.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Public JSON Schema contract for Analitiq stream documents \u2014 the authored shape used in source control, PR review, and author-time tooling. Server-managed fields (stream_id, version, org_id, created_at, updated_at) are forbidden in the authored shape and assigned by the stream service on ingest. The persisted-record shape is internal and not published. Source of truth: analitiq.contracts.stream.StreamInput (Pydantic).",

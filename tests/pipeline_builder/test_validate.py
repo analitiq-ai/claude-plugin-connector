@@ -379,7 +379,9 @@ def test_bundle_non_dict_sibling(tmp_path):
 
 TYPE_MAP_READ = [
     {"match": "exact", "native": "CITEXT", "canonical": "Utf8"},
-    {"match": "regex", "native": "^VECTOR\\((?<n>[0-9]+)\\)$", "canonical": "List<Float32>"},
+    # `Json` is the only container canonical a read rule can render (issue #81);
+    # the dimension capture is intentionally discarded (no `(` in the render).
+    {"match": "regex", "native": "^VECTOR\\((?<n>[0-9]+)\\)$", "canonical": "Json"},
 ]
 # Deliberately direction-ASYMMETRIC: the regex rule's canonical is a matcher
 # pattern, which is a contract-model error under read grading — so the "valid as
@@ -387,7 +389,7 @@ TYPE_MAP_READ = [
 # write direction (a regression to the read default would fail them). An
 # exact-rule-only fixture validates clean under either direction and pins nothing.
 TYPE_MAP_WRITE = [
-    {"match": "exact", "canonical": "List<Float32>", "native": "VECTOR(3)"},
+    {"match": "exact", "canonical": "Json", "native": "JSONB"},
     {"match": "regex", "canonical": "^Decimal(128|256)\\((?<p>\\d+),\\s*(?<s>\\d+)\\)$",
      "native": "NUMERIC(${p}, ${s})"},
 ]

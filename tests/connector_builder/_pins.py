@@ -36,7 +36,7 @@ PACKAGES_ROOT = REPO_ROOT / "packages"
 #: `packages/contract-models/pyproject.toml`; this is the human-facing copy,
 #: pinned to it by `assert_pinned_version_matches_pyproject()` below so it
 #: cannot rot silently.
-PINNED_VERSION = "1.0.0rc14"
+PINNED_VERSION = "1.0.0rc15"
 
 INSTALL_HINT = (
     "run `pip install -r requirements-dev.txt` from the repo root and run pytest "

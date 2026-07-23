@@ -42,15 +42,31 @@ requirements-dev.txt              # runtime deps of the packages + pytest
 **`schemas/` is generated, not authored.** It is rendered from
 `packages/contract-models` by `scripts/render_schemas.py`; `render_schemas.py check`
 re-renders and fails on any diff, and CI runs it. Never hand-edit a file under
-`schemas/`. Three files are exceptions, hand-authored and outside the registry:
-`canonical-types.json` (guarded by
-`packages/contract-models/tests/unit/test_canonical_types_schema.py`) and
-`data-sync-api/openapi.json`, which have no version triple, and
+`schemas/`. `canonical-types.json` is versionless and outside the registry but
+still generated: `render_schemas.py canonical-types` builds it from the
+vendored engine grammar (see "the type vocabulary" below), and `check` covers
+it. Two files are exceptions, hand-authored and outside the registry:
+`data-sync-api/openapi.json`, which has no version triple, and
 `data-sync-run-response/1.0.0.json`, which is versioned but hand-maintained —
 the publish treats every pinned `X.Y.Z.json` as immutable, so changing it means
 renaming to a new triple, never editing in place. They are served only because
 the publish workflow globs `**/*.json`, and `render_schemas.py check` never
 inspects them.
+
+**The canonical Arrow type vocabulary is engine-owned.** The set of type
+families the platform executes is a capability surface (issue #81): analitiq-core
+publishes it as versioned artifacts (`arrow-type-grammar`, `conversion-matrix`
+at `schemas.analitiq.ai`), and this repo vendors one pinned grammar version at
+`packages/contract-models/src/analitiq/contracts/arrow_type_grammar.json`.
+`ARROW_TYPE_PATTERN`, the canonical-types `$defs`, and the container-head set
+are all derived from it (`analitiq.contracts.arrow_grammar` states the pin —
+version + sha256 — once). Guards: `test_arrow_grammar.py` re-hashes the
+vendored file offline; the `engine-grammar-pin-guard` CI job byte-compares it
+against the published immutable object and cross-checks the conversion-matrix
+family keys. A family is added by shipping it in the engine first, then
+bumping the pin here (re-vendor, `render_schemas.py canonical-types`, re-render
+the affected resources, re-run the plugin doc generator) — never by hand-editing
+the vocabulary.
 
 `.github/workflows/schemas-publish.yml` uploads the tree to the serving bucket
 (defined in the infra repo's Terraform) on pushes to main touching `schemas/`.
@@ -160,8 +176,9 @@ defines — reference or load it.** Carry only craft the schema can't express
 
 Enum lists appearing in this file or in skill prose are **illustrative**; the
 authoritative definition is always the live schema (or, for canonical Arrow
-types, the published `analitiq-contract-models` package and the live
-`canonical-types.json` schema). Craft the schema never defined (the `ssl_mode`
+types, the engine-published grammar manifest vendored and pinned in
+`analitiq.contracts.arrow_grammar` — see "The canonical Arrow type vocabulary
+is engine-owned" above). Craft the schema never defined (the `ssl_mode`
 vocabulary, the driver-selection decision order, datetime naive/tz judgment) is
 not drift-exposed and stays.
 

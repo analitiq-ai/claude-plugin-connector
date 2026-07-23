@@ -134,11 +134,12 @@ validator does **not** check this.
 `constant.arrow_type` is required too, and every `arrow_type` — target or
 constant — must be **fully-qualified**. The vocabulary is owned
 by `analitiq.contracts.endpoints.ARROW_TYPE_PATTERN` — the same pattern the
-endpoint columns use — so bare parameterized forms (`Timestamp`, `Decimal128`,
-`Time64`, `Duration`, `Interval`, `FixedSizeBinary`, …) are rejected. See
+endpoint columns use, generated from the engine-published grammar manifest —
+so bare parameterized forms (`Timestamp`, `Decimal128`, `Time64`, `Duration`,
+`FixedSizeBinary`, …) are rejected. See
 [`endpoint-spec/spec-columns.md`](../endpoint-spec/spec-columns.md) for the
-canonical walkthrough: the three shapes (bare / `( )` / `< >`), unit identifiers
-and timezone forms apply identically here.
+canonical walkthrough: the two shapes (bare / `( )`), the authored-shape
+container markers, unit identifiers and timezone forms apply identically here.
 
 Container shape is not free-form either: `ADV-STRM-006`, `ADV-STRM-007` and
 `ADV-STRM-010` tie `arrow_type` to whether the field declares `properties`,

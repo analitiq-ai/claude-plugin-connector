@@ -54,11 +54,13 @@ def test_exact_canonical_vocabulary():
 
 
 def test_canonical_rejects_bare_parameterized_types():
-    # Must match the endpoint arrow vocabulary: parameterized types carry params,
-    # nested types use <> not () (issue #424).
-    for bad in ("Timestamp", "Decimal128", "Struct", "List(Int64)"):
+    # Must match the endpoint arrow vocabulary: parameterized types carry params
+    # (issue #424), and the typed nested families are not executable vocabulary
+    # at all (issue #81) — only the authored-shape markers are.
+    for bad in ("Timestamp", "Decimal128", "Struct", "List(Int64)", "List<Int64>",
+                "Struct<id:Int64>", "Map<Utf8, Int64>", "Interval(YEAR_MONTH)"):
         _rejects(READ, [{"match": "exact", "native": "X", "canonical": bad}])
-    for ok in ("Timestamp(MICROSECOND)", "Decimal128(38, 9)", "List<Int64>", "Json"):
+    for ok in ("Timestamp(MICROSECOND)", "Decimal128(38, 9)", "Json"):
         _accepts(READ, [{"match": "exact", "native": "X", "canonical": ok}])
 
 
@@ -77,10 +79,21 @@ def test_templated_canonical_needs_literal_head():
 
 def test_templated_canonical_covers_all_temporal_enums():
     # The parameter-aware dummies must accept every temporal enum family, not
-    # just microsecond-based ones (Time32 is SECOND/MILLISECOND; Interval is its own).
-    for base in ("Time32", "Time64", "Timestamp", "Duration", "Interval"):
+    # just microsecond-based ones (Time32 is SECOND/MILLISECOND).
+    for base in ("Time32", "Time64", "Timestamp", "Duration"):
         _accepts(READ, [{"match": "regex", "native": r"X\((?<u>\w+)\)",
                          "canonical": f"{base}(${{u}})"}])
+
+
+def test_literal_decimal_scale_must_not_exceed_precision():
+    # Cross-parameter bound from the engine grammar (`scale <= precision`):
+    # regex cannot express it, so the model enforces it on literals — and only
+    # on literals, since a placeholder has no value to compare.
+    _rejects(READ, [{"match": "exact", "native": "X", "canonical": "Decimal128(5, 6)"}])
+    _rejects(WRITE, [{"match": "exact", "canonical": "Decimal256(10, 11)", "native": "NUMERIC"}])
+    _accepts(READ, [{"match": "exact", "native": "X", "canonical": "Decimal128(5, 5)"}])
+    _accepts(READ, [{"match": "regex", "native": r"DEC\((?<p>\d+)\)",
+                     "canonical": "Decimal128(${p}, 9)"}])
 
 
 def test_write_native_may_carry_column_hints():
@@ -139,8 +152,8 @@ def test_read_captured_native_must_not_discard_params_to_hardcoded_canonical():
                      "canonical": "Decimal128(38, 9)"}])
     # A named capture mapping to a NON-parameterized canonical drops nothing.
     _accepts(READ, [{"match": "regex", "native": r"VARCHAR\((?<n>\d+)\)", "canonical": "Utf8"}])
-    # Structural container canonicals (`<>`, not `()`) are not param-lossy here.
-    _accepts(READ, [{"match": "regex", "native": r"ARR<(?<t>\w+)>", "canonical": "List<Int64>"}])
+    # The container canonical `Json` (no `()`) is not param-lossy here.
+    _accepts(READ, [{"match": "regex", "native": r"ARR<(?<t>\w+)>", "canonical": "Json"}])
     # The reverse check is read-only: a write rule renders free-form native DDL,
     # so a canonical-side capture unused in the native is allowed.
     _accepts(WRITE, [{"match": "regex", "canonical": r"^Decimal128\((?<p>\d+)\)",
@@ -159,19 +172,21 @@ def test_schemaless_container_must_not_collapse_to_scalar():
     # (`<...>` or `[]`) must not map to a scalar canonical. Bare vendor names
     # (`JSONB`) are intentionally not special-cased.
     _rejects(READ, [{"match": "exact", "native": "array<int>", "canonical": "Utf8"}])
-    _accepts(READ, [{"match": "exact", "native": "array<int>", "canonical": "List<Int64>"}])
+    _accepts(READ, [{"match": "exact", "native": "array<int>", "canonical": "Json"}])
     _rejects(READ, [{"match": "exact", "native": "integer[]", "canonical": "Utf8"}])
     _accepts(READ, [{"match": "exact", "native": "JSONB", "canonical": "Utf8"}])  # bare name: not flagged
 
 
-def test_schemaless_native_may_map_to_any_nested_arrow_container():
-    # A structured native mapping to ANY nested Arrow head that ARROW_TYPE_PATTERN
-    # accepts — including the union/dictionary/run-end-encoded families, not just
-    # List/Struct — must be accepted (Codex round 3).
+def test_schemaless_native_must_map_to_json_only():
+    # `Json` is the ONLY container canonical a read rule can render (issue #81):
+    # the typed nested families are outside the executable vocabulary, and the
+    # authored-shape markers need sibling sub-schemas a string rule cannot carry
+    # (`Object`/`List` remain endpoint-narrowing vocabulary, not read-rule renders).
+    _accepts(READ, [{"match": "exact", "native": "union<int, str>", "canonical": "Json"}])
     for canonical in ("DenseUnion<a:Int64>", "SparseUnion<a:Int64>",
                       "Dictionary<Int32, Utf8>", "RunEndEncoded<Int32, Int64>"):
-        _accepts(READ, [{"match": "exact", "native": "union<int, str>", "canonical": canonical}])
-    # ...but a structured native → scalar canonical is still flagged.
+        _rejects(READ, [{"match": "exact", "native": "union<int, str>", "canonical": canonical}])
+    # ...and a structured native → scalar canonical is still flagged.
     _rejects(READ, [{"match": "exact", "native": "union<int, str>", "canonical": "Utf8"}])
 
 

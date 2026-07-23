@@ -1,8 +1,8 @@
 {
   "$defs": {
-    "TypeMapWriteExactRule": {
+    "TypeMapReadExactRule": {
       "additionalProperties": false,
-      "description": "Write exact rule: literal Arrow `canonical` matches, `native` DDL renders.",
+      "description": "Read exact rule: literal `native` matches, literal Arrow `canonical` renders.",
       "properties": {
         "canonical": {
           "minLength": 1,
@@ -26,12 +26,12 @@
         "canonical",
         "match"
       ],
-      "title": "TypeMapWriteExactRule",
+      "title": "TypeMapReadExactRule",
       "type": "object"
     },
-    "TypeMapWriteRegexRule": {
+    "TypeMapReadRegexRule": {
       "additionalProperties": false,
-      "description": "Write regex rule: ECMA-262 `canonical` matches, `native` DDL render template.\n`canonical` is the matcher here, so it is NOT held to the Arrow vocabulary.",
+      "description": "Read regex rule: ECMA-262 `native` matches, Arrow `canonical` render template\n(its `${name}` placeholders draw from the native's named captures).",
       "properties": {
         "canonical": {
           "minLength": 1,
@@ -54,32 +54,32 @@
         "canonical",
         "match"
       ],
-      "title": "TypeMapWriteRegexRule",
+      "title": "TypeMapReadRegexRule",
       "type": "object"
     }
   },
-  "$id": "https://schemas.analitiq.ai/type-map-write/latest.json",
+  "$id": "https://schemas.analitiq.ai/type-map-read/3.0.0.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Public JSON Schema contract for a database connector's `type-map-write.json` \u2014 the write direction (canonical \u2192 native DDL) of its type-map pair, a top-level array of `{match, native, canonical}` rules where `canonical` matches and `native` renders. The full per-rule contract lives in the model and is enforced by the connector validator; this published schema is the structural projection. Source of truth: analitiq.contracts.type_map.TypeMapWriteDoc (Pydantic).",
+  "description": "Public JSON Schema contract for a connector's `type-map-read.json` \u2014 the read direction (native \u2192 canonical) of its type-map pair, a top-level array of `{match, native, canonical}` rules, order significant (first match wins). The full per-rule contract (ECMA-262 regex, `${name}` capture correspondence, canonical vocabulary, schemaless-container handling) lives in the model and is enforced by the connector validator; this published schema is the structural projection. Source of truth: analitiq.contracts.type_map.TypeMapReadDoc (Pydantic).",
   "items": {
     "discriminator": {
       "mapping": {
-        "exact": "#/$defs/TypeMapWriteExactRule",
-        "regex": "#/$defs/TypeMapWriteRegexRule"
+        "exact": "#/$defs/TypeMapReadExactRule",
+        "regex": "#/$defs/TypeMapReadRegexRule"
       },
       "propertyName": "match"
     },
     "oneOf": [
       {
-        "$ref": "#/$defs/TypeMapWriteExactRule"
+        "$ref": "#/$defs/TypeMapReadExactRule"
       },
       {
-        "$ref": "#/$defs/TypeMapWriteRegexRule"
+        "$ref": "#/$defs/TypeMapReadRegexRule"
       }
     ]
   },
   "minItems": 1,
-  "title": "Analitiq Type Map (write)",
+  "title": "Analitiq Type Map (read)",
   "type": "array",
   "version": "3.0.0"
 }

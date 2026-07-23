@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "analitiq-contract-models"
 # Pre-release while the packages are still being shaken out — PyPI versions are
 # immutable/single-use, so iterate with rcN and cut the final 1.0.0 once stable.
-version = "1.0.0rc14"
+version = "1.0.0rc15"
 description = "Analitiq's public contract surface (Pydantic): the authored connector/connection/stream/pipeline/endpoint documents the published JSON Schemas and the validator both derive from, plus the public REST API request/response shapes. Import as `analitiq.contracts`."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -42,3 +42,9 @@ Documentation = "https://schemas.analitiq.ai"
 # `analitiq-validator`, so it has no top-level `__init__.py`.
 [tool.setuptools]
 packages = ["analitiq.contracts", "analitiq.contracts.pipelines", "analitiq.contracts.shared"]
+
+# The vendored engine-published Arrow type grammar manifest
+# (`arrow_grammar.py` loads it at import time to build ARROW_TYPE_PATTERN) —
+# must ship in the wheel or the installed package cannot import.
+[tool.setuptools.package-data]
+"analitiq.contracts" = ["arrow_type_grammar.json"]

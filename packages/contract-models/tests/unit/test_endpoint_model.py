@@ -1248,7 +1248,7 @@ class TestDatabaseCrossField:
         "Timestamp(SECOND, Etc/GMT+5)",
         "Timestamp(MILLISECOND, +05:30)",
         "Decimal128(38, 9)",
-        "Decimal128(1, -2)",
+        "Decimal128(1, 0)",
         "Decimal256(76, 0)",
         "Time32(SECOND)",
         "Time32(MILLISECOND)",
@@ -1256,10 +1256,7 @@ class TestDatabaseCrossField:
         "Time64(NANOSECOND)",
         "FixedSizeBinary(16)",
         "Duration(MICROSECOND)",
-        "Interval(YEAR_MONTH)",
-        "List<Int64>",
-        "Struct<id:Int64,name:Utf8>",
-        "Map<Utf8, Int64>",
+        "Timestamp(MILLISECOND, +23:59)",
     ])
     def test_canonical_arrow_type_accepted(self, canonical):
         parse_endpoint(_minimal_database_payload(
@@ -1276,6 +1273,14 @@ class TestDatabaseCrossField:
         "Timestamp()",           # empty parens
         "Int128",                # unknown base
         "decimal128(38, 9)",     # wrong case
+        "Decimal128(1, -2)",     # negative scale (engine grammar: scale >= 0)
+        "Decimal128(5, 6)",      # scale > precision (cross-parameter bound)
+        # Families outside the executable vocabulary (issue #81) — nested data
+        # is authored-shape (`Object`/`List`/`Json`) only.
+        "Interval(YEAR_MONTH)",
+        "List<Int64>",
+        "Struct<id:Int64,name:Utf8>",
+        "Map<Utf8, Int64>",
     ])
     def test_invalid_arrow_type_forms_rejected(self, bad):
         with pytest.raises(ValidationError):
@@ -2699,13 +2704,13 @@ class TestApiEndpointWalkerAuthoredShapeMarkers:
                 },
             }))
 
-    def test_parameterized_struct_with_items_rejected(self):
-        """Parameterized Arrow nested types (Struct<…>, List<…>) carry their
-        shape inline; JSON Schema `items` is not a valid sibling here."""
+    def test_parameterized_scalar_with_items_rejected(self):
+        """A parameterized scalar arrow_type is not a container; JSON Schema
+        `items` is not a valid sibling on it."""
         with pytest.raises(ValidationError, match="must not carry 'properties' or 'items'"):
             parse_endpoint(_api_payload_with_field_schema("rec", {
-                "arrow_type": "Struct<id:Int64>",
-                "native_type": "struct",
+                "arrow_type": "Decimal128(38, 9)",
+                "native_type": "numeric",
                 "items": {"arrow_type": "Int64", "native_type": "integer"},
             }))
 

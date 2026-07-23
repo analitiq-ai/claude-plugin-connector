@@ -110,6 +110,26 @@ jobs:
         if: ${{ !cancelled() && steps.install.conclusion == 'success' }}
         run: python3 scripts/render_schemas.py check
 
+  engine-grammar-pin-guard:
+    # The canonical Arrow type vocabulary derives from a VENDORED copy of the
+    # engine-published arrow-type-grammar manifest (issue #81). pytest pins
+    # the vendored bytes to the sha256 stated in arrow_grammar.py offline;
+    # this job is the network half: the published immutable object at the
+    # pinned version must be byte-identical to the vendored copy, the
+    # published conversion-matrix must carry exactly the same family set, and
+    # a newer engine publication surfaces as a notice (adopting it is a
+    # deliberate pin bump, never automatic). The script owns the full
+    # semantics; stdlib-only, so no dependency install step.
+    name: vendored engine grammar matches published manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check the vendored grammar against the published objects
+        run: python3 scripts/check_engine_grammar_pin.py
+
   pinned-validator-guard:
     # Everything in the pytest job grades the IN-REPO contract source; the
     # plugins' runtime validator is the PUBLISHED wheel behind VALIDATOR_PIN,

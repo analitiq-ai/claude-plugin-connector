@@ -92,7 +92,7 @@ EXPECTED_PAGINATION_STYLES = {"offset", "page", "cursor", "link", "keyset"}
 EXPECTED_IDEMPOTENCY_TARGETS = {"header", "body"}
 # Bare-marker arrow_type vocabulary enforced by the contract's authored-shape
 # rules (Object→properties, List→items, Json→neither). Owned by the
-# api-endpoint contract's `_ARROW_AUTHORED_SHAPE` (the same alternation the
+# contract's `CONTAINER_CANONICAL_HEADS` (the grammar-derived set the
 # `arrow_type` pattern embeds); the contract model leaves the sibling-key
 # contract open, so the validator enforces it — keep this set in lockstep with
 # the prose.
@@ -242,25 +242,23 @@ def _const_types(schema: dict, def_suffix: str, const_field: str = "type") -> se
 
 
 def _bare_marker_arrow_types() -> set[str] | None:
-    """The authored-shape container markers, read from the pinned model.
+    """The authored-shape container markers, read from the pinned contract.
 
-    `analitiq.contracts.endpoints._ARROW_AUTHORED_SHAPE` is the single
-    definition of the marker alternation (`"Object|List|Json"`) — the same
-    constant the api-endpoint `arrow_type` pattern is built from and the
-    authored-shape rules key off. There is no public generated-schema
-    pointer for this vocabulary (`arrow_type` doesn't surface in the endpoint
-    model schema), so this one check reaches a private symbol. Returns None if
-    the symbol is gone (renamed) or is no longer a plain `A|B|C` alternation of
-    word tokens (reshaped — e.g. compiled, or wrapped as `^(…)$`) — either way
-    the caller surfaces a restructure failure rather than splitting garbage
-    tokens off a regex.
+    `analitiq.contracts.arrow_grammar.CONTAINER_CANONICAL_HEADS` is the single
+    definition of the container-canonical set (`{"Object", "List", "Json"}`),
+    derived from the vendored engine grammar manifest — the same constant the
+    type-map container guard keys off. Returns None if the symbol is gone
+    (renamed) or reshaped away from a set of word tokens, so the caller
+    surfaces a restructure failure rather than comparing garbage.
     """
-    from analitiq.contracts import endpoints
+    from analitiq.contracts import arrow_grammar
 
-    raw = getattr(endpoints, "_ARROW_AUTHORED_SHAPE", None)
-    if not isinstance(raw, str) or not re.fullmatch(r"\w+(?:\|\w+)+", raw):
+    raw = getattr(arrow_grammar, "CONTAINER_CANONICAL_HEADS", None)
+    if not isinstance(raw, frozenset) or not all(
+        isinstance(m, str) and re.fullmatch(r"\w+", m) for m in raw
+    ):
         return None
-    return set(raw.split("|"))
+    return set(raw)
 
 
 # A slug-flavored charset literal: a character class opening with `a-z0-9`,

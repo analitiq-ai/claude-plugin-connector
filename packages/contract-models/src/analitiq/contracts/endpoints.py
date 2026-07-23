@@ -34,6 +34,10 @@ from pydantic import (
     model_validator,
 )
 
+from analitiq.contracts.arrow_grammar import (
+    ARROW_TYPE_PATTERN,
+    validate_cross_params,
+)
 from analitiq.contracts.shared.advisory import AdvisoryValidated
 from analitiq.contracts.shared.arrow_shape import (
     ARROW_CONTAINER_SCHEMA_RULES,
@@ -72,70 +76,26 @@ RECORD_FIELD_PATH_PATTERN = (
 )
 METADATA_KEY_PATTERN = r"^[a-z][a-z0-9_]*$"
 
-# Canonical Apache Arrow type vocabulary. The Pydantic models are the single
-# source of truth for the canonical vocabulary (the connector validator enforces
-# it via the models; the published schemas are generated from them). Issue #424:
-# parameterized canonical types (`Timestamp`,
-# `Decimal128/256`, `Time32/64`, `FixedSizeBinary`, `Duration`, `Interval`,
-# and the angle-bracketed nested types `List<>`, `LargeList<>`,
-# `FixedSizeList<>[n]`, `Struct<>`, `Map<,>`, `SparseUnion<>`, `DenseUnion<>`,
-# `Dictionary<,>`, `RunEndEncoded<,>`) must carry their parameters — bare
-# base names like `Timestamp`, `Decimal128`, `Struct`, or `List` are
-# unbuildable by PyArrow and must fail at author time, not at sync time.
-_ARROW_SCALARS = (
-    r"Null|Boolean|Int8|Int16|Int32|Int64|UInt8|UInt16|UInt32|UInt64"
-    r"|Float16|Float32|Float64|Utf8|LargeUtf8|Binary|LargeBinary"
-    r"|Date32|Date64"
-)
-_ARROW_FIXED_SIZE_BINARY = r"FixedSizeBinary\([1-9][0-9]*\)"
-_ARROW_TIME32 = r"Time32\((?:SECOND|MILLISECOND)\)"
-_ARROW_TIME64 = r"Time64\((?:MICROSECOND|NANOSECOND)\)"
-# Timestamp tz is optional. When present it is one of: `null`, an IANA-like
-# token, an `Etc/GMT±N` form, or a fixed `±HH:MM` offset.
-_ARROW_TIMESTAMP = (
-    r"Timestamp\((?:SECOND|MILLISECOND|MICROSECOND|NANOSECOND)"
-    r"(?:\s*,\s*(?:null|[A-Za-z_][A-Za-z0-9_/\-]*"
-    r"|Etc/GMT[+\-][0-9]{1,2}|[+\-](?:0[0-9]|1[0-4]):[0-5][0-9]))?\)"
-)
-_ARROW_DURATION = r"Duration\((?:SECOND|MILLISECOND|MICROSECOND|NANOSECOND)\)"
-_ARROW_INTERVAL = r"Interval\((?:YEAR_MONTH|DAY_TIME|MONTH_DAY_NANO)\)"
-_ARROW_DECIMAL128 = r"Decimal128\((?:[1-9]|[12][0-9]|3[0-8])\s*,\s*-?[0-9]+\)"
-_ARROW_DECIMAL256 = r"Decimal256\((?:[1-9]|[1-6][0-9]|7[0-6])\s*,\s*-?[0-9]+\)"
-# Nested types — outer shape only; inner canonical-type validation is the
-# validator API's responsibility (matches canonical-types.json scope note).
-_ARROW_NESTED = (
-    r"List<.+>|LargeList<.+>|FixedSizeList<.+>\[[1-9][0-9]*\]"
-    r"|Struct<.+>|Map<.+,\s*.+>"
-    r"|SparseUnion<.+>|DenseUnion<.+>"
-    r"|Dictionary<.+,\s*.+>|RunEndEncoded<.+,\s*.+>"
-)
-# Bare authored-shape JSON container markers. Spelled without angle brackets
-# so the outer `^…$` anchors on ARROW_TYPE_PATTERN keep them distinct from
-# the parameterized forms in `_ARROW_NESTED` — bare `List` does not collide
-# with `List<Int64>` because the nested alternatives require `<` after the
-# base name.
+# Canonical Apache Arrow type vocabulary. `ARROW_TYPE_PATTERN` is GENERATED
+# from the engine-published, vendored grammar manifest — see
+# `analitiq.contracts.arrow_grammar` (issue #81: the executable family set is a
+# capability surface the engine owns; the contract consumes it, never restates
+# it). It is imported above and re-exported here because this module is the
+# historical import point for the pattern (stream.py, type_map.py, the schema
+# renderer, and external consumers all import it from here).
+#
+# The pattern accepts exactly the engine-executable canonical spellings:
+# scalars, parameterized scalars carrying their parameters (issue #424: bare
+# `Timestamp` / `Decimal128` are unbuildable by PyArrow and must fail at author
+# time, not at sync time), and the bare authored-shape JSON container markers:
 #   Object — JSON object with declared shape; requires sibling `properties`.
 #   List   — JSON array with declared element shape; requires sibling `items`.
 #   Json   — opaque JSON object or array; no inner declaration permitted.
-# Recursion + sibling rules are enforced at the model layer
-# (analitiq.contracts.stream.ArrowFieldSpec, analitiq.contracts.endpoints.Column) and at the
-# JSON Schema walker for API endpoint response/input schemas.
-_ARROW_AUTHORED_SHAPE = r"Object|List|Json"
-ARROW_TYPE_PATTERN = (
-    r"^(?:"
-    + _ARROW_SCALARS
-    + r"|" + _ARROW_FIXED_SIZE_BINARY
-    + r"|" + _ARROW_TIME32
-    + r"|" + _ARROW_TIME64
-    + r"|" + _ARROW_TIMESTAMP
-    + r"|" + _ARROW_DURATION
-    + r"|" + _ARROW_INTERVAL
-    + r"|" + _ARROW_DECIMAL128
-    + r"|" + _ARROW_DECIMAL256
-    + r"|" + _ARROW_NESTED
-    + r"|" + _ARROW_AUTHORED_SHAPE
-    + r")$"
-)
+# Container recursion + sibling rules are enforced at the model layer
+# (analitiq.contracts.stream.ArrowFieldSpec, analitiq.contracts.endpoints.Column)
+# and at the JSON Schema walker for API endpoint response/input schemas.
+# Cross-parameter bounds the regex cannot express (Decimal scale <= precision)
+# are enforced by `validate_cross_params` at every arrow_type acceptance site.
 
 SLUG_RE = re.compile(SLUG_PATTERN)
 PATH_PLACEHOLDER_NAME_RE = re.compile(PATH_PLACEHOLDER_NAME_PATTERN)
@@ -1071,9 +1031,18 @@ def _validate_arrow_type_in_json_schema(
                 f"{path}.arrow_type={arrow_value!r} is not a canonical Arrow "
                 "type. Parameterized canonical types must carry their "
                 "parameters: e.g. 'Timestamp(MICROSECOND)', "
-                "'Decimal128(38, 9)', 'FixedSizeBinary(16)', "
-                "'Struct<id:Int64>' (spec: §Native and Arrow Types)"
+                "'Decimal128(38, 9)', 'FixedSizeBinary(16)' "
+                "(spec: §Native and Arrow Types)"
             )
+        else:
+            # Cross-parameter bounds the pattern cannot express
+            # (Decimal scale <= precision).
+            try:
+                validate_cross_params(arrow_value)
+            except ValueError as exc:
+                errors.append(
+                    f"{path}.arrow_type: {exc} (spec: §Native and Arrow Types)"
+                )
     if has_native ^ has_arrow:
         missing = "arrow_type" if has_native else "native_type"
         errors.append(
@@ -1151,9 +1120,9 @@ def _validate_arrow_type_in_json_schema(
                     "'properties' or 'items' (spec: §Native and Arrow Types)"
                 )
         else:
-            # Scalar or parameterized arrow_type (Utf8, Int64, Struct<…>,
-            # List<…>, etc.): JSON-container siblings are not legal. The
-            # Pydantic helper rejects this on the model side; the walker
+            # Scalar or parameterized arrow_type (Utf8, Int64,
+            # Decimal128(38, 9), etc.): JSON-container siblings are not legal.
+            # The Pydantic helper rejects this on the model side; the walker
             # must mirror it on the JSON Schema side per spec §Native and
             # Arrow Types ("must not appear on scalar or parameterized
             # arrow_type values").
@@ -1928,11 +1897,11 @@ class Column(_EndpointModel):
         description=(
             "Apache Arrow canonical transport type string. PascalCase base name "
             "plus parameters when the canonical type requires them — bare "
-            "parameterized forms such as 'Timestamp', 'Decimal128', or 'Struct' "
+            "parameterized forms such as 'Timestamp' or 'Decimal128' "
             "are rejected. Examples: 'Utf8', 'Int64', 'Timestamp(MICROSECOND)' "
             "(zone-naive), 'Timestamp(MICROSECOND, UTC)' (zoned source; prefer "
             "UTC unless source-specific), 'Decimal128(38, 9)', "
-            "'FixedSizeBinary(16)', 'Struct<id:Int64, name:Utf8>'. Bare markers "
+            "'FixedSizeBinary(16)'. Bare markers "
             "'Object' / 'List' / 'Json' declare JSON containers; see spec "
             "§Native and Arrow Types."
         ),
