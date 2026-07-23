@@ -1190,7 +1190,8 @@ _CANONICAL_GROUPS: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
         "the patterns cap a literal scale at the family's precision ceiling, "
         "and the scale-vs-precision relation itself is a cross-parameter rule "
         "enforced by the validator API and the contract models. Use "
-        "`Decimal128` unless the source precision exceeds 38.",
+        "`Decimal128` unless the source precision exceeds "
+        f"{_precision_bounds('Decimal128').split('-')[1]}.",
         ("Decimal128", "Decimal256"),
     ),
     (
