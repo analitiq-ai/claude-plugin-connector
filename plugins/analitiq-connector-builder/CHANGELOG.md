@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-connector-builder-v0.1.7...analitiq-connector-builder-v0.1.8) (2026-07-23)
+
+
+### Bug Fixes
+
+* **analitiq-connector-builder:** document bare Object/List as write-map canonicals the engine actually emits ([#82](https://github.com/analitiq-ai/claude-code-plugins/issues/82)) ([d576fef](https://github.com/analitiq-ai/claude-code-plugins/commit/d576fefbd5b21e18cdd4a3bff88ded05b872ef89))
+* trim the canonical-type vocabulary to the engine-executable set, generated from the published grammar manifest ([#86](https://github.com/analitiq-ai/claude-code-plugins/issues/86)) ([b94cafa](https://github.com/analitiq-ai/claude-code-plugins/commit/b94cafad3ccc2fa924d29752eb919b6ffad2a685))
+
 ## [0.1.7](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-connector-builder-v0.1.6...analitiq-connector-builder-v0.1.7) (2026-07-23)
 
 
