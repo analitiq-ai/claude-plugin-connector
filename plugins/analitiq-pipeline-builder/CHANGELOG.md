@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-pipeline-builder-v0.1.1...analitiq-pipeline-builder-v0.1.2) (2026-07-23)
+
+
+### Bug Fixes
+
+* bump the runtime validator pin to 1.0.0rc14 and guard it in CI ([e22bff4](https://github.com/analitiq-ai/claude-code-plugins/commit/e22bff44c9a224f87425fe0ea75deeef1d4a48b8))
+
 ## [0.1.1](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-pipeline-builder-v0.1.0...analitiq-pipeline-builder-v0.1.1) (2026-07-22)
 
 
