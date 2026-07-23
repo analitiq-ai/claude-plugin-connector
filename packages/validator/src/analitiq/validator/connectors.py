@@ -317,12 +317,15 @@ def _embedded_schema_findings(ep_doc: dict, label: str = "") -> list[dict]:
 
 # Representative canonical families a write map should render; gaps are warnings
 # (a dialect may override rendering for a family). Mirrors the published
-# authoring rule set.
+# authoring rule set. `Object`/`List` are the bare shape markers destination
+# columns carry verbatim when an API source hands over a struct/array field —
+# the engine probes the write map with the document's `arrow_type` literally,
+# so a map without rules for them hard-errors the stream at configuration.
 _WRITE_VOCABULARY_PROBES: tuple[str, ...] = (
     "Boolean", "Int8", "Int16", "Int32", "Int64",
     "UInt8", "UInt16", "UInt32", "UInt64",
     "Float16", "Float32", "Float64", "Decimal128(38, 9)",
-    "Utf8", "LargeUtf8", "Json", "Binary", "LargeBinary",
+    "Utf8", "LargeUtf8", "Json", "Object", "List", "Binary", "LargeBinary",
     "Date32", "Date64", "Time64(MICROSECOND)", "Timestamp(MICROSECOND)",
 )
 

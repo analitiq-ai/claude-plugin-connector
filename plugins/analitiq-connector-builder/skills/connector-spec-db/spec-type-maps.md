@@ -126,12 +126,20 @@ it to a unit instead. See "Database coverage → Read map".)
 
 A schemaless or structured-container native — `JSON`, `JSONB`, `VARIANT`,
 `OBJECT`, `ARRAY`, `MAP`, `STRUCT`, a parameterized container like
-`array<object>`, or a SQL array suffix like `integer[]` — **must** map to a
-**container canonical** (`Json`, or a typed `List` / `Struct` / `Map`),
-**never a scalar** like `Utf8`. The canonical is a *claim about the shape* of
-the data: `Utf8` asserts an opaque string and throws the structure away, so it
-is wrong for a JSON / array / struct column even when the driver happens to
-hand the value over as text on the wire.
+`array<object>`, or a SQL array suffix like `integer[]` — **must** map to
+**`Json`**, **never a scalar** like `Utf8`. The canonical is a *claim about
+the shape* of the data: `Utf8` asserts an opaque string and throws the
+structure away, so it is wrong for a JSON / array / struct column even when
+the driver happens to hand the value over as text on the wire.
+
+`Json` is the **only** container canonical a read map can render. The shape
+markers `Object` / `List` need a sibling `properties` / `items` sub-schema
+that a string→string rule cannot carry, and the typed angle-bracket forms
+(`List<…>`, `Struct<…>`, `Map<…>`) are contract grammar without a runtime —
+the engine executes none of them, so a read map that renders one freezes a
+canonical into the discovered endpoint that fails the stream at schema
+construction (see issue #81). The contract patterns validate outer shape
+only, so such a rule validates **clean** and dies at runtime.
 
 > **Only the syntactic half is enforced** (ADV-TMAP-001/002). The contract
 > flags a native whose *shape* is visibly a container — angle brackets
@@ -145,7 +153,7 @@ hand the value over as text on the wire.
 | `JSON`, `JSONB` (Postgres, MySQL/MariaDB) | `Json` |
 | `VARIANT`, `OBJECT`, `ARRAY`, `MAP` (Snowflake) | `Json` |
 | `array`, `object` (document stores) | `Json` |
-| `integer[]` and other `…[]` array suffixes | `Json` (or a typed `List<…>`) |
+| `integer[]` and other `…[]` array suffixes | `Json` |
 
 `XML` is structured text, not a JSON/array/struct container, so it maps to
 `Utf8` — the rule covers JSON / array / struct / map containers only.
@@ -154,11 +162,38 @@ On the write side the `Json` canonical renders the system's JSON column
 type (`Json` → `JSONB` for postgres, `JSON` for MySQL, `VARIANT` for
 Snowflake), so the type round-trips.
 
-The endpoint-only shape markers `Object` and `List` (which require
-sibling `properties` / `items` to declare the inner shape) **never**
-appear as a type-map `canonical`. The endpoint walker accepts a field
-typed `Object` or `List` as a valid narrowing of a `Json` read-map
-rule; the validator does not treat that as a mismatch.
+The shape markers `Object` and `List` split by direction:
+
+- **Read maps never render them** (see above — no rule can carry the
+  sibling sub-schema they require). The endpoint walker accepts a field
+  typed `Object` or `List` as a valid narrowing of a `Json` read-map
+  rule; the validator does not treat that as a mismatch.
+- **Write maps must cover them.** The engine renders every destination
+  column's frozen `arrow_type` through the write map **verbatim**
+  (`shared/type-maps.md`), and endpoint documents legitimately carry the
+  bare markers — an API source's struct field arrives at a database
+  destination as the literal canonical `Object`, an array field as
+  `List`. A write map without rules for them hard-errors the stream at
+  configuration time. Render both exactly like `Json`:
+
+  ```json
+  { "match": "exact", "canonical": "Object", "native": "JSONB" },
+  { "match": "exact", "canonical": "List",   "native": "JSONB" }
+  ```
+
+  Author these as `exact` rules over the bare markers — do **not** widen
+  them to regexes over the typed forms (`^(?:Struct<.+>|Object)$`,
+  `^(?:Large)?List(?:<.+>)?$`). The angle-bracket families can never
+  sync (issue #81), so covering them only converts an early, visible
+  unmapped-type error into a table created for a stream that then dies
+  at schema construction.
+
+**No `Map` canonical exists at runtime.** The engine's type-family set
+has no `Map`, so a `Map<…>` write rule is dead — it can never match a
+canonical that syncs — and a column declared `Map<…>` fails
+unconditionally at stream configuration regardless of map content. Never
+author `Map` rules; the contract tolerating the spelling is the
+vocabulary gap tracked in issue #81.
 
 ## Non-obvious natives (derive, don't guess)
 
@@ -253,8 +288,10 @@ database-package concept (DDL rendering).
 
 **Write map:** cover the **full canonical vocabulary** — every Arrow type a
 source could hand this system needs a rendering, including the parameterized
-families (Decimal via a regex with `${p}`/`${s}` captures) and both the bare
-and tz-aware `Timestamp` forms.
+families (Decimal via a regex with `${p}`/`${s}` captures), both the bare
+and tz-aware `Timestamp` forms, and the bare container markers `Object` /
+`List` (see "Schemaless / JSON-shaped natives" — API sources hand them over
+as literal canonicals).
 
 Run the validator and reconcile every family its `type-map-write-coverage`
 warning names. A gap is legitimate **only** when the connector's dialect takes
@@ -273,8 +310,10 @@ passes. Verify by hand at least:
 - `Decimal256` (only `Decimal128` is probed, so a map whose Decimal rule is
   narrowed to `Decimal128` shows nothing)
 
-Treat that as the floor rather than the whole set: containers (`List<…>`,
-`Struct<…>`, `Map<…>`) and rarer scalars are unprobed too.
+Treat that as the floor rather than the whole set: rarer scalars are
+unprobed too. The `Object` / `List` markers are probed, but only by
+validator releases newer than some deployed pins — verify their rules by
+hand as well rather than trusting a clean warning.
 
 Mind precision survival on the write side: MySQL's write map renders
 `DATETIME(6)` / `TIME(6)` so microseconds survive the round trip — a
@@ -289,6 +328,12 @@ parens for parameterized scalars (`Decimal128(p, s)`,
 `Decimal256(p, s)`, `Timestamp(MICROSECOND, UTC)`, `Time64(MICROSECOND)`,
 `FixedSizeBinary(16)`), and angle brackets for nested types
 (`List<Int64>`, `Struct<id:Int64, name:Utf8>`, `Map<Utf8, Int64>`).
+
+The angle-bracket nested families are published grammar with **no
+runtime behind them** — the engine executes nested data only through the
+authored-shape path (`Object` / `List` with a sub-schema, opaque
+`Json`). Do not author them as map canonicals or endpoint `arrow_type`s;
+issue #81 tracks trimming the vocabulary to the executable set.
 
 The full vocabulary is `schemas/canonical-types.json`, published at
 [`https://schemas.analitiq.ai/canonical-types.json`](https://schemas.analitiq.ai/canonical-types.json)
@@ -350,6 +395,8 @@ the regex over the canonical string with lowercase capture names), and
   { "match": "regex", "canonical": "^Decimal(128|256)\\((?<p>\\d+),\\s*(?<s>\\d+)\\)$", "native": "NUMERIC(${p}, ${s})" },
   { "match": "exact", "canonical": "Utf8",      "native": "TEXT" },
   { "match": "exact", "canonical": "Json",      "native": "JSONB" },
+  { "match": "exact", "canonical": "Object",    "native": "JSONB" },
+  { "match": "exact", "canonical": "List",      "native": "JSONB" },
   { "match": "regex", "canonical": "^FixedSizeBinary\\(\\d+\\)$",          "native": "BYTEA" },
   { "match": "regex", "canonical": "^Time(32|64)\\([A-Z]+\\)$",            "native": "TIME" },
   { "match": "regex", "canonical": "^Timestamp\\([A-Z]+\\)$",              "native": "TIMESTAMP" },

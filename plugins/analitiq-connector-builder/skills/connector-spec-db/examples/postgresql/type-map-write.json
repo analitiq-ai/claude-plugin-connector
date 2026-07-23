@@ -81,6 +81,16 @@
   },
   {
     "match": "exact",
+    "canonical": "Object",
+    "native": "JSONB"
+  },
+  {
+    "match": "exact",
+    "canonical": "List",
+    "native": "JSONB"
+  },
+  {
+    "match": "exact",
     "canonical": "Binary",
     "native": "BYTEA"
   },

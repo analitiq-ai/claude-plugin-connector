@@ -4,5 +4,7 @@
   { "match": "exact", "canonical": "Int64",                    "native": "BIGINT" },
   { "match": "exact", "canonical": "Utf8",                     "native": "TEXT" },
   { "match": "regex", "canonical": "^Timestamp\\(MICROSECOND\\)$", "native": "TIMESTAMP" },
-  { "match": "exact", "canonical": "Json",                     "native": "JSONB" }
+  { "match": "exact", "canonical": "Json",                     "native": "JSONB" },
+  { "match": "exact", "canonical": "Object",                   "native": "JSONB" },
+  { "match": "exact", "canonical": "List",                     "native": "JSONB" }
 ]
