@@ -146,20 +146,54 @@ def test_unsupported_manifest_shapes_fail_loudly():
         arrow_grammar._param_literal_pattern({"kind": "mystery", "name": "x"}, [])
 
 
-def test_non_trailing_optional_param_fails_loudly(monkeypatch):
-    """A leading/middle optional param would silently generate a wrong grammar
-    (the comma rides inside each piece); the generator must refuse instead."""
-    fake = {
-        "Bad": {
-            "params": [
-                {"kind": "int", "min": 1, "max": None, "name": "a", "optional": True},
-                {"kind": "int", "min": 1, "max": None, "name": "b"},
-            ]
-        }
-    }
-    monkeypatch.setattr(arrow_grammar, "FAMILIES", {**arrow_grammar.FAMILIES, **fake})
+@pytest.mark.parametrize("params", [
+    # leading optional before a required param
+    [
+        {"kind": "int", "min": 1, "max": None, "name": "a", "optional": True},
+        {"kind": "int", "min": 1, "max": None, "name": "b"},
+    ],
+    # ALL-optional multi-param list: `\((?:A)?(?:\s*,\s*B)?\)` would accept
+    # the malformed `(,B)` — must refuse too (round-2 review finding)
+    [
+        {"kind": "int", "min": 1, "max": None, "name": "a", "optional": True},
+        {"kind": "int", "min": 1, "max": None, "name": "b", "optional": True},
+    ],
+])
+def test_non_trailing_optional_param_fails_loudly(monkeypatch, params):
+    """A leading/middle optional param — or an all-optional multi-param list —
+    would silently generate a wrong grammar (the comma rides inside each
+    non-first piece); the generator must refuse instead."""
+    monkeypatch.setattr(
+        arrow_grammar, "FAMILIES", {**arrow_grammar.FAMILIES, "Bad": {"params": params}}
+    )
     with pytest.raises(ValueError, match="non-trailing optional"):
         arrow_grammar.family_pattern("Bad")
+
+
+def test_sole_optional_param_is_supported(monkeypatch):
+    monkeypatch.setattr(
+        arrow_grammar,
+        "FAMILIES",
+        {
+            **arrow_grammar.FAMILIES,
+            "Solo": {"params": [
+                {"kind": "int", "min": 1, "max": None, "name": "a", "optional": True},
+            ]},
+        },
+    )
+    pattern = re.compile("^" + arrow_grammar.family_pattern("Solo") + "$")
+    assert pattern.fullmatch("Solo()") and pattern.fullmatch("Solo(3)")
+    assert not pattern.fullmatch("Solo(,3)")
+
+
+def test_dangling_cross_ref_bound_fails_loudly():
+    """A typo'd `"max": "presicion"` would otherwise disable the bound at BOTH
+    layers — unbounded pattern here, silent skip in validate_cross_params."""
+    with pytest.raises(ValueError, match="unknown sibling param"):
+        arrow_grammar._param_literal_pattern(
+            {"kind": "int", "min": 0, "max": "presicion", "name": "scale"},
+            [{"kind": "int", "min": 1, "max": 38, "name": "precision"}],
+        )
 
 
 def test_wheel_packaging_declares_the_vendored_manifest():

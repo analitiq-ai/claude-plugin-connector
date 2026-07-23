@@ -172,7 +172,15 @@ def _param_literal_pattern(param: dict[str, Any], params: list[dict[str, Any]]) 
         hi = param["max"]
         if isinstance(hi, str):
             ref = next((p for p in params if p["name"] == hi), None)
-            hi = ref["max"] if ref and isinstance(ref.get("max"), int) else None
+            if ref is None:
+                # A dangling ref would otherwise silently disable the bound at
+                # BOTH layers: unbounded pattern here, and a silent skip in
+                # `validate_cross_params` (named.get(ref) is None).
+                raise ValueError(
+                    f"param {param['name']!r} bound references unknown "
+                    f"sibling param {hi!r}"
+                )
+            hi = ref["max"] if isinstance(ref.get("max"), int) else None
         return _int_range_pattern(lo, hi)
     if kind == "unit":
         return "(?:" + "|".join(param["allowed"]) + ")"
@@ -198,15 +206,20 @@ def family_pattern(name: str, *, templated: bool = False) -> str:
         return name
     # The per-piece optional wrapper below is only correct for TRAILING
     # optional params (the comma rides inside each non-first piece). A leading
-    # or middle optional would silently generate a wrong grammar — fail loudly
-    # instead, like every other unsupported manifest shape.
+    # or middle optional would silently generate a wrong grammar — an
+    # all-optional multi-param list included: `\((?:A)?(?:\s*,\s*B)?\)` accepts
+    # the malformed `(,B)`. Fail loudly instead, like every other unsupported
+    # manifest shape. A SOLE optional param is fine (no comma exists).
     first_optional = next(
         (i for i, p in enumerate(params) if p.get("optional")), len(params)
     )
-    if any(not p.get("optional") for p in params[first_optional:]):
+    if any(not p.get("optional") for p in params[first_optional:]) or (
+        first_optional == 0 and len(params) > 1
+    ):
         raise ValueError(
             f"family {name!r} has a non-trailing optional param; the pattern "
-            "generator only supports trailing optionals"
+            "generator only supports trailing optionals after a required first "
+            "param"
         )
     pieces: list[str] = []
     for i, param in enumerate(params):
