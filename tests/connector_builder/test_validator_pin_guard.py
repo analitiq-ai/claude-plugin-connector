@@ -91,6 +91,16 @@ def test_extraction_is_all_or_error(guard, tmp_path, monkeypatch):
 # --- main()'s verdict branches, probe monkeypatched out -------------------
 
 
+@pytest.fixture(autouse=True)
+def _isolate_actions_env(monkeypatch):
+    # In CI these are always set, and `_surface_warning` writes DIRECTLY to
+    # the GITHUB_STEP_SUMMARY file — pytest captures stdout, not file writes,
+    # so without this a warn-branch test would publish its fabricated
+    # rejection into the real job summary.
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+
+
 def test_verdict_accepted_is_ok(guard, monkeypatch):
     monkeypatch.setenv("VALIDATOR_PIN_GUARD_STRICT", "")
     monkeypatch.setattr(guard, "probe_pinned_wheel", lambda pin, drivers: [])
@@ -107,7 +117,9 @@ def test_verdict_rejection_fails_in_steady_state(guard, monkeypatch):
     assert guard.main() == 1
 
 
-def test_verdict_rejection_warns_inside_a_release_window(guard, monkeypatch):
+def test_verdict_rejection_warns_inside_a_release_window(
+    guard, monkeypatch, tmp_path
+):
     # pin != shipped and the workflow set '' (ordinary PR): warn, exit 0. The
     # '' env case is load-bearing — the workflow's ternary emits '' on
     # non-strict refs, and only the literal '1' may mean strict.
@@ -116,7 +128,14 @@ def test_verdict_rejection_warns_inside_a_release_window(guard, monkeypatch):
         guard, "read_shipped_version", lambda: guard.read_pin_version() + ".post1"
     )
     monkeypatch.setattr(guard, "probe_pinned_wheel", lambda pin, drivers: ["x+y"])
+    # Exercise the Actions surfacing against a redirected summary file, so the
+    # warn path's visibility mechanism is covered without touching the real
+    # job summary (see _isolate_actions_env).
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
     assert guard.main() == 0
+    assert "x+y" in summary.read_text(encoding="utf-8")
 
 
 def test_verdict_env_override_is_strict_even_in_a_window(guard, monkeypatch):
