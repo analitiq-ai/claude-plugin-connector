@@ -83,7 +83,10 @@ environment:
 {
   "connector_id": "postgresql",
   "parameters": { "host": "db.example.com", "port": 5432, "database": "analytics", "ssl_mode": "verify-full" },
-  "secret_refs": { "password": "env:ANALITIQ_POSTGRESQL_PASSWORD" }
+  "secret_refs": {
+    "password": "env:ANALITIQ_POSTGRESQL_PASSWORD",
+    "ssl_ca_certificate": "env:ANALITIQ_POSTGRESQL_SSL_CA_CERTIFICATE"
+  }
 }
 ```
 
@@ -95,7 +98,10 @@ the user names their own variable. Emit the sibling template the user fills in:
 
 ```jsonc
 // .secrets/credentials.json
-{ "ANALITIQ_POSTGRESQL_PASSWORD": "<paste-password-here>" }
+{
+  "ANALITIQ_POSTGRESQL_PASSWORD": "<paste-password-here>",
+  "ANALITIQ_POSTGRESQL_SSL_CA_CERTIFICATE": "<paste-ca-pem-here>"
+}
 ```
 
 The user (or CI) exports these into the environment where the pipeline runs (or
