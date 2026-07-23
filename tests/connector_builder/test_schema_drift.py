@@ -349,7 +349,8 @@ def test_sqlalchemy_driver_pattern_matches_schema(connector_schema: dict) -> Non
     fix = (
         "update the driver guidance (spec-driver-selection.md, "
         "spec-dsn-bindings.md, enum-mappers.md, db-connector-creator.md, "
-        "connector-spec-db/SKILL.md, io-contracts.md) and "
+        "connector-spec-db/SKILL.md, io-contracts.md), the canon extraction in "
+        "scripts/check_validator_pin_contract.py, and "
         "EXPECTED_SQLALCHEMY_DRIVER_PATTERN together."
     )
     if pattern is None:

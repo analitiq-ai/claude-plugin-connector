@@ -19,7 +19,7 @@ from pathlib import Path
 # (installing the wheel would shadow the in-repo source); the invariant is
 # instead `pin == packages/validator/pyproject.toml version`, enforced by
 # tests/pipeline_builder/test_contract_enforcement.py.
-VALIDATOR_PIN = "analitiq-validator==1.0.0rc13"
+VALIDATOR_PIN = "analitiq-validator==1.0.0rc14"
 
 _REEXEC_SENTINEL = "ANALITIQ_PIPELINE_VALIDATOR_BOOTSTRAPPED"
 

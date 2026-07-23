@@ -109,3 +109,34 @@ jobs:
         # Same reasoning as the step above, hence the same condition.
         if: ${{ !cancelled() && steps.install.conclusion == 'success' }}
         run: python3 scripts/render_schemas.py check
+
+  pinned-validator-guard:
+    # Everything in the pytest job grades the IN-REPO contract source; the
+    # plugins' runtime validator is the PUBLISHED wheel behind VALIDATOR_PIN,
+    # released on a different train. This is the only gate that exercises that
+    # wheel: install it into an isolated venv (never the job env — a wheel
+    # shadows the namespace source) and check it accepts the canonical
+    # dialect+driver values the connector-builder prose teaches (issue #71's
+    # failure mode). Strict on push — the marketplace's plugin sources are
+    # unpinned relative paths, so users install main HEAD and a contradiction
+    # on main is live exposure; a release window (pin != shipped) therefore
+    # shows as a red main until the pin catch-up lands, by design — and on
+    # release-please branches, where merging stamps a plugin version onto the
+    # contradiction. Ordinary PRs inside a window only warn (annotated on the
+    # checks UI), so a contract-widening PR is not red with no way to unblock
+    # itself. The script owns the full semantics; stdlib-only, so no
+    # dependency install step. Live-settings caveat: nothing REQUIRES this
+    # check before merge unless a ruleset on main says so, and runs on
+    # bot-opened Release PRs start action_required until a human approves
+    # them — same settings-page class as the pypi/schemas environments.
+    name: pinned validator accepts canonical drivers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check the published pin against the prose canon
+        env:
+          VALIDATOR_PIN_GUARD_STRICT: ${{ (github.event_name == 'push' || startsWith(github.head_ref, 'release-please--')) && '1' || '' }}
+        run: python3 scripts/check_validator_pin_contract.py
