@@ -983,12 +983,16 @@ class SqlAlchemyTransport(StrictModel):
     transport_type: Literal["sqlalchemy"] = Field(description="Transport type discriminator")
     driver: str | None = Field(
         default=None,
-        pattern=r"^[a-z][a-z0-9_]*\+(asyncpg|aiomysql|asyncmy|aiosqlite|oracledb)$",
+        pattern=r"^[a-z][a-z0-9_]*\+[a-z0-9_]+$",
         description=(
-            "SQLAlchemy async driver in `dialect+driver` form "
-            "(e.g. `postgresql+asyncpg`, `mysql+aiomysql`, `mariadb+aiomysql`). "
-            "Must name an async DBAPI — sync drivers such as `pymysql` or "
-            "`redshift_connector` are not supported and cannot connect."
+            "SQLAlchemy driver in `dialect+driver` form "
+            "(e.g. `postgresql+asyncpg`, `mysql+aiomysql`, "
+            "`redshift+redshift_connector`). May name a sync or an async "
+            "DBAPI: the engine selects the sync vs async SQLAlchemy engine "
+            "automatically from the dialect's own `is_async` capability, so "
+            "no driver allow-list is imposed here. Optional — SQLAlchemy can "
+            "derive the driver from the DSN scheme — but declare it so the "
+            "sync/async choice is explicit to a reader."
         ),
     )
     dsn: UrlTemplateDsn | None = Field(

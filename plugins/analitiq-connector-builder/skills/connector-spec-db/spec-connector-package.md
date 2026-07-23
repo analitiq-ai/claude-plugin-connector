@@ -81,8 +81,8 @@ package-dir = { "analitiq_connector_{connector_id}" = "." }
 
 ## `requirements.txt`
 
-THIS connector's driver(s) only — the async DBAPI for SQLAlchemy
-transports and/or the `adbc-driver-{driver}` wheel (+
+THIS connector's driver(s) only — the SQLAlchemy DBAPI (sync or async)
+for SQLAlchemy transports and/or the `adbc-driver-{driver}` wheel (+
 `adbc-driver-manager`) for ADBC transports. See
 `spec-driver-selection.md` for choosing. Comment non-obvious pins (e.g.
 `pymysql<1.2`).

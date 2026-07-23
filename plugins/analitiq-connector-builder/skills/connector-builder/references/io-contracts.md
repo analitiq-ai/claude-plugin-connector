@@ -143,11 +143,11 @@ fan-out and returned as `EndpointFacts` (below).
         },
         "bulk_load_protocol": {
           "type": "string",
-          "description": "The system's native bulk-load path when no ADBC driver exists (e.g. 'LOAD DATA LOCAL INFILE', 'COPY FROM stdin BINARY', 'fast_executemany'). Drives step 3 — async SQLAlchemy transport with the bulk path implemented in the connector class."
+          "description": "The system's native bulk-load path when no ADBC driver exists (e.g. 'LOAD DATA LOCAL INFILE', 'COPY FROM stdin BINARY', 'fast_executemany'). Drives step 3 — SQLAlchemy transport with the bulk path implemented in the connector class."
         },
-        "async_sqlalchemy_driver": {
+        "sqlalchemy_driver": {
           "type": "string",
-          "description": "The async DBAPI for the SQLAlchemy transport (e.g. 'postgresql+asyncpg', 'mysql+aiomysql'). Sync drivers fail at connect — the engine requires the asyncio extension."
+          "description": "The SQLAlchemy 'dialect+driver' for the SQLAlchemy transport, sync or async (e.g. 'postgresql+asyncpg', 'mysql+aiomysql', 'redshift+redshift_connector'). The engine selects the sync vs async engine from the dialect's own is_async capability; no driver allow-list."
         },
         "dsn": {
           "type": "object",
@@ -389,7 +389,7 @@ Returned by `api-connector-creator` and `db-connector-creator`.
           "properties": {
             "connector_py":     { "type": "string", "minLength": 1, "description": "{Name}Dialect(SqlDialect) + {Name}Connector(GenericSQLConnector); CDK imports only." },
             "init_py":          { "type": "string", "minLength": 1, "description": "Re-exports the connector + dialect classes." },
-            "requirements_txt": { "type": "string", "minLength": 1, "description": "THIS connector's driver(s) only — async DBAPI and/or adbc-driver-{driver} wheel." },
+            "requirements_txt": { "type": "string", "minLength": 1, "description": "THIS connector's driver(s) only — the SQLAlchemy DBAPI (sync or async) and/or adbc-driver-{driver} wheel." },
             "pyproject_toml":   { "type": "string", "minLength": 1, "description": "name=analitiq-connector-{connector_id}; dynamic dependencies from requirements.txt; package-dir maps the repo root; entry points named {connector_id} under analitiq.source_connectors AND analitiq.destination_connectors." }
           }
         },

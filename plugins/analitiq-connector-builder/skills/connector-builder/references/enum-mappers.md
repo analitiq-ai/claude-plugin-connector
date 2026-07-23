@@ -61,8 +61,9 @@ order, stopping at the first match (full guide:
    `AdbcTransport.driver` enum is the sole validator — currently
    `postgresql`, `snowflake`, `bigquery`) → `adbc`. The driver hands
    Arrow buffers to the system's native bulk protocol; no row-by-row
-   path. Redshift is libpq-compatible and takes `adbc` with driver
-   `postgresql`.
+   path. Redshift is postgres-wire-compatible but does NOT take this
+   tier: its canonical path is the sync SQLAlchemy
+   `redshift+redshift_connector` driver — see `spec-driver-selection.md`.
 2. **The server exposes an Arrow Flight SQL endpoint** → `adbc` via the
    generic Flight SQL driver. `flightsql` is **not yet in the
    `AdbcTransport.driver` enum** (`postgresql`, `snowflake`, `bigquery`),
@@ -71,17 +72,17 @@ order, stopping at the first match (full guide:
    `spec-driver-selection.md`). Ordinary MySQL/Postgres deployments do
    not expose Flight SQL.
 3. **Neither, but the system has a native bulk-load protocol** →
-   `sqlalchemy` (async DBAPI) for connect/DDL, with the bulk write
-   implemented in the connector's own class against the raw cursor
-   (the thick path).
-4. **None of the above** → `sqlalchemy` (async DBAPI) with batched
-   INSERT. This is the fallback, not the default — pick it last.
+   `sqlalchemy` for connect/DDL, with the bulk write implemented in
+   the connector's own class against the raw cursor (the thick path).
+4. **None of the above** → `sqlalchemy` with batched INSERT. This is
+   the fallback, not the default — pick it last.
 
 Never select the JDBC bridge (`adbc-driver-jdbc`): it provides the ADBC
 API surface over row-by-row JDBC binding — the interface without the
-performance. SQLAlchemy transports require an **async** DBAPI
-(`postgresql+asyncpg`, `mysql+aiomysql`, `mariadb+aiomysql`); sync
-drivers fail at connect.
+performance. SQLAlchemy transports accept a **sync or async** DBAPI
+(`postgresql+asyncpg`, `mysql+aiomysql`, `redshift+redshift_connector`);
+the engine dispatches by the dialect's `is_async` capability. Prefer
+async where the system has a working async driver.
 
 ## Failing closed
 

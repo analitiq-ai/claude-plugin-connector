@@ -56,9 +56,11 @@ installable Python package.
   order: `adbc` (closed `driver` enum
   `postgresql | snowflake | bigquery`; carries `dsn` and/or `db_kwargs`
   — **the AdbcTransport contract requires at least one of the two**;
-  TLS lives inside `db_kwargs`) and `sqlalchemy` (carries an **async**
-  `driver`, e.g. `postgresql+asyncpg`, `mysql+aiomysql`; supports the
-  generic `tls` block). When present, `dsn` carries the same
+  TLS lives inside `db_kwargs`) and `sqlalchemy` (carries a
+  `dialect+driver`, sync or async — e.g. `postgresql+asyncpg`,
+  `mysql+aiomysql`, `redshift+redshift_connector`; the engine dispatches
+  by the dialect's `is_async` capability; supports the generic `tls`
+  block). When present, `dsn` carries the same
   `dsn.kind: "url_template"` shape in both transport types; ADBC
   drivers that accept all connection state via `db_kwargs` (e.g.
   Snowflake) may omit `dsn` entirely.

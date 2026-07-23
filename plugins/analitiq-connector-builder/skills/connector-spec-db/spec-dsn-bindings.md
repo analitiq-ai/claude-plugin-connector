@@ -7,13 +7,13 @@ fields are:
 
 | `transport_type` | Identity field | Extras |
 |---|---|---|
-| `sqlalchemy` | `driver` — an **async** DBAPI (e.g. `"postgresql+asyncpg"`, `"mysql+aiomysql"`; sync drivers fail at connect). Optional in the contract, since SQLAlchemy can derive it from the DSN's scheme — but **declare it anyway**: it is the one place a reader can see the async choice was deliberate. | optional `tls` block (`ssl_mode` + `ssl_ca_certificate` refs; mode vocabulary is connector-defined) |
+| `sqlalchemy` | `driver` — a `dialect+driver`, sync or async (e.g. `"postgresql+asyncpg"`, `"mysql+aiomysql"`, `"redshift+redshift_connector"`). The engine selects the sync vs async engine from the dialect's own `is_async` capability. Optional in the contract, since SQLAlchemy can derive it from the DSN's scheme — but **declare it anyway**: it is the one place a reader can see the sync/async choice was deliberate. | optional `tls` block (`ssl_mode` + `ssl_ca_certificate` refs; mode vocabulary is connector-defined) |
 | `adbc` | `driver` — closed enum: `postgresql`, `snowflake`, `bigquery` | `db_kwargs` (object; values may be value expressions). **AdbcTransport requires at least one of `dsn` / `db_kwargs`.** TLS lives inside `db_kwargs` (e.g. `adbc.postgresql.sslmode`); no `tls` block. |
 
 Transport choice follows the decision order in
-`spec-driver-selection.md` (first-class ADBC → Flight SQL → async
-SQLAlchemy + native bulk path → async SQLAlchemy batched INSERT; never
-the JDBC bridge). For databases in the ADBC driver enum, prefer `adbc`
+`spec-driver-selection.md` (first-class ADBC → Flight SQL → SQLAlchemy
++ native bulk path → SQLAlchemy batched INSERT; never the JDBC bridge).
+For databases in the ADBC driver enum, prefer `adbc`
 — it exchanges Arrow columns natively and avoids the SQLAlchemy
 row-to-Arrow conversion. The chosen driver ships ONLY in the
 connector's `requirements.txt` (the engine pins no database drivers).
@@ -75,8 +75,10 @@ Snowflake) may omit `dsn` entirely.
 |---|---|
 | `postgresql+asyncpg` | `postgresql+asyncpg://{username}:{password}@{host}:{port}/{database}` |
 | `mysql+aiomysql` | `mysql+aiomysql://{username}:{password}@{host}:{port}/{database}` |
+| `redshift+redshift_connector` | `redshift+redshift_connector://{username}:{password}@{host}:{port}/{database}` |
 
-These are async SQLAlchemy transports (DSN `url_template`). ADBC drivers
+These are SQLAlchemy transports (DSN `url_template`) — the first two
+async, the third a sync driver (Redshift). ADBC drivers
 differ by driver: Snowflake carries all connection state in `db_kwargs`
 and omits the DSN, while `postgresql` keeps core coordinates in a `dsn`
 `url_template` and reserves `db_kwargs` for driver-namespaced extras like
