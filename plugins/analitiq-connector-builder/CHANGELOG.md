@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.6](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-connector-builder-v0.1.5...analitiq-connector-builder-v0.1.6) (2026-07-23)
+
+
+### Features
+
+* **analitiq-connector-builder:** accept sync SQLAlchemy drivers in the transport contract ([d78b8b5](https://github.com/analitiq-ai/claude-code-plugins/commit/d78b8b55b07b6a4800f61bcf2ffd2947fc405d8e))
+
+
+### Bug Fixes
+
+* bump the runtime validator pin to 1.0.0rc14 and guard it in CI ([e22bff4](https://github.com/analitiq-ai/claude-code-plugins/commit/e22bff44c9a224f87425fe0ea75deeef1d4a48b8))
+
 ## [0.1.5](https://github.com/analitiq-ai/claude-code-plugins/compare/analitiq-connector-builder-v0.1.4...analitiq-connector-builder-v0.1.5) (2026-07-22)
 
 
