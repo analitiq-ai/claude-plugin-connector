@@ -79,7 +79,8 @@ Snowflake) may omit `dsn` entirely.
 
 These are SQLAlchemy transports (DSN `url_template`) — the first two
 async, the third a sync driver (Redshift). ADBC drivers
-differ by driver: Snowflake carries all connection state in `db_kwargs`
-and omits the DSN, while `postgresql` keeps core coordinates in a `dsn`
-`url_template` and reserves `db_kwargs` for driver-namespaced extras like
-TLS — compare the `snowflake` and `postgresql-adbc` reference examples.
+differ by driver: a driver may carry all connection state in `db_kwargs`
+and omit the DSN entirely (Snowflake authenticates this way), while
+`postgresql` keeps core coordinates in a `dsn` `url_template` and
+reserves `db_kwargs` for driver-namespaced extras like TLS — see the
+`postgresql-adbc` reference example for the DSN-plus-`db_kwargs` shape.

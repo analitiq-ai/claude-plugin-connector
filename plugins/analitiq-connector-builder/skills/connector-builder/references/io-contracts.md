@@ -157,7 +157,7 @@ fan-out and returned as `EndpointFacts` (below).
           }
         },
         "tls": {
-          "type": "object",
+          "type": ["object", "null"],
           "properties": {
             "supported_modes": { "type": "array", "items": { "type": "string" } }
           }

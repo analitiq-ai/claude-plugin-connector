@@ -111,7 +111,9 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
      only when that is the system's viable path (e.g. Redshift).
      Author `tls.mode` (referencing
      `connection.parameters.ssl_mode`) and `tls.ca_certificate`
-     (referencing `secrets.ssl_ca_certificate`).
+     (referencing `secrets.ssl_ca_certificate`). Declaring `tls`
+     obligates the package dialect's TLS hook — the engine has no
+     built-in TLS interpretation for any driver (`spec-tls.md`).
 
    Both transport types use the same `dsn.kind: "url_template"` with a
    connector-specific `template` and one binding per logical field
@@ -126,10 +128,11 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
    `ssl_ca_certificate`. Each with the right `source` / `phase` /
    `storage` / `type` / `secret` / `enum` / `default`. The `ssl_mode`
    input must declare its enum so the dialect and any lookup-based
-   mappings have a closed vocabulary to interpret. The mode vocabulary is connector-defined
-   (libpq-style for postgres-shaped systems; MySQL declares its native
-   `DISABLED`/`PREFERRED`/`REQUIRED`/`VERIFY_CA`/`VERIFY_IDENTITY`) —
-   the dialect's `build_tls_connect_arg` interprets it.
+   mappings have a closed vocabulary to interpret. The mode vocabulary
+   is connector-defined, taken from the researcher's grounded TLS facts
+   (`provider_facts.tls.supported_modes` — the driver's own documented
+   mode names, never another connector's set; see `spec-tls.md`) — the
+   dialect's TLS hook interprets it.
 5. **Resource discovery** — populate `resource_discovery` with the
    provider's discovery strategy for enumerating the system's objects.
    This is central for DB connectors. Pick a strategy that matches the
@@ -163,8 +166,10 @@ The `connector-spec-db` skill is preloaded. Beyond that, read:
    `spec-connector-package.md`:
    - `connector_py` — `{Name}Dialect(SqlDialect)` +
      `{Name}Connector(GenericSQLConnector)`. The dialect implements
-     every hook its transports require: SQLAlchemy + TLS →
-     `build_tls_connect_arg`; upsert → `build_sqlalchemy_upsert`
+     every hook its transports require: SQLAlchemy + TLS → the TLS hook
+     (`build_tls_connect_arg`, or `build_tls_connect_args` for drivers
+     that take TLS through several connect parameters —
+     `spec-connector-package.md` §Dialect hooks); upsert → `build_sqlalchemy_upsert`
      (+ `supports_upsert_sqlalchemy = True`); ADBC upsert →
      `adbc_stage_table_sql` (+ `supports_upsert_adbc = True`).
      Structural overrides only where the portable form is invalid
@@ -212,10 +217,12 @@ discipline, and dialect behavior. Do not restate validator rules.
 - [ ] **`connector.py` imports the CDK only** — never another connector,
   never the engine/runtime.
 - [ ] **The dialect implements exactly the hooks its transports require**
-  (SQLAlchemy + TLS → `build_tls_connect_arg`; upsert →
-  `build_sqlalchemy_upsert` + `supports_upsert_sqlalchemy`; ADBC upsert →
-  `adbc_stage_table_sql` + `supports_upsert_adbc`) and ships **no Python
-  type-rendering table** — the write map owns the write direction.
+  (SQLAlchemy + TLS → the TLS hook, `build_tls_connect_arg` or
+  `build_tls_connect_args` per the driver's connect-parameter shape;
+  upsert → `build_sqlalchemy_upsert` + `supports_upsert_sqlalchemy`;
+  ADBC upsert → `adbc_stage_table_sql` + `supports_upsert_adbc`) and
+  ships **no Python type-rendering table** — the write map owns the
+  write direction.
 - [ ] **Structural overrides exist only where the portable form is
   genuinely invalid** (`batch_commits_key_type`,
   `current_timestamp_default`, and a `render_column_type` override only

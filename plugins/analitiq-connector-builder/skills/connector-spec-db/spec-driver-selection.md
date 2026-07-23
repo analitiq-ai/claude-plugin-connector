@@ -50,15 +50,19 @@ owners rather than something a connector author can unblock alone. Until the
 enum entry exists, select the next tier in the decision order.
 
 **Redshift** takes the SQLAlchemy transport with the **sync**
-`redshift+redshift_connector` driver — the engine's canonical Redshift
-path, with Redshift-specific bind-param and TLS handling already built
-for this driver. `redshift_connector` is a sync DBAPI; the engine runs
-it on the sync SQLAlchemy engine automatically (see "Constraints"
-below), so no ADBC entry is needed. DSN template
+`redshift+redshift_connector` driver — the canonical Redshift path.
+`redshift_connector` is a sync DBAPI; the engine runs it on the sync
+SQLAlchemy engine automatically (see "Constraints" below), so no ADBC
+entry is needed. That dispatch is all the engine contributes: as with
+every SQLAlchemy connector, system-specific interpretation — TLS,
+upsert SQL — ships in the connector package's own dialect, never the
+engine (see `spec-connector-package.md`). DSN template
 `redshift+redshift_connector://{username}:{password}@{host}:{port}/{database}`.
 The libpq-compatible PostgreSQL ADBC driver (`transport_type: "adbc"`,
 driver `postgresql`) also reaches Redshift over the postgres wire, but
-the sync SQLAlchemy path is the one the engine is tuned for.
+wire compatibility does not extend to the driver's option surface
+(TLS parameters differ — research the actual driver, per
+`spec-tls.md`), and the sync SQLAlchemy path is the canonical one.
 
 ## 2. Flight SQL
 

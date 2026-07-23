@@ -100,6 +100,13 @@ When the resource is writable, also ground:
 
 ## Hard rules
 
+<!-- Maintainers: in the `- For databases:` bullets below, backticked
+     snake_case tokens (dotted or not, e.g. `sqlalchemy_driver`,
+     `tls.supported_modes`) are pinned to the ProviderFacts fragment in
+     references/io-contracts.md by
+     tests/connector_builder/test_provider_facts_guard.py — renaming a
+     field in one file without the other fails the build. -->
+
 - Do not invent values. If the docs do not say it, leave it unset and note it.
 - Do not return prose summaries. The orchestrator expects the JSON block only,
   optionally followed by a short list of doc URLs.
@@ -107,8 +114,15 @@ When the resource is writable, also ground:
   contract schema asks about; you may add contract-relevant facts beyond the
   named fields (paired with a `notes` line). Do not invent fields unrelated to
   the contract.
-- For databases: do NOT speculate about TLS modes if the driver's docs are
-  ambiguous about TLS support — set `tls` to null and report the gap.
+- For databases: ground the driver's TLS surface from its official docs —
+  the documented mode values, verbatim, into `tls.supported_modes`, and
+  which connect parameter(s) the driver takes TLS through (a single mode
+  argument vs. several, e.g. a boolean toggle plus a mode string) as a
+  `notes` line, because the creator's dialect must interpret declared
+  modes into exactly those parameters. Never carry a vocabulary over from
+  another system, even a wire-compatible one. Do NOT speculate: if the
+  driver's docs are ambiguous about TLS support, set `tls` to null and
+  report the gap.
 - For databases: report the driver-selection facts the creator needs —
   `adbc_driver_package` (only when a first-class production ADBC driver
   exists), `flight_sql_endpoint` (only when the server documents an Arrow

@@ -42,7 +42,8 @@ installable Python package.
   per-binding `encoding` (closed enum: `raw`, `host`, `url_userinfo`,
   `url_path_segment`, `url_query_key`, `url_query_value`).
 - `tls.mode` and `tls.ca_certificate` declarations and their rules
-  (`verify-ca` / `verify-full` require `ssl_ca_certificate` input).
+  (certificate-verification modes require an `ssl_ca_certificate` input;
+  the mode vocabulary is researched per driver, never copied — `spec-tls.md`).
   **SQLAlchemy-only**: ADBC transports express TLS via `db_kwargs`
   entries (e.g. `adbc.postgresql.sslmode`) — they have no `tls` block.
 - `resource_discovery` declarations for enumerating schemas / tables /

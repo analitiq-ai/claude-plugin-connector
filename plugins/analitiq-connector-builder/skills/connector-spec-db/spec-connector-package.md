@@ -125,7 +125,7 @@ hooks fail loudly with `UnsupportedDialectOperationError`:
 
 | Transport feature | Required hook(s) |
 |---|---|
-| SQLAlchemy + TLS | `build_tls_connect_arg(mode, ca_pem)` — interprets the connector's declared `ssl_mode` vocabulary into the driver's connect argument (mode string, `False`, or an `SSLContext` built via `ca_ssl_context`). |
+| SQLAlchemy + TLS | `build_tls_connect_arg(mode, ca_pem)` — interprets the connector's declared `ssl_mode` vocabulary into the driver's single TLS connect argument (mode string, `False`, or an `SSLContext` built via `ca_ssl_context`); the CDK currently lands it under `connect_args["ssl"]`. When the driver takes TLS through **several** connect parameters instead, override `build_tls_connect_args(mode, ca_pem)` (plural) and return the full connect-args mapping. |
 | SQLAlchemy upsert | `build_sqlalchemy_upsert(table, records, conflict_keys)` + `supports_upsert_sqlalchemy = True` (e.g. postgres `ON CONFLICT DO UPDATE`, mysql `ON DUPLICATE KEY UPDATE`). |
 | ADBC upsert | `adbc_stage_table_sql(stage_qualified, target_qualified)` + `supports_upsert_adbc = True` (e.g. `CREATE TABLE … (LIKE … INCLUDING DEFAULTS)`, `CREATE TABLE … LIKE …`). |
 | Discovery | `schemas_query()` and the `system_schemas` exclusion list. |

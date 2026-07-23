@@ -19,7 +19,7 @@ documentation URL, the plugin:
 4. Authors endpoint files alongside (API connectors only — DB endpoints are
    discovered at runtime).
 5. Validates everything against the published JSON schemas plus a layer of
-   semantic validators (DSN bindings, auth shape, TLS consistency, etc.).
+   semantic validators (DSN bindings, auth shape, type-map coverage, etc.).
 6. Classifies version drift against the previous release and bumps `version`
    accordingly.
 7. Writes the connector and endpoint files to disk at predictable paths.

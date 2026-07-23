@@ -33,8 +33,10 @@ _CLI_PYTHONPATH = os.pathsep.join([str(SRC_ROOT), str(CONTRACTS_SRC_ROOT)])
 DOC_CASES = [
     ("valid_read.json", True),
     ("valid_write_insert.json", True),
+    ("valid_connector_sync_driver.json", True),
     ("invalid_reserved_field.json", False),
     ("invalid_write_from_input.json", False),
+    ("invalid_connector_bare_driver.json", False),
 ]
 
 
@@ -62,6 +64,21 @@ def test_from_input_defect_is_caught(validator):
     assert any(
         "from_input" in f["message"] and f["severity"] == "error" for f in findings
     ), "the from_input contract rule was not enforced"
+
+
+def test_bare_sqlalchemy_driver_is_a_contract_model_finding(validator):
+    """The sync-driver boundary #70 opened, exercised end-to-end (issue #72):
+    the valid corpus twin (`valid_connector_sync_driver.json`, driver
+    `redshift+redshift_connector`) passes in DOC_CASES above; here the bare
+    variant (no `dialect+` segment) must surface as a contract-model finding
+    on the transport's driver field — the model rejection reaching a consumer
+    of validate_document, not just the pydantic layer."""
+    doc = json.loads((CORPUS / "invalid_connector_bare_driver.json").read_text())
+    errors = _errors(validator.validate_document(doc))
+    assert any(
+        f["validator"] == "contract-model" and f["path"].endswith("/driver")
+        for f in errors
+    ), errors
 
 
 def test_unrecognized_document_errors(validator):
