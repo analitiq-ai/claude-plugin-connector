@@ -120,10 +120,13 @@ Bump the pin in a follow-up once the release is out.
 `scripts/check_validator_pin_contract.py` (CI job `pinned-validator-guard`)
 guards the pin from the other side: it installs the pinned release into an
 isolated venv and fails if that **published** wheel rejects the canonical
-`dialect+driver` values the plugin prose teaches — strict in steady state and
-on `release-please--*` branches (merging a Release PR is what would ship the
-contradiction), warn-only inside a release window (pin ≠ shipped). The script's
-docstring owns the full semantics.
+`dialect+driver` values the plugin prose teaches. Marketplace installs track
+main HEAD (the plugin sources are unpinned relative paths), so the guard is
+strict on pushes to main — a release window (pin ≠ shipped) shows as a red
+main until the pin catch-up lands — and on `release-please--*` branches;
+ordinary PRs inside a window only warn so a contract-widening PR can still
+land. The script's docstring owns the full semantics, including the
+live-settings caveat that no branch protection currently requires the check.
 
 Running a plugin helper from a checkout would otherwise trigger the bootstrap
 (build a venv, install the published wheel, `os.execv` into it). The root
