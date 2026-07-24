@@ -4064,7 +4064,7 @@
       "type": "object"
     }
   },
-  "$id": "https://schemas.analitiq.ai/connector/latest.json",
+  "$id": "https://schemas.analitiq.ai/connector/19.1.0.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Public JSON Schema contract for Analitiq connector documents \u2014 the authored shape used in source control, PR review, and author-time tooling. `connector_id` is the authored canonical identifier (slug pattern `^[a-z0-9][a-z0-9_-]*$`). Only `created_at` and `updated_at` are server-managed and absent in the authored shape. Source of truth: analitiq.contracts.connector.Connector (Pydantic).",
   "discriminator": {

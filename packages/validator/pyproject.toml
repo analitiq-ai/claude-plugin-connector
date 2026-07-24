@@ -10,7 +10,7 @@ name = "analitiq-validator"
 # Kept EQUAL to contract-models/pyproject.toml `version`: the two packages are one
 # release unit and ship in sync (#951 point 4). `test_contract_models_pin.py`
 # fails the build if this version, or the exact pin below, diverges from it.
-version = "1.0.0rc15"
+version = "1.0.0rc16"
 description = "The Analitiq artifact validator: offline validation of Analitiq documents against the contract models (`analitiq-contract-models`) plus the cross-file and cross-document checks a single-document model cannot express. Today it validates connector-package documents (connector, endpoint, type-map files) and the referential integrity of an assembled pipeline bundle. Import as `analitiq.validator`; CLI `analitiq-validate`."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,7 +30,7 @@ classifiers = [
 # contract-models/pyproject.toml `version`; `test_contract_models_pin.py` fails
 # the build if either diverges. Bump all three together on every release.
 dependencies = [
-    "analitiq-contract-models==1.0.0rc15",
+    "analitiq-contract-models==1.0.0rc16",
     # Meta-validates the JSON-Schema documents embedded in api-endpoints
     # (input/response `schema`) as Draft 2020-12 — a check the dependency-light
     # contract-models package cannot host.

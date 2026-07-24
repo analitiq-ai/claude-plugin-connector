@@ -1263,6 +1263,224 @@ def _reject_post_auth_contract(contract: "ConnectionContract", kind: str) -> Non
         )
 
 
+# --- SQL write-path capabilities & write unit (engine ADR §5, issue #87) ---
+#
+# `sql_capabilities` — SQL-shape capabilities are DECLARED, not guessed. The
+# engine's SQL write path ("refuse, don't guess" — analitiq-engine#390, settled
+# in the engine ADR `docs/sql-write-path-v2.md` §5) reads these facts from the
+# connector definition and refuses any needed-but-undeclared fact at
+# config/handshake time, instead of probing the live database. A declared block
+# is COMPLETE — every top-level fact is required — because a partial declaration
+# is a config error, not a request for implicit defaults. (`stage.dedicated_schema`
+# is the one conditional field: required iff `stage.schema == "dedicated"`.)
+#
+# `write_unit` — a connector-level, non-SQL coalescing PREFERENCE (not a
+# refuse-don't-guess fact): a destination declares the batch size it wants, and
+# absence simply means "no preference". At least one of `rows`/`bytes` is
+# required so a declared block is never an empty no-op.
+#
+# Both blocks are OPTIONAL at the schema level; omission is legal.
+
+
+class SqlStageCapabilities(StrictModel):
+    """Staging-relation capabilities for a SQL destination's write path (ADR §5).
+
+    Describes how the engine may materialize an intermediate stage relation
+    before merging into the target. `scope`, `schema`, and `transactional_ddl`
+    are always required; `dedicated_schema` is required iff `schema` is
+    `dedicated`, and must be omitted or null otherwise
+    (`_dedicated_schema_matches_scope`).
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        # Mirror `_dedicated_schema_matches_scope` for JSON-Schema-only
+        # consumers (FE, third-party validators): a non-empty `dedicated_schema`
+        # is present iff `schema == "dedicated"`. Uses the same in-model
+        # `json_schema_extra` + `oneOf` technique as `ConnectionConditionPredicate`
+        # (`_PREDICATE_EXACTLY_ONE_OPERATOR`). A `target` stage may omit the key
+        # or send null, never a real name — so the target branch is null-aware.
+        # Keys are wire names (`schema`, the alias), not the Python `schema_`.
+        json_schema_extra={
+            "oneOf": [
+                {
+                    "properties": {
+                        "schema": {"const": "dedicated"},
+                        "dedicated_schema": {"type": "string", "minLength": 1},
+                    },
+                    "required": ["dedicated_schema"],
+                },
+                {
+                    "properties": {"schema": {"const": "target"}},
+                    "anyOf": [
+                        {"not": {"required": ["dedicated_schema"]}},
+                        {"properties": {"dedicated_schema": {"type": "null"}}},
+                    ],
+                },
+            ]
+        },
+    )
+
+    scope: Literal["temp", "real"] = Field(
+        ...,
+        description=(
+            "Stage-relation scope: `temp` for a session/transaction-scoped "
+            "temporary table, `real` for an ordinary persistent table the "
+            "engine creates and drops around the write."
+        ),
+    )
+    schema_: Literal["target", "dedicated"] = Field(
+        ...,
+        alias="schema",
+        description=(
+            "Where stage relations live: `target` co-locates them in the "
+            "target's own schema; `dedicated` places them in a separate schema "
+            "named by `dedicated_schema`."
+        ),
+    )
+    dedicated_schema: str | None = Field(
+        default=None,
+        min_length=1,
+        pattern=NO_EDGE_WHITESPACE_PATTERN,
+        description=(
+            "Name of the dedicated staging schema — the engine emits it as a SQL "
+            "identifier, so it must be a non-blank name with no leading/trailing "
+            "whitespace. Required when `schema` is `dedicated`; must be omitted "
+            "or null otherwise."
+        ),
+    )
+    transactional_ddl: bool = Field(
+        ...,
+        description=(
+            "Whether the destination runs stage DDL (CREATE/DROP) inside the "
+            "write transaction. `false` for engines that auto-commit DDL "
+            "(e.g. MySQL), which forces a non-transactional staging strategy."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _dedicated_schema_matches_scope(self) -> "SqlStageCapabilities":
+        if self.schema_ == "dedicated" and self.dedicated_schema is None:
+            raise ValueError(
+                "stage.schema='dedicated' requires `dedicated_schema` "
+                "(engine ADR §5 — a dedicated staging schema must be named)"
+            )
+        if self.schema_ == "target" and self.dedicated_schema is not None:
+            raise ValueError(
+                "stage.schema='target' must omit `dedicated_schema` (or set it "
+                "null) (engine ADR §5 — dedicated_schema is meaningful only for "
+                "schema='dedicated')"
+            )
+        return self
+
+
+class SqlCapabilities(StrictModel):
+    """SQL write-path capabilities declared by a database connector (ADR §5).
+
+    "Refuse, don't guess": the engine reads these facts instead of probing the
+    live database, and refuses at handshake time when a needed fact was not
+    declared (analitiq-engine#390, PR analitiq-engine#400). Optional as a block,
+    but when present all five facts are required — a partial declaration is a
+    config error.
+    """
+
+    catalog: Literal["none", "read", "full"] = Field(
+        ...,
+        description=(
+            "Catalog (multi-database) support: `none` — no catalog concept; "
+            "`read` — the catalog is addressable but not creatable; `full` — "
+            "the engine may create/drop catalogs."
+        ),
+    )
+    session_targeting: Literal["per_statement", "session_default"] = Field(
+        ...,
+        description=(
+            "How the write target schema/catalog is selected: `per_statement` "
+            "— fully qualified on each statement; `session_default` — set once "
+            "as a session default (e.g. `search_path` / `USE`) and inherited."
+        ),
+    )
+    merge_form: Literal[
+        "merge", "insert_on_conflict", "insert_on_duplicate_key", "none"
+    ] = Field(
+        ...,
+        description=(
+            "The upsert grammar the destination supports: SQL-standard `merge` "
+            "(`MERGE`), Postgres-style `insert_on_conflict` "
+            "(`INSERT … ON CONFLICT`), MySQL-style `insert_on_duplicate_key` "
+            "(`INSERT … ON DUPLICATE KEY`), or `none` (no native upsert)."
+        ),
+    )
+    bulk_load: Literal[
+        "none", "copy_from", "load_data_local_infile", "adbc_ingest", "load_job"
+    ] = Field(
+        ...,
+        description=(
+            "The bulk-ingest path the destination supports: `none`, Postgres "
+            "`copy_from` (`COPY FROM`), MySQL `load_data_local_infile` "
+            "(`LOAD DATA LOCAL INFILE`), ADBC bulk `adbc_ingest`, or "
+            "BigQuery-style `load_job`."
+        ),
+    )
+    stage: SqlStageCapabilities = Field(
+        ...,
+        description=(
+            "Staging-relation capabilities for the merge/upsert write path."
+        ),
+    )
+
+
+class WriteUnit(StrictModel):
+    """Preferred write-batch coalescing unit for a destination (issue #87).
+
+    Connector-level, not a SQL-only fact: any destination whose write cost is
+    per-write-operation may declare the batch size it wants the engine's
+    coalescer to target. At least one of `rows` / `bytes` must be given;
+    absence of the whole block means "no coalescing preference". Consumed by
+    the engine batch coalescer (analitiq-engine#384).
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        # Mirror `_at_least_one_bound` for JSON-Schema-only consumers: at least
+        # one of `rows` / `bytes` present AND non-null. Same shape as
+        # AdbcTransport's `dsn`/`db_kwargs` rule.
+        json_schema_extra={
+            "anyOf": [
+                {
+                    "required": ["rows"],
+                    "properties": {"rows": {"not": {"type": "null"}}},
+                },
+                {
+                    "required": ["bytes"],
+                    "properties": {"bytes": {"not": {"type": "null"}}},
+                },
+            ]
+        },
+    )
+
+    rows: int | None = Field(
+        default=None,
+        ge=1,
+        description="Preferred number of rows per write operation (≥ 1).",
+    )
+    bytes: int | None = Field(
+        default=None,
+        ge=1,
+        description="Preferred payload size in bytes per write operation (≥ 1).",
+    )
+
+    @model_validator(mode="after")
+    def _at_least_one_bound(self) -> "WriteUnit":
+        if self.rows is None and self.bytes is None:
+            raise ValueError(
+                "write_unit requires at least one of `rows` or `bytes` "
+                "(issue #87 — an empty write_unit expresses no preference; "
+                "omit the block entirely instead)"
+            )
+        return self
+
+
 class ConnectorBase(AdvisoryValidated, StrictModel):
     """Base connector model — fields shared by every connector kind.
 
@@ -1369,6 +1587,16 @@ class ConnectorBase(AdvisoryValidated, StrictModel):
     resource_discovery: ResourceDiscovery | None = Field(
         default=None,
         description="Resource discovery declarations for dynamic or post-auth resources.",
+    )
+    write_unit: WriteUnit | None = Field(
+        default=None,
+        description=(
+            "Preferred write-batch coalescing unit for this destination "
+            "(issue #87). Connector-level because it is not a SQL-only fact: "
+            "any destination whose write cost is per-write-operation may "
+            "declare the batch size the engine's coalescer should target. "
+            "Absent means no coalescing preference."
+        ),
     )
 
     @field_validator("display_name")
@@ -1541,6 +1769,15 @@ class DatabaseConnector(ConnectorBase):
         description=(
             "Named database transport contracts (`sqlalchemy` | `adbc`), "
             "discriminated by `transport_type`."
+        ),
+    )
+    sql_capabilities: SqlCapabilities | None = Field(
+        default=None,
+        description=(
+            "Declared SQL write-path capabilities (engine ADR §5). SQL-specific "
+            "— not present on other connector kinds. Optional; when omitted the "
+            "engine refuses any needed-but-undeclared fact at handshake time. "
+            "When present, all five facts are required."
         ),
     )
 
